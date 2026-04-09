@@ -1,0 +1,27 @@
+# Core RL
+stable-baselines3[extra]==2.3.2  # [extra] = TensorBoard 포함 (학습 중 실시간 모니터링)
+gymnasium==0.29.1
+
+# Deep learning backend (CPU-only sufficient for PPO on tabular state)
+torch==2.3.1
+
+# Data
+ccxt==4.3.45         # Binance API — 1h 히스토리 데이터 (2020~) 다운로드용
+yfinance==0.2.40     # 보조 용도 (빠른 테스트, 최근 730일 이내 한정)
+pandas==2.2.2
+numpy==1.26.4        # SB3 2.x는 numpy 2.x 호환 문제 — 고정 필요
+pyarrow>=14.0.0      # parquet 포맷용 — mlflow 호환 범위 내에서 uv가 선택
+
+# ATR은 preprocessor.py에서 pandas로 직접 계산 — 외부 라이브러리 불필요
+
+# Experiment tracking (로컬 실행, 계정 불필요)
+mlflow>=2.13.0       # pyarrow 버전과 호환되는 최신 버전으로 uv가 선택
+
+# Plotting
+matplotlib==3.9.0
+seaborn==0.13.2
+plotly==5.22.0
+
+# Utilities
+pyyaml==6.0.1
+tqdm==4.66.4

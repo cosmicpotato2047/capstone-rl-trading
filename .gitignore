@@ -1,0 +1,34 @@
+# Data — 원본 및 처리 데이터 (재생성 가능, 용량 이슈)
+data/raw/
+data/cache/
+data/processed/
+*.parquet
+*.feather
+
+# 논문 PDF — 저작권 문제로 비공개
+papers/
+
+# Experiments — configs/logs 추적, 모델 가중치 제외
+experiments/*/model_*.zip
+experiments/*/model_*.pt
+
+# MLflow
+mlruns/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.env
+venv/
+.venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Claude Code 로컬 설정
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
