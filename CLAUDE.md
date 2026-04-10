@@ -120,6 +120,31 @@ step_reward += cycle_pnl_pct + cycle_alpha / cycle_hours
 
 ---
 
+## Git 작업 규칙
+
+### 브랜치 전략
+- `main` — 발표/제출 가능한 안정 버전만
+- `feature/*` — 기능 단위 개발. 완성 후 main에 merge하고 브랜치 삭제
+
+### 자동화 규칙 (Claude Code가 항상 따름)
+- 기능 구현 시작 시 **자동으로 feature 브랜치 생성**
+- 구현 완료 후 **자동으로 main에 merge + push + 브랜치 삭제**
+- 사용자 확인 없이 진행 (혼자 하는 프로젝트이므로)
+- 단, 보고서/문서 업데이트는 브랜치 없이 main에 직접 커밋
+
+### Commit Message Convention (Conventional Commits)
+```
+feat:     새 기능 구현
+fix:      버그 수정
+docs:     문서, 보고서, 주석
+test:     테스트 추가/수정
+refactor: 동작 변경 없는 코드 정리
+chore:    설정, 패키지, .gitignore 등
+data:     데이터 관련 스크립트
+```
+
+---
+
 ## 코드 작성 원칙
 
 ### 구조
