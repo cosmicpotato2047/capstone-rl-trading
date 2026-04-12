@@ -60,10 +60,6 @@ environment:
   # 슬롯 소진(cycle_budget_remaining < per_order_size) 후 추가 매수 완전 차단
   n_splits: 4                   # 사이클당 총 매수 슬롯 수 (Val 셋 튜닝 예정)
 
-  # Reward 파라미터
-  cycle_alpha: 0.5              # 빠른 회전 보너스 가중치 (튜닝 필요)
-                                # 초기값: 예상 평균 cycle_pnl_pct 수준으로 설정
-
   # 사이클 정의
   # 시작: holdings == 0 → 첫 체결
   # 종료: holdings > 0 → holdings == 0 (전량 매도)

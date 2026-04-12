@@ -51,7 +51,10 @@ action_space = Box(low=0.0, high=1.0, shape=(2,), dtype=np.float32)
 
 ```
 [0] log_price            = log(price / price.rolling(168).mean())
-[1] divergence           = (avg_price - price) / avg_price  # 미보유 시 0
+[1] divergence           = (avg_price - price) / avg_price
+                           # 보유 중: 현재 평단가 기준
+                           # 미보유 + 직전 사이클 있음: last_avg_price 기준
+                           # 미보유 + 거래 이력 없음: 0.0
 [2] holdings_value_ratio = (holdings × price) / start_capital  # 미보유 시 0
 [3] cash_ratio           = cash / start_capital
 [4] volatility           = ATR(168) / price
@@ -75,12 +78,10 @@ sell_hi = avg_price * (1 + sell_hi_gap)  # avg_price=0이면 price fallback
 
 ```python
 step_reward = (equity_t - equity_{t-1}) / start_capital - fee_rate * n_trades
-# 사이클 종료 시 추가:
-step_reward += cycle_pnl_pct + cycle_alpha / cycle_hours
 ```
 
 - `fee_rate`: 0.05% (Binance maker fee)
-- `cycle_alpha`: 0.5 초기값 (Val 셋 튜닝 예정)
+- 사이클 종료 시 별도 보너스 없음. `completed_cycles` 리스트에 통계만 기록.
 - 사이클: holdings == 0 → 첫 체결 시 시작 / holdings → 0 복귀 시 종료
 
 ### 주문 크기 (Order Sizing)
