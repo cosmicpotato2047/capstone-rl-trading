@@ -3,7 +3,7 @@ BTC 그리드 트레이딩 Gymnasium 환경
 
 State (5차원, rolling z-score 정규화):
     [0] log_price            = log(price / price.rolling(168).mean())
-    [1] divergence           = (avg_price - price) / avg_price  (미보유 시 0)
+    [1] divergence           = (avg_price - price) / avg_price  (미보유 시 last_avg_price 활용, 거래 이력 없으면 0)
     [2] holdings_value_ratio = (holdings × price) / start_capital  (미보유 시 0)
     [3] cash_ratio           = cash / start_capital
     [4] volatility           = ATR(168) / price
@@ -32,7 +32,7 @@ Action (2차원 연속, [0, 1]²):
 
 Reward:
     매 스텝: (equity_t - equity_{t-1}) / start_capital - fee × n_trades
-    사이클 종료 시: cycle_pnl_pct + alpha / cycle_hours 추가
+    사이클 종료 시: 보너스 없음 (통계 기록만 — completed_cycles)
 """
 
 import numpy as np
@@ -67,7 +67,6 @@ class BTCGridTradingEnv(gym.Env):
         self.n_buy_orders: int     = self.cfg_env["n_buy_orders"]
         self.n_sell_orders: int    = self.cfg_env["n_sell_orders"]
         self.n_splits: int         = self.cfg_env["n_splits"]
-        self.cycle_alpha: float    = self.cfg_env["cycle_alpha"]
         self.warmup: int           = self.cfg_ind["atr_period"]  # 168봉
 
         # ── Gymnasium 공간 정의 ────────────────────────────────
@@ -113,6 +112,9 @@ class BTCGridTradingEnv(gym.Env):
         self.cycle_slot_size: float        = 0.0
         self.per_order_size: float         = 0.0
         self.cycle_budget_remaining: float = 0.0
+
+        # 직전 사이클 청산 시 평단가 (미보유 구간 divergence 계산용)
+        self.last_avg_price: float = 0.0
 
         # 통계 (디버깅/분석용)
         self.n_trades: int = 0
@@ -199,6 +201,8 @@ class BTCGridTradingEnv(gym.Env):
         self.cycle_slot_size: float        = 0.0
         self.per_order_size: float         = 0.0
         self.cycle_budget_remaining: float = 0.0
+        # 직전 사이클 청산 시 평단가 (미보유 구간 divergence 계산용)
+        self.last_avg_price: float = 0.0
         self.n_trades: int = 0
         self.completed_cycles: list = []
 
@@ -360,7 +364,8 @@ class BTCGridTradingEnv(gym.Env):
 
         # 수량이 매우 작으면 0으로 강제 (부동소수점 오차 방지)
         if self.holdings < 1e-10:
-            self.holdings = 0.0
+            self.last_avg_price = self.avg_price   # 전량 청산 직전 평단가 보존
+            self.holdings  = 0.0
             self.avg_price = 0.0
 
         # 사이클 종료 감지: 전량 청산 → holdings == 0
@@ -371,26 +376,26 @@ class BTCGridTradingEnv(gym.Env):
 
     def _close_cycle(self, price: float) -> float:
         """
-        사이클 종료 시 보너스 계산.
+        사이클 종료 시 통계 기록.
+
+        보너스는 step_reward의 equity 변화에 이미 반영되므로 반환하지 않는다.
 
         Returns:
-            cycle_bonus = cycle_pnl_pct + alpha / cycle_hours
+            0.0 (보너스 없음)
         """
         cycle_pnl_pct = (self.cash - self.cycle_start_cash) / self.cycle_start_cash
         cycle_hours   = max(self.current_step - self.cycle_start_step, 1)
-        bonus         = cycle_pnl_pct + self.cycle_alpha / cycle_hours
 
         self.completed_cycles.append({
             "start_step":    self.cycle_start_step,
             "end_step":      self.current_step,
             "cycle_hours":   cycle_hours,
             "pnl_pct":       cycle_pnl_pct,
-            "bonus":         bonus,
         })
 
         self.in_cycle         = False
         self.cycle_start_cash = self.cash  # 다음 사이클 기준점 갱신
-        return bonus
+        return 0.0
 
     def _get_observation(self) -> np.ndarray:
         """
@@ -406,11 +411,16 @@ class BTCGridTradingEnv(gym.Env):
         zscore_log_price = float(row["zscore_log_price"])
 
         # [1] 포지션 손익 방향: 평단가 대비 현재가 괴리율
-        #     미보유 시 0 (에이전트에게 포지션 없음을 알림)
+        #     보유 중: 현재 평단가 기준
+        #     미보유 + 직전 사이클 있음: last_avg_price 기준 (재진입 신호 유지)
+        #     미보유 + 거래 이력 없음: 0.0 (에피소드 초반)
         if self.holdings > 0.0 and self.avg_price > 0.0:
             divergence = (self.avg_price - price) / self.avg_price
+        elif self.last_avg_price > 0.0:
+            # 미보유 구간: 직전 사이클 평단가 기준 괴리율 유지
+            divergence = (self.last_avg_price - price) / self.last_avg_price
         else:
-            divergence = 0.0
+            divergence = 0.0  # 거래 이력 없음 (에피소드 초반)
 
         # [2] 포지션 규모: 현재 BTC 평가액 / 초기 자본
         #     가격이 오르면 같은 수량이어도 비율 증가 → 리스크 인식
