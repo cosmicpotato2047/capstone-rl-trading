@@ -22,6 +22,14 @@ Action (2차원 연속, [0, 1]²):
     next_high >= sell_lo  →  sell_lo 체결
     next_low  <= buy_hi   →  buy_hi  체결
 
+주문 크기:
+    매수: 사이클 시작 시 현금을 n_splits 슬롯으로 분할
+          per_order_size = (cycle_start_cash / n_splits) / n_buy_orders
+          슬롯 소진(cycle_budget_remaining < per_order_size) 후 추가 매수 완전 차단
+    매도: threshold_btc = cycle_slot_size / avg(sell_lo, sell_hi)
+          holdings ≤ threshold_btc → 전량 청산 (사이클 종료 유도)
+          holdings > threshold_btc → holdings / n_sell_orders (균등 분할)
+
 Reward:
     매 스텝: (equity_t - equity_{t-1}) / start_capital - fee × n_trades
     사이클 종료 시: cycle_pnl_pct + alpha / cycle_hours 추가
@@ -54,11 +62,13 @@ class BTCGridTradingEnv(gym.Env):
         self.cfg_ind = config["indicators"]
 
         # ── 환경 파라미터 ──────────────────────────────────────
-        self.start_capital: float = self.cfg_env["initial_cash"]
-        self.fee_rate: float = self.cfg_env["transaction_cost"]
-        self.order_size_frac: float = self.cfg_env["order_size_fraction"]
-        self.cycle_alpha: float = self.cfg_env["cycle_alpha"]
-        self.warmup: int = self.cfg_ind["atr_period"]  # 168봉
+        self.start_capital: float  = self.cfg_env["initial_cash"]
+        self.fee_rate: float       = self.cfg_env["transaction_cost"]
+        self.n_buy_orders: int     = self.cfg_env["n_buy_orders"]
+        self.n_sell_orders: int    = self.cfg_env["n_sell_orders"]
+        self.n_splits: int         = self.cfg_env["n_splits"]
+        self.cycle_alpha: float    = self.cfg_env["cycle_alpha"]
+        self.warmup: int           = self.cfg_ind["atr_period"]  # 168봉
 
         # ── Gymnasium 공간 정의 ────────────────────────────────
         # Action: [aggressiveness, profit_target] ∈ [0, 1]²
@@ -98,6 +108,11 @@ class BTCGridTradingEnv(gym.Env):
         self.in_cycle: bool = False
         self.cycle_start_cash: float = self.start_capital
         self.cycle_start_step: int = self.warmup
+
+        # 사이클 예산 (사이클 시작 시 확정, 0이면 매수 차단)
+        self.cycle_slot_size: float        = 0.0
+        self.per_order_size: float         = 0.0
+        self.cycle_budget_remaining: float = 0.0
 
         # 통계 (디버깅/분석용)
         self.n_trades: int = 0
@@ -180,6 +195,10 @@ class BTCGridTradingEnv(gym.Env):
         self.in_cycle: bool = False
         self.cycle_start_cash: float = self.start_capital
         self.cycle_start_step: int = self.warmup
+        # 사이클 예산 (사이클 시작 시 확정, 0이면 매수 차단)
+        self.cycle_slot_size: float        = 0.0
+        self.per_order_size: float         = 0.0
+        self.cycle_budget_remaining: float = 0.0
         self.n_trades: int = 0
         self.completed_cycles: list = []
 
@@ -232,9 +251,19 @@ class BTCGridTradingEnv(gym.Env):
 
         # ── 1. SELL 먼저 처리 (보유 포지션 우선 정리) ──────────────
 
+        # 매도 수량 결정 기준: 1슬롯 임계값
+        #   holdings ≤ threshold_btc → 전량 청산 (사이클 종료 유도)
+        #   holdings >  threshold_btc → holdings / n_sell_orders (균등 분할)
+        # cycle_slot_size > 0 보장: sell은 buy 이후에만 발생 (holdings > 0 조건)
+        avg_sell_price = (sell_lo + sell_hi) / 2.0
+        threshold_btc  = (self.cycle_slot_size / avg_sell_price
+                          if avg_sell_price > 0.0 else 0.0)
+
         # sell_lo: 빠른 익절 (현재가 근처)
         if self.holdings > 0.0 and next_high >= sell_lo:
-            sell_qty = self.holdings * self.order_size_frac
+            sell_qty = (self.holdings
+                        if self.holdings <= threshold_btc
+                        else self.holdings / self.n_sell_orders)
             if sell_qty > 0.0:
                 bonus = self._execute_sell(sell_lo, sell_qty, next_price)
                 cycle_bonus += bonus
@@ -242,7 +271,9 @@ class BTCGridTradingEnv(gym.Env):
 
         # sell_hi: 느린 익절 (평단 기준, 더 높은 목표)
         if self.holdings > 0.0 and next_high >= sell_hi:
-            sell_qty = self.holdings * self.order_size_frac
+            sell_qty = (self.holdings
+                        if self.holdings <= threshold_btc
+                        else self.holdings / self.n_sell_orders)
             if sell_qty > 0.0:
                 bonus = self._execute_sell(sell_hi, sell_qty, next_price)
                 cycle_bonus += bonus
@@ -268,31 +299,43 @@ class BTCGridTradingEnv(gym.Env):
         """
         매수 체결 처리.
 
+        사이클 최초 매수 시 cycle_budget_remaining / per_order_size를 확정한 뒤
+        매번 고정 금액(per_order_size)을 소비한다.
+        cycle_budget_remaining < per_order_size 이면 추가 매수를 완전 차단한다.
+
         Args:
             fill_price: 체결가
         Returns:
-            체결 성공 여부 (현금 부족 시 False)
+            체결 성공 여부 (예산 소진 또는 현금 부족 시 False)
         """
-        spend = self.cash * self.order_size_frac
-        if spend < 1.0:          # 최소 주문 금액 ($1) 미만이면 스킵
-            return False
-
-        fee = spend * self.fee_rate
-        net_spend = spend - fee  # 수수료 차감 후 실제 매수에 쓰이는 금액
-        buy_qty = net_spend / fill_price
-
-        # 사이클 시작 감지: 미보유 → 첫 매수
+        # 사이클 시작 감지: 미보유 → 첫 매수 시 예산 확정
         if self.holdings == 0.0 and not self.in_cycle:
             self.in_cycle = True
-            self.cycle_start_cash = self.cash
-            self.cycle_start_step = self.current_step
+            self.cycle_start_cash          = self.cash
+            self.cycle_start_step          = self.current_step
+            self.cycle_slot_size           = self.cash / self.n_splits
+            self.per_order_size            = self.cycle_slot_size / self.n_buy_orders
+            self.cycle_budget_remaining    = self.cash
+
+        # 예산 소진 체크 → 완전 차단
+        if self.cycle_budget_remaining < self.per_order_size:
+            return False
+
+        spend = self.per_order_size
+        if spend > self.cash:    # 부동소수점 오차 안전망
+            return False
+
+        fee       = spend * self.fee_rate
+        net_spend = spend - fee  # 수수료 차감 후 실제 매수에 쓰이는 금액
+        buy_qty   = net_spend / fill_price
 
         # 평단가 가중평균 업데이트
-        total_cost = self.avg_price * self.holdings + fill_price * buy_qty
-        self.holdings += buy_qty
-        self.avg_price = total_cost / self.holdings
+        total_cost     = self.avg_price * self.holdings + fill_price * buy_qty
+        self.holdings  += buy_qty
+        self.avg_price  = total_cost / self.holdings
 
-        self.cash -= spend
+        self.cash                   -= spend
+        self.cycle_budget_remaining -= spend
         return True
 
     def _execute_sell(self, fill_price: float, qty: float, next_price: float) -> float:
