@@ -242,7 +242,10 @@ df_behavior = pd.DataFrame(records)
 ## 5. 미결 사항 및 구현 주의점
 
 - [ ] `_process_fills()`: 같은 봉에서 buy + sell 동시 체결 시 처리 순서 확정 (sell 우선 원칙)
-- [ ] `order_size_fraction`: 주문 1개당 가용 현금의 몇 %를 사용할지 (현재 50% 임시)
+- [x] `order_size_fraction` → `n_splits` 방식으로 대체 (2026-04-10):
+      매수: `per_order_size = (cycle_start_cash / n_splits) / n_buy_orders` (고정 금액)
+      매도: `holdings ≤ threshold_btc` → 전량 청산, 아니면 `holdings / n_sell_orders`
+      `n_splits` 기본값 4, Val 셋 튜닝 예정
 - [ ] 변수 간 상관관계 분석 후 state 구성 재검토 (학습 전 notebooks/02에서 수행)
 - [ ] alpha 초기값 검증: Val 셋 랜덤 에이전트 실행 후 평균 cycle_pnl_pct 측정
 

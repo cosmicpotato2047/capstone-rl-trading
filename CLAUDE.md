@@ -83,6 +83,23 @@ step_reward += cycle_pnl_pct + cycle_alpha / cycle_hours
 - `cycle_alpha`: 0.5 초기값 (Val 셋 튜닝 예정)
 - 사이클: holdings == 0 → 첫 체결 시 시작 / holdings → 0 복귀 시 종료
 
+### 주문 크기 (Order Sizing)
+
+```python
+# 매수 — 사이클 시작 시 예산 확정 (고정 금액)
+cycle_slot_size = cycle_start_cash / n_splits
+per_order_size  = cycle_slot_size / n_buy_orders
+# cycle_budget_remaining < per_order_size → 추가 매수 완전 차단
+
+# 매도 — 1슬롯 임계값 기준
+threshold_btc = cycle_slot_size / avg(sell_lo, sell_hi)
+sell_qty = holdings           # 전량 청산  (holdings ≤ threshold_btc)
+sell_qty = holdings / n_sell_orders  # 균등 분할 (holdings > threshold_btc)
+```
+
+- `n_splits`: 4 초기값 (Val 셋 튜닝 예정)
+- 전량 청산 조건: 보유 BTC 가치 ≤ 1슬롯 현금 → 사이클 종료 보장
+
 ---
 
 ## 데이터

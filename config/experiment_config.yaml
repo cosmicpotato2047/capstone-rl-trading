@@ -54,8 +54,11 @@ environment:
   n_buy_orders: 2               # buy_hi, buy_lo
   n_sell_orders: 2              # sell_lo, sell_hi
 
-  # 주문당 매수 수량 (총 자본 / n_buy_orders 균등 분할)
-  order_size_fraction: 0.5      # 주문 1개당 가용 현금의 50% 사용
+  # 예산 분할 — 사이클 시작 시 현금을 n_splits 슬롯으로 나눔
+  # per_order_size = (cycle_start_cash / n_splits) / n_buy_orders
+  # 예: cash=10000, n_splits=4, n_buy_orders=2 → slot=2500, per_order=1250
+  # 슬롯 소진(cycle_budget_remaining < per_order_size) 후 추가 매수 완전 차단
+  n_splits: 4                   # 사이클당 총 매수 슬롯 수 (Val 셋 튜닝 예정)
 
   # Reward 파라미터
   cycle_alpha: 0.5              # 빠른 회전 보너스 가중치 (튜닝 필요)
