@@ -105,3 +105,88 @@
 - 주간 보고서 템플릿 생성: `reports/WEEKLY_TEMPLATE.md`
 
 ---
+
+## 2026-04-12 — 주문 사이징 재설계 + Reward 단순화 + State 개선
+
+### 주문 사이징 재설계: order_size_fraction → n_splits 균등 분할
+
+**문제**: 기존 `order_size_fraction=0.5` 방식은 매수마다 가용 현금의 50%를 소비하는
+기하급수적 감소 구조였다. 현실적인 그리드 봇 운용 방식(정해진 예산을 균등 소비)과 불일치.
+
+**결정**: 사이클 시작 시 현금을 n_splits 슬롯으로 등분, 슬롯당 균등 금액 고정 소비.
+
+```python
+cycle_slot_size = cycle_start_cash / n_splits       # 1슬롯 예산
+per_order_size  = cycle_slot_size / n_buy_orders    # 주문당 고정 금액
+# cycle_budget_remaining < per_order_size → 추가 매수 완전 차단
+```
+
+- `n_splits=4` 기본값 (Val 셋 튜닝 예정)
+- `config/experiment_config.yaml`에서 `order_size_fraction` 제거, `n_splits: 4` 추가
+
+**매도 주문 크기**: threshold_btc 기준 이분법
+```python
+threshold_btc = cycle_slot_size / avg(sell_lo, sell_hi)  # 1슬롯에 해당하는 BTC 수량
+sell_qty = holdings                      # 전량 청산  (holdings ≤ threshold_btc)
+sell_qty = holdings / n_sell_orders      # 균등 분할 (holdings > threshold_btc)
+```
+보유량이 1슬롯 이하로 줄면 전량 청산하여 사이클 종료를 보장한다.
+
+---
+
+### Reward 단순화: 사이클 보너스 완전 제거
+
+**문제**: 기존 보너스 `cycle_pnl_pct + alpha / cycle_hours`의 구조적 결함
+- 손실 사이클도 `alpha / cycle_hours`가 크면 양수 보너스 발생 (잘못된 강화)
+- n_splits + threshold_btc 설계로 사이클 구조는 이미 기계적으로 보장됨
+- `cycle_alpha` 하이퍼파라미터 하나를 줄일 수 있음
+
+**결정**: 사이클 보너스 완전 제거. step_reward만 사용.
+```python
+step_reward = (equity_t - equity_{t-1}) / start_capital - fee_rate * n_trades
+```
+사이클 종료 시 `completed_cycles` 리스트에 통계만 기록 (보너스 없음).
+
+- `config/experiment_config.yaml`에서 `cycle_alpha` 파라미터 제거
+- `_close_cycle()`: 보너스 계산 로직 제거, `return 0.0`
+- `completed_cycles` dict에서 `"bonus"` 키 제거
+
+---
+
+### State 개선: divergence에 last_avg_price 도입
+
+**문제**: 미보유 구간(holdings==0)에서 divergence=0으로 고정되면
+"방금 70k에 전량 매도, 현재 60k" 상태와 "한 번도 거래 안 함" 상태가
+동일하게 인코딩된다. 재진입 타이밍 신호가 누락됨.
+
+**결정**: 전량 청산 시 평단가를 `last_avg_price`에 보존. 미보유 구간에 활용.
+```python
+if holdings > 0:
+    divergence = (avg_price - price) / avg_price             # 보유 중
+elif last_avg_price > 0:
+    divergence = (last_avg_price - price) / last_avg_price   # 미보유, 직전 사이클 있음
+else:
+    divergence = 0.0                                         # 에피소드 초반
+```
+
+---
+
+### 검증
+- `gymnasium.utils.env_checker` 통과
+- 랜덤 에이전트 Val set 실행:
+  - 174 사이클 완료 (n_splits 도입 전: 1 사이클)
+  - `last_avg_price` 정상 저장 확인 (17311.59)
+  - 미보유 구간 divergence = -0.0096 (0이 아님, last_avg_price 활용 중)
+  - `completed_cycles` dict에 `bonus` 키 없음 확인
+
+### 아이디어 기록 (2학기/논문 확장 시 검토)
+- **레짐 스위칭 그리드 베이스라인**: 변동성 수준(상/중/하)별로 최적 그리드 파라미터를
+  오프라인 그리드서치로 확정 후 런타임에 레짐 감지하여 적용하는 방식.
+  현재 ATR 비례 그리드보다 강력한 베이스라인이 되어 PPO와의 비교가 더 설득력 있어진다.
+  1학기 범위 초과 → 2학기 혹은 논문 확장 시 추가 예정.
+
+### 커밋
+- `feat: n_splits equal-slot order sizing` (feature/n-splits-order-sizing → main)
+- `feat: remove cycle bonus, add last_avg_price for divergence` (feature/remove-cycle-bonus-add-last-avg-price → main)
+
+---
