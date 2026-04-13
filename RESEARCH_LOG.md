@@ -297,3 +297,52 @@ BTCGridTradingEnv와 동일한 원칙 적용:
 - `feat: Buy-and-Hold / Fixed Grid / ATR Grid 베이스라인 구현` (feature/baselines → main)
 
 ---
+
+## 2026-04-13 — metrics.py 구현
+
+### 무엇을
+`src/evaluation/metrics.py` 신규 작성 — 포트폴리오 성능 지표 계산 모듈.
+
+### 왜
+PPO와 베이스라인을 **동일한 함수**로 계산해야 비교가 공정하다.
+학습 루프 안에서도 Val 평가 시 Sharpe를 계산하려면 이 모듈이 먼저 있어야 한다.
+ppo_agent.py / train_ppo.py 구현 이전에 선행 완료.
+
+### 구현 내용
+
+| 함수 | 설명 |
+|------|------|
+| `total_return_pct(equity_curve, initial_cash)` | 누적 수익률 (%) |
+| `sharpe_ratio(equity_curve, ...)` | 연율화 Sharpe (√8760, 1h봉 기준) |
+| `max_drawdown_pct(equity_curve)` | 최대 낙폭 (%) |
+| `avg_cycle_pnl_pct(completed_cycles)` | 사이클 평균 수익률 (%) |
+| `avg_cycle_hours(completed_cycles)` | 사이클 평균 소요 봉 |
+| `compute_all(...)` | 전체 지표 일괄 계산 → dict |
+| `print_metrics(metrics, label)` | 지표 dict 보기 좋게 출력 |
+
+### 검증 결과
+
+수학 단위 테스트:
+- total_return 10% (단조 상승) ✅
+- MDD 40% (10k→15k→9k) ✅
+- 무변동 Sharpe 0.000 ✅
+
+Val 셋 베이스라인 전체 적용:
+
+| 전략 | 수익률(%) | Sharpe | MDD(%) | 거래 | 사이클 |
+|------|----------|--------|--------|------|--------|
+| Buy-and-Hold | +150.18 | 2.377 | 21.74 | 1 | 0 |
+| Fixed Grid 1% | +43.16 | **2.610** | 10.77 | 567 | 141 |
+| Fixed Grid 2% | +16.96 | 2.032 | 7.65 | 126 | 41 |
+| Fixed Grid 5% | +2.47 | 1.375 | 1.66 | 8 | 4 |
+| ATR Grid k=0.5 | +24.70 | 1.118 | 16.07 | 1464 | 347 |
+| ATR Grid k=1.0 | +39.79 | 1.434 | 15.86 | 833 | 213 |
+| ATR Grid k=2.0 | +28.98 | 1.948 | 9.38 | 320 | 91 |
+
+**PPO가 넘어야 할 Sharpe 기준: 2.610** (Val 셋 Fixed Grid 1%)
+단, 2023년은 강세장 — Train 셋(2020-2022 혼재)에서의 Sharpe 비교가 더 의미 있다.
+
+### 커밋
+- `feat: src/evaluation/metrics.py — 포트폴리오 성능 지표 계산 모듈` (feature/metrics → main)
+
+---
