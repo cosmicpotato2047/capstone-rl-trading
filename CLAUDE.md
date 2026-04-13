@@ -150,6 +150,22 @@ sell_qty = holdings / n_sell_orders  # 균등 분할 (holdings > threshold_btc)
 - 사용자 확인 없이 진행 (혼자 하는 프로젝트이므로)
 - 단, 보고서/문서 업데이트는 브랜치 없이 main에 직접 커밋
 
+### RESEARCH_LOG.md 자동 기록 규칙
+코드 변경을 동반하는 작업이 완료되면 **사용자 요청 없이** 반드시 기록한다.
+
+기록 조건:
+- `src/`, `scripts/`, `config/`, `tests/` 등 코드/설정 파일을 수정한 경우
+- 설계 의사결정이 바뀐 경우 (MDP, Reward, State 구조 등)
+- 실험을 실행하고 결과가 나온 경우
+
+기록 내용 (날짜별 섹션 추가):
+- **무엇을** 변경했는가 (파일, 함수, 파라미터)
+- **왜** 변경했는가 (기존 문제, 결정 근거)
+- **결과** (검증 수치, env_checker 통과 여부 등)
+- **보류한 아이디어**가 있으면 "아이디어 기록" 항목에 남김
+
+기록 후 `docs: RESEARCH_LOG.md 업데이트` 로 main에 직접 커밋 및 push한다.
+
 ### Commit Message Convention (Conventional Commits)
 ```
 feat:     새 기능 구현
