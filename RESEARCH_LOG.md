@@ -190,3 +190,41 @@ else:
 - `feat: remove cycle bonus, add last_avg_price for divergence` (feature/remove-cycle-bonus-add-last-avg-price → main)
 
 ---
+
+## 2026-04-13 — 환경 수학 검증 테스트 작성
+
+### 무엇을
+`tests/test_trading_env.py` 신규 작성 — 46개 테스트, 전체 통과 (1.00s).
+
+### 왜
+지난 세션(n_splits 도입, 사이클 보너스 제거, last_avg_price 추가)에서 환경 수학이
+크게 바뀌었는데 수치 검증이 없었다. PPO 학습 전에 반드시 "환경이 설계대로 계산하는가"를
+확인해야 한다. 이후 환경을 수정할 때도 pytest 한 번으로 회귀를 즉시 탐지할 수 있다.
+
+### 어떻게
+가격 고정 합성 DataFrame(close=1000, high/low 정밀 제어)으로 실제 데이터 의존성 제거.
+내부 메서드 직접 호출(수학 단위 테스트) + step() 통합 호출(동작 통합 테스트) 병행.
+
+**검증 항목 (10개 클래스)**
+| 클래스 | 검증 내용 |
+|--------|----------|
+| InitialState | reset 후 7개 초기값 |
+| BuyMath | per_order_size, 평단가 가중평균, 수수료, cash 감소 |
+| BudgetExhaustion | 8회 성공 → 9회 False, 음수 방지 |
+| SellMath | 수수료, 전량/분할 청산, avg_price 불변 |
+| CycleAndLastAvgPrice | last_avg_price 저장 조건, 사이클 구조, bonus 키 없음 |
+| ThresholdBtcSell | threshold 기준 전량/분할 매도 |
+| SellFirstPrinciple | 같은 봉 sell+buy 동시 체결 시 sell 우선 |
+| Divergence | last_avg_price 3분기 동작 |
+| Reward | bonus=0, equity_change 공식 정확성 |
+| EnvChecker | gymnasium 공식 env_checker |
+
+### 발견 사항
+초기 실패 3건 — next_low=500 설정 시 buy_hi + buy_lo 둘 다 체결(n_trades=2)되어
+n_trades=1로 가정한 테스트가 깨짐. 이는 환경 버그가 아니라 두 주문이 독립적으로
+정상 처리된다는 것을 확인한 셈. next_low를 999.5로 조정하여 buy_hi만 선택 체결.
+
+### 커밋
+- `test: BTCGridTradingEnv 포트폴리오 수학 검증 테스트 46개` (feature/trading-env-tests → main)
+
+---
