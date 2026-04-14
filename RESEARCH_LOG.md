@@ -480,3 +480,31 @@ PPO 학습 파이프라인 전체 구현 완료.
 - `feat: exp002 튜닝 설정 + Train 셋 베이스라인 평가`
 
 ---
+
+## 2026-04-14 — exp002 학습 완료 및 결과 분석
+
+### exp001 vs exp002 비교
+
+| 지표 | exp001 | exp002 | 개선 |
+|------|--------|--------|------|
+| best Sharpe | 0.795 (step=100k) | 0.745 (step=50k) | ↓ |
+| final Sharpe | -0.280 | **-0.095** | ↑ |
+| mean Sharpe | 0.271 | **0.368** | ↑ |
+| 양수 비율 | 95.0% | 90.0% | ↓ 소폭 |
+
+### 해석
+- **안정성 개선**: final Sharpe -0.280 → -0.095, mean Sharpe 0.271 → 0.368. 수렴이 더 안정적
+- **peak 미개선**: best Sharpe는 오히려 낮음 (0.795 → 0.745). lr 감소가 탐색 초반 속도를 낮춤
+- **공통 문제**: 두 실험 모두 Train 베이스라인 최고(ATR k=0.5: 0.818)에 미달. 단순 lr/ent_coef 튜닝만으로는 한계
+
+### 보류 아이디어 (2학기)
+- **reward normalization**: step_reward 스케일이 너무 작아 학습 신호 약함
+- **VecNormalize**: SB3 내장 reward/obs 정규화 래퍼 활용
+- **n_steps 8192**: 에피소드(25k봉) 대비 충분한 롤아웃
+- **총 스텝 증가**: 1M → 3M (충분한 샘플 확보)
+- **lr scheduling**: LinearSchedule(3e-4 → 1e-5) annealing
+
+### 커밋
+- `feat: exp002 학습 완료 + exp001 vs exp002 비교 그래프`
+
+---
