@@ -346,3 +346,47 @@ Val 셋 베이스라인 전체 적용:
 - `feat: src/evaluation/metrics.py — 포트폴리오 성능 지표 계산 모듈` (feature/metrics → main)
 
 ---
+
+## 2026-04-14 — PPOAgent 래퍼 + train_ppo.py 구현
+
+### 무엇을
+`src/agents/ppo_agent.py` + `scripts/train_ppo.py` 신규 작성.
+PPO 학습 파이프라인 전체 구현 완료.
+
+### 왜
+베이스라인과 metrics.py가 완성됐으니 이제 실제 PPO를 학습시킬 파이프라인이 필요하다.
+학습 중 Val 평가, 최고 모델 저장, MLflow 기록, 베이스라인 비교 출력까지 한 번에 처리한다.
+
+### 구현 내용
+
+**`src/agents/ppo_agent.py`**
+- `ValMetricsCallback`: eval_freq 스텝마다 Val 1에피소드 실행 → Sharpe/Return/MDD 출력
+  - 최고 Sharpe 모델 `best_model_path`에 자동 저장
+  - MLflow 활성 시 지표 자동 기록
+- `PPOAgent(config, df_train, df_val)`: SB3 PPO 래퍼
+  - `train(total_timesteps, best_model_path)`: 학습 실행
+  - `evaluate(df)`: 결정론적 1에피소드 평가 → metrics dict + equity_curve
+  - `save(path)` / `load(path, ...)`: 모델 저장/로드
+  - tensorboard 미설치 시 자동 비활성화 (ImportError 처리)
+
+**`scripts/train_ppo.py`**
+- CLI 인자: `--config`, `--timesteps`, `--exp-name`, `--no-mlflow`
+- MLflow 하이퍼파라미터 + Val 지표 자동 기록
+- 학습 완료 후 베이스라인 비교표 + PPO 우위 여부 출력
+- config_snapshot.yaml 실험 디렉토리 자동 복사 (재현성)
+
+### smoke test 결과 (100스텝)
+파이프라인 전체 정상 동작:
+- 콜백 주기적 호출 ✅
+- best_model 자동 저장 ✅
+- evaluate() 정상 반환 ✅
+- 100스텝 미학습 에이전트 Sharpe -3.449 (랜덤 정책, 예상 범위 내)
+
+### 인프라 이슈 및 해결
+- `stable-baselines3` 미설치 → `pip install stable-baselines3` (v2.8.0, torch 2.11.0 포함)
+- tensorboard 미설치 시 `ImportError` → ppo_agent.py에서 try/except로 자동 비활성화
+
+### 커밋
+- `feat: PPOAgent 래퍼 + train_ppo.py 학습 스크립트 구현` (feature/ppo-agent → main)
+
+---
