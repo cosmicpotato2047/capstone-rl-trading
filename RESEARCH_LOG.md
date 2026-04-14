@@ -390,3 +390,38 @@ PPO 학습 파이프라인 전체 구현 완료.
 - `feat: PPOAgent 래퍼 + train_ppo.py 학습 스크립트 구현` (feature/ppo-agent → main)
 
 ---
+
+## 2026-04-14 — behavior.py 구현 (PPO 행동 분석 모듈)
+
+### 무엇을
+`src/evaluation/behavior.py` 신규 작성 — Sub-RQ 분석 인프라.
+
+### 왜
+주 연구 질문(Sharpe 우위)과 함께 **"어떤 시장 레짐에서 어떤 간격을 선택하는가?"**
+라는 부 연구 질문에 답해야 한다. PPO 학습 완료 후 즉시 분석할 수 있도록
+행동 수집/분석/시각화 파이프라인을 미리 구현한다.
+
+### 구현 내용
+
+| 함수 | 역할 |
+|------|------|
+| `collect(model, df, config)` | 1에피소드 전체 (state, action, regime) → DataFrame |
+| `actions_to_gaps(actions)` | action [0,1]² → buy/sell gap 실수값 변환 |
+| `action_stats(behavior_df)` | 기술통계 (mean/std/min/max) |
+| `regime_analysis(behavior_df)` | Low/Mid/High 레짐별 평균 행동 비교 |
+| `print_regime_summary(behavior_df)` | 레짐별 요약 콘솔 출력 |
+| `plot_behavior(behavior_df, save_dir)` | 행동 시계열 + 박스플롯 4종 PNG 저장 |
+
+레짐 정의 (zscore_volatility 기준):
+- Low : < -0.5 / Mid : -0.5 ~ 0.5 / High : > 0.5
+
+### smoke test 결과 (Val, 미학습 모델)
+- 8,567스텝 수집 완료 ✅
+- 레짐 분포: Low 49.7% / Mid 10.6% / High 39.8%
+- gap 변환 수학 검증: agg=0.0 → buy_hi_gap=0.01%, agg=1.0 → 5.01% ✅
+- 행동 분석 그래프 저장 성공 ✅
+
+### 커밋
+- `feat: src/evaluation/behavior.py — PPO 행동 수집 및 레짐 분석 모듈` (feature/behavior → main)
+
+---
