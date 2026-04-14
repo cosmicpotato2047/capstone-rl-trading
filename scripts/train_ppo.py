@@ -151,7 +151,7 @@ def main() -> None:
           f"{ppo_sharpe:>7.3f} {val_metrics['max_drawdown_pct']:>8.2f} "
           f"{val_metrics['n_trades']:>6} {val_metrics['n_cycles']:>6}")
     print(f"\n→ PPO Sharpe {ppo_sharpe:.3f} vs 베이스라인 최고 {best_bl_sharpe:.3f} "
-          f"({'✓ 우위' if ppo_sharpe > best_bl_sharpe else '✗ 미달'})")
+          f"({'[우위]' if ppo_sharpe > best_bl_sharpe else '[미달]'})")
 
     # ── 6. MLflow 최종 지표 기록 + 종료 ──────────────────────
     if use_mlflow:
