@@ -10,12 +10,19 @@ State (5차원, rolling z-score 정규화):
 
 Action (2차원 연속, [0, 1]²):
     [0] aggressiveness → buy_hi_gap, buy_lo_gap 결정
-    [1] profit_target  → sell_lo_gap, sell_hi_gap 결정
+    [1] profit_target  → sell_market_gap, sell_cost_gap 결정
 
-주문 (매 스텝 4개 지정가 갱신):
-    buy_hi      = price     × (1 - buy_hi_gap)       # 공격적 매수
-    buy_lo      = price     × (1 - buy_lo_gap)       # 보수적 매수
-    sell_market = price     × (1 + sell_market_gap)  # 시장 모멘텀 활용 (현재가 기준)
+주문 (매 스텝 4개 지정가 갱신 — ATR 비례 스케일링):
+    atr_ratio   = ATR(168) / price              # 현재 변동성 수준
+
+    buy_hi_gap      = atr_ratio × (0.1 + aggressiveness × 0.9)  # [0.1×ATR, 1.0×ATR]
+    buy_lo_gap      = atr_ratio × (0.5 + aggressiveness × 4.5)  # [0.5×ATR, 5.0×ATR]
+    sell_market_gap = atr_ratio × (0.1 + profit_target  × 0.9)  # [0.1×ATR, 1.0×ATR]
+    sell_cost_gap   = atr_ratio × (0.5 + profit_target  × 4.5)  # [0.5×ATR, 5.0×ATR]
+
+    buy_hi      = price     × (1 - buy_hi_gap)
+    buy_lo      = price     × (1 - buy_lo_gap)
+    sell_market = price     × (1 + sell_market_gap)
     sell_cost   = avg_price × (1 + sell_cost_gap)    # 원가 수익 보호 (평단가 기준)
 
 체결: 다음 봉 high/low 기준, 조건 충족 시 그 시점 시장가(next_high / next_low)로 체결
@@ -132,13 +139,14 @@ class BTCGridTradingEnv(gym.Env):
             f"Invalid action: {action}"
 
         row = self.df.iloc[self.current_step]
-        price = float(row["close"])
+        price     = float(row["close"])
+        atr_ratio = float(row["volatility_raw"])   # ATR(168) / price
 
         # ── 1. 액션 → 4개 지정가 계산 ────────────────────────
         aggressiveness = float(action[0])
         profit_target = float(action[1])
         buy_hi, buy_lo, sell_market, sell_cost = self._compute_order_prices(
-            aggressiveness, profit_target, price
+            aggressiveness, profit_target, price, atr_ratio
         )
 
         # ── 2. 다음 봉 체결 판단 ──────────────────────────────
@@ -219,18 +227,30 @@ class BTCGridTradingEnv(gym.Env):
         aggressiveness: float,
         profit_target: float,
         price: float,
+        atr_ratio: float,
     ) -> tuple[float, float, float, float]:
         """액션값 → 4개 지정가 가격 반환.
+
+        ATR 비례 스케일링:
+            간격을 현재 변동성(ATR/price)에 비례시켜 action 전 범위 [0,1]이
+            실제 체결 확률 스펙트럼 [~13%, ~87%]에 고르게 대응되도록 설계.
+
+            aggressiveness=0.0 → buy_hi_gap = 0.1 × ATR  (소극적 매수, 낮은 체결률)
+            aggressiveness=1.0 → buy_hi_gap = 1.0 × ATR  (공격적 매수, 높은 체결률)
+
+        Args:
+            atr_ratio: ATR(168) / price (volatility_raw 컬럼)
 
         Returns:
             (buy_hi, buy_lo, sell_market, sell_cost)
             sell_market : 현재가(price) 기준 — 시장 모멘텀 활용
             sell_cost   : 평단가(avg_price) 기준 — 원가 수익 보호
         """
-        buy_hi_gap       = 0.0001 + aggressiveness * 0.05   # [0.01%,  5%]
-        buy_lo_gap       = 0.001  + aggressiveness * 0.10   # [0.10%, 10%]
-        sell_market_gap  = 0.0001 + profit_target  * 0.05   # [0.01%,  5%]
-        sell_cost_gap    = 0.001  + profit_target  * 0.15   # [0.10%, 15%]
+        # ATR 비례 간격 — 변동성이 크면 자동으로 간격이 넓어짐
+        buy_hi_gap      = atr_ratio * (0.1 + aggressiveness * 0.9)  # [0.1×ATR, 1.0×ATR]
+        buy_lo_gap      = atr_ratio * (0.5 + aggressiveness * 4.5)  # [0.5×ATR, 5.0×ATR]
+        sell_market_gap = atr_ratio * (0.1 + profit_target  * 0.9)  # [0.1×ATR, 1.0×ATR]
+        sell_cost_gap   = atr_ratio * (0.5 + profit_target  * 4.5)  # [0.5×ATR, 5.0×ATR]
 
         buy_hi      = price * (1.0 - buy_hi_gap)
         buy_lo      = price * (1.0 - buy_lo_gap)

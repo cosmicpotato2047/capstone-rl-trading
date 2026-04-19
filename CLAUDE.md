@@ -60,19 +60,26 @@ action_space = Box(low=0.0, high=1.0, shape=(2,), dtype=np.float32)
 [4] volatility           = ATR(168) / price
 ```
 
-### Action → 주문 변환 공식
+### Action → 주문 변환 공식 (ATR 비례 스케일링)
 
 ```python
-buy_hi_gap  = 0.0001 + aggressiveness * 0.05   # [0.01%,  5%]
-buy_lo_gap  = 0.001  + aggressiveness * 0.10   # [0.10%, 10%]
-sell_lo_gap = 0.0001 + profit_target  * 0.05   # [0.01%,  5%]
-sell_hi_gap = 0.001  + profit_target  * 0.15   # [0.10%, 15%]
+atr_ratio = ATR(168) / price               # volatility_raw 컬럼
 
-buy_hi  = price * (1 - buy_hi_gap)
-buy_lo  = price * (1 - buy_lo_gap)
-sell_lo = price * (1 + sell_lo_gap)
-sell_hi = avg_price * (1 + sell_hi_gap)  # avg_price=0이면 price fallback
+buy_hi_gap      = atr_ratio * (0.1 + aggressiveness * 0.9)  # [0.1×ATR, 1.0×ATR]
+buy_lo_gap      = atr_ratio * (0.5 + aggressiveness * 4.5)  # [0.5×ATR, 5.0×ATR]
+sell_market_gap = atr_ratio * (0.1 + profit_target  * 0.9)  # [0.1×ATR, 1.0×ATR]
+sell_cost_gap   = atr_ratio * (0.5 + profit_target  * 4.5)  # [0.5×ATR, 5.0×ATR]
+
+buy_hi      = price     * (1 - buy_hi_gap)
+buy_lo      = price     * (1 - buy_lo_gap)
+sell_market = price     * (1 + sell_market_gap)
+sell_cost   = avg_price * (1 + sell_cost_gap)   # avg_price=0이면 price fallback
 ```
+
+설계 근거:
+- 고정 절대 간격 → 시장 변동성과 분리, action 범위 대부분이 "체결 불가" 영역
+- ATR 비례 → action [0,1] 전체가 체결 확률 스펙트럼 [~13%, ~87%]에 고르게 대응
+- State[4] volatility 정보를 Policy가 직접 활용 가능 (State-Action 정합성)
 
 ### Reward
 

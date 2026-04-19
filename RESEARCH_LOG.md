@@ -658,3 +658,45 @@ step_reward = (equity_after - equity_before) / start_capital
 수정된 reward 공식으로 재학습.
 
 ---
+
+## 2026-04-19 — Action 공식 ATR 비례 스케일링 도입
+
+### 문제 진단 (exp003 결과 분석)
+
+고정 절대 간격 공식의 구조적 문제:
+- `buy_hi_gap = 0.0001 + agg × 0.05`
+- val(2023) 1h 평균 변동폭 0.304%, train(2020-22) 0.561%
+- agg=0.0 → gap=0.01% → 체결 확률 3%  (action 범위의 대부분이 "체결 불가")
+- agg=0.1 → gap=0.51% → 체결 확률 84% (급격한 계단)
+- 의미있는 구간 [0.03, 0.1] = 전체의 7%만 유효
+- State[4]의 ATR 정보를 읽어도 Action에 반영할 표현 수단 없음
+
+### 해결책: ATR 비례 스케일링
+
+```python
+# 수정 전 (고정)
+buy_hi_gap = 0.0001 + aggressiveness * 0.05
+
+# 수정 후 (ATR 비례)
+atr_ratio  = ATR(168) / price
+buy_hi_gap = atr_ratio * (0.1 + aggressiveness * 0.9)  # [0.1×ATR, 1.0×ATR]
+buy_lo_gap = atr_ratio * (0.5 + aggressiveness * 4.5)  # [0.5×ATR, 5.0×ATR]
+# sell도 동일 구조
+```
+
+체결 확률 분포 (val 2023 기준):
+  agg=0.0 → gap=0.1×ATR(0.058%) → 체결 확률 13%
+  agg=0.5 → gap=0.55×ATR(0.317%) → 체결 확률 67%
+  agg=1.0 → gap=1.0×ATR(0.576%) → 체결 확률 87%
+
+→ action [0,1] 전체가 의미있는 스펙트럼에 고르게 분포
+→ 변동성이 높은 train 구간에서 배운 정책이 val에도 자동 적용 (스케일 불변성)
+→ State-Action 정합성: State[4] ATR 정보를 Policy가 action으로 직접 표현 가능
+
+### 변경 파일
+- `src/env/trading_env.py`: `_compute_order_prices()` ATR 비례 공식 + `atr_ratio` 인자 추가
+- `CLAUDE.md`: Action 공식 섹션 업데이트 + 설계 근거 명시
+- `tests/test_trading_env.py`: `ATR_RATIO=0.01` 상수 추가, `_df()/_df_rows()` volatility_raw 컬럼 수정, 체결 경계 수치 전면 갱신
+- 46개 테스트 통과 확인
+
+---
