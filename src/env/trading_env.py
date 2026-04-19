@@ -32,8 +32,9 @@ Action (2차원 연속, [0, 1]²):
     next_low  <= buy_lo       →  next_low  가격으로 체결
 
 주문 크기:
-    매수: 사이클 시작 시 현금을 n_splits 슬롯으로 분할
-          per_order_size = (cycle_start_cash / n_splits) / n_buy_orders
+    매수: n_buy_orders개 가격 레벨 (buy_hi ~ buy_lo 선형 보간)
+          per_order_size = cycle_slot_size / n_buy_orders
+          각 레벨에서 next_low ≤ level_price 조건 충족 시 체결
           슬롯 소진(cycle_budget_remaining < per_order_size) 후 추가 매수 완전 차단
     매도: 고정 2레벨 (n_sell_orders 파라미터 없음)
           sell_market: 현재가 기준 단기 반등 / 현금 확보
@@ -313,8 +314,8 @@ class BTCGridTradingEnv(gym.Env):
             next_high:   다음 봉 high
             next_low:    다음 봉 low
             next_price:  다음 봉 close (사이클 종료 처리용)
-            buy_hi:      공격적 매수 지정가
-            buy_lo:      보수적 매수 지정가
+            buy_hi:      매수 가격 레벨 상단 (가장 공격적, 체결 확률 높음)
+            buy_lo:      매수 가격 레벨 하단 (가장 보수적, 체결 확률 낮음)
             sell_market: 현재가 기준 매도 지정가
             sell_cost:   평단가 기준 매도 지정가
 
@@ -360,17 +361,22 @@ class BTCGridTradingEnv(gym.Env):
 
         # ── 2. BUY 처리 ─────────────────────────────────────────
 
-        # buy_hi: 공격적 매수 — 조건 충족 시 next_low로 체결 (지정가 이하 보장)
-        if next_low <= buy_hi:
-            success = self._execute_buy(next_low)
-            if success:
-                n_trades += 1
+        # buy_hi ~ buy_lo 사이를 n_buy_orders개 가격으로 선형 보간
+        # n_buy_orders=2 → [buy_hi, buy_lo] (하위 호환)
+        # n_buy_orders=N → N개 레벨에 cycle_slot_size/N씩 균등 배분
+        if self.n_buy_orders == 1:
+            buy_prices = [buy_hi]
+        else:
+            buy_prices = [
+                buy_hi + i / (self.n_buy_orders - 1) * (buy_lo - buy_hi)
+                for i in range(self.n_buy_orders)
+            ]
 
-        # buy_lo: 보수적 매수 — 조건 충족 시 next_low로 체결
-        if next_low <= buy_lo:
-            success = self._execute_buy(next_low)
-            if success:
-                n_trades += 1
+        for bp in buy_prices:
+            if next_low <= bp:
+                success = self._execute_buy(next_low)
+                if success:
+                    n_trades += 1
 
         return n_trades, cycle_bonus
 
