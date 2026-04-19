@@ -58,10 +58,10 @@ def _cfg(**env_overrides):
 ATR_RATIO = 0.01   # volatility_raw = ATR/price = 10/1000
 
 # ATR 비례 공식 (_act(0.0, 0.0) 기준):
-#   buy_hi_gap      = ATR_RATIO × 0.1 = 0.001  →  buy_hi      = 999.0
-#   buy_lo_gap      = ATR_RATIO × 0.5 = 0.005  →  buy_lo      = 995.0
-#   sell_market_gap = ATR_RATIO × 0.1 = 0.001  →  sell_market = 1001.0
-#   sell_cost_gap   = ATR_RATIO × 0.5 = 0.005  →  sell_cost   = avg_price × 1.005
+#   buy_hi_gap      = ATR_RATIO × 0.5 = 0.005  →  buy_hi      = 995.0
+#   buy_lo_gap      = ATR_RATIO × 2.5 = 0.025  →  buy_lo      = 975.0
+#   sell_market_gap = ATR_RATIO × 0.5 = 0.005  →  sell_market = 1005.0
+#   sell_cost_gap   = ATR_RATIO × 2.5 = 0.025  →  sell_cost   = avg_price × 1.025
 
 
 def _df(n_rows=30, price=PRICE, high_offset=0.0, low_offset=0.0):
@@ -70,8 +70,8 @@ def _df(n_rows=30, price=PRICE, high_offset=0.0, low_offset=0.0):
     high = price + high_offset, low = price - low_offset.
 
     기본값(offset=0): high == low == price → 어떤 체결도 발생하지 않는 안전한 봉.
-      sell_market = price × 1.001 = 1001.0 > high=price  → sell 안 됨
-      buy_hi      = price × 0.999 =  999.0 < low=price   → buy  안 됨
+      sell_market = price × 1.005 = 1005.0 > high=price  → sell 안 됨
+      buy_hi      = price × 0.995 =  995.0 < low=price   → buy  안 됨
 
     volatility_raw = ATR/price = 10/1000 = 0.01 (고정)
     """
@@ -445,16 +445,16 @@ class TestSellFirstPrinciple:
     같은 봉에서 sell + buy 동시 체결 가능할 때 sell이 먼저 처리되어야 한다.
 
     ATR 비례 공식 (_act(0.0, 0.0), atr_ratio=0.01):
-      buy_hi  = 1000 × (1 - 0.001) = 999.0
-      buy_lo  = 1000 × (1 - 0.005) = 995.0
-      sell_market = 1000 × 1.001   = 1001.0
+      buy_hi  = 1000 × (1 - 0.005) = 995.0
+      buy_lo  = 1000 × (1 - 0.025) = 975.0
+      sell_market = 1000 × 1.005   = 1005.0
 
     시나리오:
-      스텝 0: next 봉 low=998.0 → buy_hi(999.0) 체결, buy_lo(995.0) 차단
+      스텝 0: next 봉 low=994.0 → buy_hi(995.0) 체결, buy_lo(975.0) 차단
               → holdings ≈ 1.25 ≤ threshold_btc(2.5)
       스텝 1: next 봉 high=2000, low=500
-              → sell_market(1001.0) 체결: 전량 청산 → 사이클 종료
-              → buy_hi(999.0) 체결 → 새 사이클 시작
+              → sell_market(1005.0) 체결: 전량 청산 → 사이클 종료
+              → buy_hi(995.0) 체결 → 새 사이클 시작
     """
 
     def _build_env(self):
@@ -463,10 +463,10 @@ class TestSellFirstPrinciple:
         highs  = [PRICE] * n
         lows   = [PRICE] * n
 
-        # 스텝 0의 다음 봉: low를 buy_hi(999.0)와 buy_lo(995.0) 사이로 설정
+        # 스텝 0의 다음 봉: low를 buy_hi(995.0)와 buy_lo(975.0) 사이로 설정
         #   → buy_hi만 체결, buy_lo는 차단 → holdings ≈ 1.25 ≤ threshold_btc(2.5)
         highs[WARMUP + 1] = PRICE
-        lows[WARMUP + 1]  = 998.0   # buy_hi(999.0) 체결 (998≤999), buy_lo(995.0) 차단 (998>995)
+        lows[WARMUP + 1]  = 994.0   # buy_hi(995.0) 체결 (994≤995), buy_lo(975.0) 차단 (994>975)
 
         # 스텝 1의 다음 봉: high 높게 + low 낮게 → sell + buy 동시
         highs[WARMUP + 2] = 2000.0
@@ -606,17 +606,17 @@ class TestReward:
         → equity 변화분 자체에 수수료가 포함되므로 별도 차감 없음.
 
         ATR 비례 공식 (atr_ratio=0.01, agg=0.0):
-          buy_hi  = 1000 × (1 - 0.001) = 999.0
-          buy_lo  = 1000 × (1 - 0.005) = 995.0
-        next_low=998.0: 998 ≤ 999.0 → buy_hi 체결, 998 > 995.0 → buy_lo 미체결 → n_trades=1
+          buy_hi  = 1000 × (1 - 0.005) = 995.0
+          buy_lo  = 1000 × (1 - 0.025) = 975.0
+        next_low=994.0: 994 ≤ 995.0 → buy_hi 체결, 994 > 975.0 → buy_lo 미체결 → n_trades=1
         """
         n = WARMUP + 5
         prices = [PRICE] * n
         highs  = [PRICE] * n
         lows   = [PRICE] * n
-        # buy_hi=999.0, buy_lo=995.0
-        # next_low=998.0: 998 ≤ 999 → buy_hi 체결, 998 > 995 → buy_lo 미체결
-        lows[WARMUP + 1] = 998.0
+        # buy_hi=995.0, buy_lo=975.0
+        # next_low=994.0: 994 ≤ 995 → buy_hi 체결, 994 > 975 → buy_lo 미체결
+        lows[WARMUP + 1] = 994.0
 
         df = _df_rows(prices, highs, lows)
         env = BTCGridTradingEnv(df, _cfg())
@@ -634,20 +634,20 @@ class TestReward:
         사이클 종료 스텝에서도 보너스가 없어야 한다 (bonus=0 설계).
 
         ATR 비례 공식 (atr_ratio=0.01, agg=0.0, pt=0.0):
-          buy_hi      = 999.0,  buy_lo      = 995.0
-          sell_market = 1001.0, sell_cost   = avg_price × 1.005 ≈ 998 × 1.005 ≈ 1002.99
+          buy_hi      = 995.0,  buy_lo      = 975.0
+          sell_market = 1005.0, sell_cost   = avg_price × 1.025 ≈ 994 × 1.025 ≈ 1018.85
 
-        스텝 0: next_low=998.0  → buy_hi(999.0)만 체결 (1회) → fill at 998.0
-        스텝 1: next_high=1001.5 → sell_market(1001.0) 체결, sell_cost(≈1002.99) 미체결 (1회)
-                next_low=1000.0  > buy_hi(999.0) → buy 미체결
+        스텝 0: next_low=994.0  → buy_hi(995.0)만 체결 (1회) → fill at 994.0
+        스텝 1: next_high=1006.0 → sell_market(1005.0) 체결, sell_cost(≈1018.85) 미체결 (1회)
+                next_low=1000.0  > buy_hi(995.0) → buy 미체결
         """
         n = WARMUP + 5
         prices = [PRICE] * n
         highs  = [PRICE] * n
         lows   = [PRICE] * n
-        lows[WARMUP + 1]  = 998.0    # 스텝 0: buy_hi(999.0)만 체결 (fill at 998.0)
-        highs[WARMUP + 2] = 1001.5   # 스텝 1: sell_market(1001.0) 체결, sell_cost(≈1003) 미체결
-        lows[WARMUP + 2]  = 1000.0   # buy 미체결 (1000 > 999.0)
+        lows[WARMUP + 1]  = 994.0    # 스텝 0: buy_hi(995.0)만 체결 (fill at 994.0)
+        highs[WARMUP + 2] = 1006.0   # 스텝 1: sell_market(1005.0) 체결, sell_cost(≈1019) 미체결
+        lows[WARMUP + 2]  = 1000.0   # buy 미체결 (1000 > 995.0)
 
         df = _df_rows(prices, highs, lows)
         env = BTCGridTradingEnv(df, _cfg())

@@ -65,10 +65,11 @@ action_space = Box(low=0.0, high=1.0, shape=(2,), dtype=np.float32)
 ```python
 atr_ratio = ATR(168) / price               # volatility_raw 컬럼
 
-buy_hi_gap      = atr_ratio * (0.1 + aggressiveness * 0.9)  # [0.1×ATR, 1.0×ATR]
-buy_lo_gap      = atr_ratio * (0.5 + aggressiveness * 4.5)  # [0.5×ATR, 5.0×ATR]
-sell_market_gap = atr_ratio * (0.1 + profit_target  * 0.9)  # [0.1×ATR, 1.0×ATR]
-sell_cost_gap   = atr_ratio * (0.5 + profit_target  * 4.5)  # [0.5×ATR, 5.0×ATR]
+buy_hi_gap      = atr_ratio * (0.5 + aggressiveness * 1.5)  # [0.5×ATR, 2.0×ATR]
+buy_lo_gap      = atr_ratio * (2.5 + aggressiveness * 7.5)  # [2.5×ATR, 10×ATR]
+sell_market_gap = atr_ratio * (0.5 + profit_target  * 1.5)  # [0.5×ATR, 2.0×ATR]
+sell_cost_gap   = atr_ratio * (2.5 + profit_target  * 7.5)  # [2.5×ATR, 10×ATR]
+# 최소 gap 0.5×ATR: val p10 ATR=0.35%에서도 round-trip net = +0.25% (fee=0.1%)
 
 buy_hi      = price     * (1 - buy_hi_gap)
 buy_lo      = price     * (1 - buy_lo_gap)

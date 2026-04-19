@@ -15,10 +15,10 @@ Action (2차원 연속, [0, 1]²):
 주문 (매 스텝 4개 지정가 갱신 — ATR 비례 스케일링):
     atr_ratio   = ATR(168) / price              # 현재 변동성 수준
 
-    buy_hi_gap      = atr_ratio × (0.1 + aggressiveness × 0.9)  # [0.1×ATR, 1.0×ATR]
-    buy_lo_gap      = atr_ratio × (0.5 + aggressiveness × 4.5)  # [0.5×ATR, 5.0×ATR]
-    sell_market_gap = atr_ratio × (0.1 + profit_target  × 0.9)  # [0.1×ATR, 1.0×ATR]
-    sell_cost_gap   = atr_ratio × (0.5 + profit_target  × 4.5)  # [0.5×ATR, 5.0×ATR]
+    buy_hi_gap      = atr_ratio × (0.5 + aggressiveness × 1.5)  # [0.5×ATR, 2.0×ATR]
+    buy_lo_gap      = atr_ratio × (2.5 + aggressiveness × 7.5)  # [2.5×ATR, 10×ATR]
+    sell_market_gap = atr_ratio × (0.5 + profit_target  × 1.5)  # [0.5×ATR, 2.0×ATR]
+    sell_cost_gap   = atr_ratio × (2.5 + profit_target  × 7.5)  # [2.5×ATR, 10×ATR]
 
     buy_hi      = price     × (1 - buy_hi_gap)
     buy_lo      = price     × (1 - buy_lo_gap)
@@ -235,8 +235,8 @@ class BTCGridTradingEnv(gym.Env):
             간격을 현재 변동성(ATR/price)에 비례시켜 action 전 범위 [0,1]이
             실제 체결 확률 스펙트럼 [~13%, ~87%]에 고르게 대응되도록 설계.
 
-            aggressiveness=0.0 → buy_hi_gap = 0.1 × ATR  (소극적 매수, 낮은 체결률)
-            aggressiveness=1.0 → buy_hi_gap = 1.0 × ATR  (공격적 매수, 높은 체결률)
+            aggressiveness=0.0 → buy_hi_gap = 0.5 × ATR  (소극적 매수, fee 손익분기 보장)
+            aggressiveness=1.0 → buy_hi_gap = 2.0 × ATR  (공격적 매수, 높은 체결률)
 
         Args:
             atr_ratio: ATR(168) / price (volatility_raw 컬럼)
@@ -247,10 +247,10 @@ class BTCGridTradingEnv(gym.Env):
             sell_cost   : 평단가(avg_price) 기준 — 원가 수익 보호
         """
         # ATR 비례 간격 — 변동성이 크면 자동으로 간격이 넓어짐
-        buy_hi_gap      = atr_ratio * (0.1 + aggressiveness * 0.9)  # [0.1×ATR, 1.0×ATR]
-        buy_lo_gap      = atr_ratio * (0.5 + aggressiveness * 4.5)  # [0.5×ATR, 5.0×ATR]
-        sell_market_gap = atr_ratio * (0.1 + profit_target  * 0.9)  # [0.1×ATR, 1.0×ATR]
-        sell_cost_gap   = atr_ratio * (0.5 + profit_target  * 4.5)  # [0.5×ATR, 5.0×ATR]
+        buy_hi_gap      = atr_ratio * (0.5 + aggressiveness * 1.5)  # [0.5×ATR, 2.0×ATR]
+        buy_lo_gap      = atr_ratio * (2.5 + aggressiveness * 7.5)  # [2.5×ATR, 10×ATR]
+        sell_market_gap = atr_ratio * (0.5 + profit_target  * 1.5)  # [0.5×ATR, 2.0×ATR]
+        sell_cost_gap   = atr_ratio * (2.5 + profit_target  * 7.5)  # [2.5×ATR, 10×ATR]
 
         buy_hi      = price * (1.0 - buy_hi_gap)
         buy_lo      = price * (1.0 - buy_lo_gap)
