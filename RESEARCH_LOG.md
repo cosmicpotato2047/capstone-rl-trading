@@ -700,3 +700,56 @@ buy_lo_gap = atr_ratio * (0.5 + aggressiveness * 4.5)  # [0.5×ATR, 5.0×ATR]
 - 46개 테스트 통과 확인
 
 ---
+
+## 2026-04-19 — exp004 결과 분석 + exp005 설계 (최소 gap 계수 수정)
+
+### exp004 최종 결과 요약
+
+| 모델 | Sharpe | 수익률(%) | MDD(%) | 거래수 | 사이클 |
+|------|--------|----------|--------|--------|--------|
+| best (step≈1.05M) | **4.588** | +0.00 | 99.62 | — | — |
+| final (step=3M) | 0.724 | -3.67 | 69.84 | 0 | 0 |
+| Fixed Grid 1% (기준) | 2.610 | +43.16 | 10.77 | 567 | 141 |
+
+**best_model 트레이스 (200스텝)**: n_trades=424, cycles=144, equity 10000→12291 → 실제 거래 발생 ✅  
+**final_model**: 0거래로 수렴 (학습 불안정)
+
+### 원인 분석: 최소 gap ≈ fee 손익분기점
+
+ATR 비례 공식 (min coef=0.1):
+```
+buy_hi_gap = ATR × 0.1  (agg=0.0 기준)
+val p10 ATR = 0.349% → min gap = 0.035%
+round-trip net = 2×0.035% - 2×0.05% = -0.030%  ← 손실
+val mean ATR = 0.576% → min gap = 0.058%
+round-trip net = 2×0.058% - 2×0.05% = +0.015%  ← 이익 (간신히)
+```
+
+→ val 하위 50% ATR 구간(p25=0.046%)에서 round-trip net < 0  
+→ 에이전트가 agg=0 고착해도 저변동성 구간에서는 수익이 나지 않음  
+→ 학습이 불안정: 이익 내는 정책 탐색 → 고변동성 일부 구간만 수익 → 결국 과적합 붕괴
+
+### 해결책: 최소 gap 계수 0.1 → 0.5 (exp005)
+
+새 범위 [0.5×ATR, 2.0×ATR]:
+```
+val p10 ATR = 0.349% → min gap = 0.175%
+round-trip net = 2×0.175% - 2×0.05% = +0.250%  ← 안정적 이익
+val p25 ATR = 0.463% → net = +0.363%
+val mean ATR = 0.576% → net = +0.476%
+```
+
+→ val 전 구간에서 fee 손익분기점 초과 보장  
+→ 에이전트가 agg=0에 고착해도 반드시 양(+)의 기댓값 거래
+
+### 변경 내용 (exp005)
+- `src/env/trading_env.py`: 계수 [0.1, 0.9] → [0.5, 1.5] (buy_hi/sell_market)
+  및 [0.5, 4.5] → [2.5, 7.5] (buy_lo/sell_cost)
+- `tests/test_trading_env.py`: buy_hi=995.0, sell_market=1005.0 기준으로 전면 갱신
+- `CLAUDE.md`: Action 공식 업데이트
+- `config/exp005_config.yaml`: 신규 (하이퍼파라미터는 exp004 동일)
+- 46개 테스트 통과 확인
+
+### exp005 학습 시작 (3M steps, 백그라운드)
+
+---
