@@ -1,0 +1,104 @@
+# exp003 실험 설정
+# 베이스: experiment_config.yaml
+# 변경 사항:
+#   - 환경 수정 (설계 이슈 4개 반영): sell_market/sell_cost 명칭, 시장가 체결,
+#     threshold_btc 분모 → price, 균등 분할 → /n_splits
+#   - VecNormalize: observation / reward 정규화
+#   - LR 스케줄링: 3e-4 → 1e-5 cosine decay
+#   - n_steps: 8192 (롤아웃 버퍼 확대)
+#   - total_timesteps: 3,000,000
+
+# ────────────────────────────────────────
+# 데이터 (experiment_config.yaml 동일)
+# ────────────────────────────────────────
+data:
+  symbol: "BTC/USDT"
+  interval: "1h"
+  train_start: "2020-01-01"
+  train_end:   "2022-12-31"
+  val_start:   "2023-01-01"
+  val_end:     "2023-12-31"
+  test_start:  "2024-01-01"
+  test_end:    null
+
+# ────────────────────────────────────────
+# State 구성 지표 (experiment_config.yaml 동일)
+# ────────────────────────────────────────
+indicators:
+  price_lookback: 168
+  atr_period: 168
+  zscore_window: 168
+
+# ────────────────────────────────────────
+# 환경 (MDP) — 설계 이슈 4개 반영 버전
+# ────────────────────────────────────────
+environment:
+  initial_cash: 10000.0
+  transaction_cost: 0.0005
+
+  n_buy_orders: 2                # buy_hi (공격적), buy_lo (보수적)
+  n_sell_orders: 2               # sell_market (현재가 기준), sell_cost (평단가 기준)
+
+  # exp003: n_splits 동일하게 유지 (매수/매도 대칭)
+  # 추후 notebook 04 행동 분석 후 10으로 튜닝 검토 예정
+  n_splits: 4
+
+# ────────────────────────────────────────
+# PPO 에이전트 (stable-baselines3)
+# ────────────────────────────────────────
+agent:
+  algorithm: "PPO"
+  policy: "MlpPolicy"
+
+  # LR 스케줄링: 3e-4 → 1e-5 cosine decay
+  # scripts/train_ppo.py에서 linear_schedule 또는 cosine_schedule로 주입
+  learning_rate: 0.0003          # 초기값 (스케줄 시작점)
+  lr_schedule: "cosine"          # "constant" | "linear" | "cosine"
+  lr_end: 0.00001                # cosine decay 최종값
+
+  n_steps: 8192                  # exp002(2048) → 4배 확대; 롤아웃 다양성 향상
+  batch_size: 256                # n_steps에 맞춰 비례 확대 (64 → 256)
+  n_epochs: 10
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_range: 0.2
+  ent_coef: 0.01
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+
+  total_timesteps: 3000000       # 3M steps (exp001/002: 1M)
+
+# ────────────────────────────────────────
+# VecNormalize (observation + reward 정규화)
+# ────────────────────────────────────────
+vec_normalize:
+  enabled: true
+  norm_obs: true                 # observation z-score 정규화
+  norm_reward: true              # reward 정규화 (분산 기반 스케일링)
+  clip_obs: 10.0                 # 이상치 클리핑 임계값
+  clip_reward: 10.0
+  gamma: 0.99                    # reward 정규화 시 할인율 (agent.gamma와 동일)
+
+# ────────────────────────────────────────
+# 베이스라인 (train_ppo.py 비교용)
+# ────────────────────────────────────────
+baselines:
+  buy_and_hold: true
+  fixed_grid:
+    gaps: [0.01, 0.02, 0.05]
+  atr_grid:
+    k_values: [0.5, 1.0, 2.0]
+
+# ────────────────────────────────────────
+# 학습 설정
+# ────────────────────────────────────────
+training:
+  seed: 42
+  eval_freq: 50000
+  n_eval_episodes: 3
+  experiment_name: "exp004_atr_scaled_action"
+  log_dir: "experiments/exp004_atr_scaled_action"
+
+  # 체크포인트
+  save_freq: 500000              # 50만 스텝마다 모델 저장
+  save_best: true                # val Sharpe 기준 best 모델 별도 저장
