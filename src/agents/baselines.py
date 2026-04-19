@@ -181,7 +181,6 @@ class FixedGridAgent(BaseAgent):
         env_cfg        = config["environment"]
         self.n_splits  = env_cfg["n_splits"]
         self.n_buy     = env_cfg["n_buy_orders"]
-        self.n_sell    = env_cfg["n_sell_orders"]
 
     def run(self, df: pd.DataFrame) -> dict:
         df = df.reset_index(drop=True)
@@ -221,7 +220,7 @@ class FixedGridAgent(BaseAgent):
                 threshold_btc = (cycle_slot_size / avg_sell
                                  if cycle_slot_size > 0 and avg_sell > 0 else 0.0)
                 sell_qty = (holdings if holdings <= threshold_btc
-                            else holdings / self.n_sell)
+                            else holdings / self.n_splits)
                 sell_qty = min(sell_qty, holdings)
 
                 cash, holdings = self._sell(cash, holdings, sell_price, sell_qty)
@@ -295,7 +294,6 @@ class ATRGridAgent(BaseAgent):
         env_cfg       = config["environment"]
         self.n_splits = env_cfg["n_splits"]
         self.n_buy    = env_cfg["n_buy_orders"]
-        self.n_sell   = env_cfg["n_sell_orders"]
 
     def run(self, df: pd.DataFrame) -> dict:
         df = df.reset_index(drop=True)
@@ -342,7 +340,7 @@ class ATRGridAgent(BaseAgent):
                 threshold_btc = (cycle_slot_size / sell_price
                                  if cycle_slot_size > 0 and sell_price > 0 else 0.0)
                 sell_qty = (holdings if holdings <= threshold_btc
-                            else holdings / self.n_sell)
+                            else holdings / self.n_splits)
                 sell_qty = min(sell_qty, holdings)
 
                 cash, holdings = self._sell(cash, holdings, sell_price, sell_qty)

@@ -35,7 +35,10 @@ Action (2차원 연속, [0, 1]²):
     매수: 사이클 시작 시 현금을 n_splits 슬롯으로 분할
           per_order_size = (cycle_start_cash / n_splits) / n_buy_orders
           슬롯 소진(cycle_budget_remaining < per_order_size) 후 추가 매수 완전 차단
-    매도: threshold_btc = cycle_slot_size / price  (현재가 기준 1슬롯 BTC 수량)
+    매도: 고정 2레벨 (n_sell_orders 파라미터 없음)
+          sell_market: 현재가 기준 단기 반등 / 현금 확보
+          sell_cost  : 평단가 기준 수익 실현
+          threshold_btc = cycle_slot_size / price  (현재가 기준 1슬롯 BTC 수량)
           holdings ≤ threshold_btc → 전량 청산 (사이클 종료 유도)
           holdings > threshold_btc → holdings / n_splits (매수와 대칭 균등 분할)
 
@@ -75,8 +78,10 @@ class BTCGridTradingEnv(gym.Env):
         self.start_capital: float  = self.cfg_env["initial_cash"]
         self.fee_rate: float       = self.cfg_env["transaction_cost"]
         self.n_buy_orders: int     = self.cfg_env["n_buy_orders"]
-        self.n_sell_orders: int    = self.cfg_env["n_sell_orders"]
         self.n_splits: int         = self.cfg_env["n_splits"]
+        # threshold_basis: "price"(현재가) or "avg_price"(평단가)
+        # 미지정 시 기존 동작("price") 유지 → 하위 호환
+        self.threshold_basis: str  = self.cfg_env.get("threshold_basis", "price")
         self.warmup: int           = self.cfg_ind["atr_period"]  # 168봉
 
         # ── 랜덤 시작점 (멀티 환경 + 짧은 에피소드용) ──────────
@@ -321,11 +326,15 @@ class BTCGridTradingEnv(gym.Env):
 
         # ── 1. SELL 먼저 처리 (보유 포지션 우선 정리) ──────────────
 
-        # threshold_btc: 현재가 기준 1슬롯 BTC 수량
+        # threshold_btc: 1슬롯에 해당하는 BTC 수량
         #   holdings ≤ threshold_btc → 전량 청산 (사이클 종료 유도)
         #   holdings >  threshold_btc → holdings / n_splits (매수와 대칭 균등 분할)
-        threshold_btc = (self.cycle_slot_size / price
-                         if price > 0.0 else 0.0)
+        if self.threshold_basis == "avg_price":
+            ref_price = (self.avg_price if self.avg_price > 0.0 else price)
+        else:
+            ref_price = price
+        threshold_btc = (self.cycle_slot_size / ref_price
+                         if ref_price > 0.0 else 0.0)
 
         # sell_market: 현재가 기준 매도 — 시장 모멘텀 활용
         if self.holdings > 0.0 and next_high >= sell_market:

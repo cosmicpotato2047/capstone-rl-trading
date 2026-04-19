@@ -50,9 +50,8 @@ environment:
   # 거래비용 — Binance 지정가 maker fee 기준
   transaction_cost: 0.0005      # 0.05% per trade
 
-  # 주문 개수 (1학기 고정)
-  n_buy_orders: 2               # buy_hi, buy_lo
-  n_sell_orders: 2              # sell_lo, sell_hi
+  # 주문 개수
+  n_buy_orders: 2               # buy_hi, buy_lo (탐색 중)
 
   # 예산 분할 — 사이클 시작 시 현금을 n_splits 슬롯으로 나눔
   # per_order_size = (cycle_start_cash / n_splits) / n_buy_orders

@@ -35,7 +35,6 @@ INITIAL_CASH  = 10_000.0
 FEE           = 0.0005   # 0.05%
 N_SPLITS      = 4
 N_BUY         = 2
-N_SELL        = 2
 PRICE         = 1_000.0  # 기본 테스트 가격
 
 
@@ -46,7 +45,6 @@ def _cfg(**env_overrides):
             "initial_cash":     INITIAL_CASH,
             "transaction_cost": FEE,
             "n_buy_orders":     N_BUY,
-            "n_sell_orders":    N_SELL,
             "n_splits":         N_SPLITS,
         },
         "indicators": {"atr_period": WARMUP},
