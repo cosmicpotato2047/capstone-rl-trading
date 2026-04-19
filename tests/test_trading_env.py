@@ -358,18 +358,17 @@ class TestCycleAndLastAvgPrice:
 
 class TestThresholdBtcSell:
     """
-    threshold_btc = cycle_slot_size / avg(sell_lo, sell_hi)
+    threshold_btc = cycle_slot_size / price  (현재가 기준 1슬롯 BTC 수량)
     holdings ≤ threshold_btc → 전량 청산
-    holdings >  threshold_btc → holdings / n_sell_orders (균등 분할)
+    holdings >  threshold_btc → holdings / n_splits (매수와 대칭 균등 분할)
 
     _process_fills 직접 호출로 검증.
     """
 
-    SELL_LO = 1050.0
-    SELL_HI = 1100.0
-    AVG_SELL = (SELL_LO + SELL_HI) / 2   # 1075.0
+    SELL_MARKET = 1050.0
+    SELL_COST   = 1100.0
     # cycle_slot_size = 10000/4 = 2500
-    # threshold_btc = 2500 / 1075 ≈ 2.326
+    # threshold_btc = 2500 / 1000(price) = 2.5
 
     def _env_with_n_buys(self, n_buys):
         env = _env()
@@ -379,49 +378,49 @@ class TestThresholdBtcSell:
 
     def test_full_sell_when_below_threshold(self):
         """
-        1번 매수 → holdings ≈ 1.249 < threshold ≈ 2.326 → 전량 청산.
-        buy 는 차단 (next_low > buy_hi).
+        1번 매수 → holdings ≈ 1.249 < threshold = 2.5 → 전량 청산.
+        sell 후 holdings=0 → 사이클 종료, 이후 buy_hi도 체결 → 새 사이클 시작.
         """
         env = self._env_with_n_buys(1)
-        assert env.holdings < INITIAL_CASH / N_SPLITS / self.AVG_SELL
+        assert env.holdings < INITIAL_CASH / N_SPLITS / PRICE  # 1.249 < 2.5
 
         env._process_fills(
-            next_high=2000.0,   # sell_lo(1050) 체결
-            next_low=999.5,     # buy_hi(≈999.9) 미체결 (999.5 <= 999.9 → 체결됨!)
-            # ↑ 체결 방지: next_low > buy_hi 필요. buy_hi = 1000*(1-0.0001) = 999.9
-            # 999.5 < 999.9 이므로 buy_hi도 체결됨. 그러나 sell이 먼저.
-            # sell 후 holdings=0 → 사이클 종료 후 buy → 새 사이클 시작
-            next_price=self.SELL_LO,
+            price=PRICE,
+            next_high=2000.0,   # sell_market(1050) 체결, fill at 2000
+            next_low=999.5,     # buy_hi(≈999.9) 도 체결 (999.5 <= 999.9)
+            # sell 먼저 → 전량 청산 → 사이클 종료 → buy → 새 사이클 시작
+            next_price=self.SELL_MARKET,
             buy_hi=999.9,
             buy_lo=899.0,
-            sell_lo=self.SELL_LO,
-            sell_hi=self.SELL_HI,
+            sell_market=self.SELL_MARKET,
+            sell_cost=self.SELL_COST,
         )
         # 전량 청산 후 사이클 종료 확인
         assert len(env.completed_cycles) == 1
 
     def test_partial_sell_when_above_threshold(self):
         """
-        8번 매수 → holdings ≈ 9.995 > threshold ≈ 2.326 → 분할 매도.
-        sell_lo만 체결(next_high=1060: sell_lo=1050 체결, sell_hi=1100 미체결).
-        sell 후 holdings = 원래 - holdings/n_sell_orders.
+        8번 매수 → holdings ≈ 9.995 > threshold = 2.5 → 분할 매도.
+        sell_market만 체결(next_high=1060: sell_market=1050 체결, sell_cost=1100 미체결).
+        sell 후 holdings = 원래 - holdings / n_splits.
         """
         env = self._env_with_n_buys(N_SPLITS * N_BUY)
-        threshold = env.cycle_slot_size / self.AVG_SELL
+        threshold = env.cycle_slot_size / PRICE   # 2500/1000 = 2.5
         assert env.holdings > threshold
 
         holdings_before = env.holdings
-        expected_sell_qty = holdings_before / N_SELL
+        expected_sell_qty = holdings_before / N_SPLITS  # /4 (매수와 대칭)
         expected_remaining = holdings_before - expected_sell_qty
 
         env._process_fills(
-            next_high=1060.0,   # sell_lo(1050) 체결, sell_hi(1100) 미체결
+            price=PRICE,
+            next_high=1060.0,   # sell_market(1050) 체결, sell_cost(1100) 미체결
             next_low=1000.0,    # buy_hi=999.9, next_low=1000 > 999.9 → buy 미체결
-            next_price=self.SELL_LO,
+            next_price=self.SELL_MARKET,
             buy_hi=999.9,
             buy_lo=899.0,
-            sell_lo=self.SELL_LO,
-            sell_hi=self.SELL_HI,
+            sell_market=self.SELL_MARKET,
+            sell_cost=self.SELL_COST,
         )
         assert env.holdings == pytest.approx(expected_remaining, rel=1e-6)
 
@@ -435,10 +434,10 @@ class TestSellFirstPrinciple:
     같은 봉에서 sell + buy 동시 체결 가능할 때 sell이 먼저 처리되어야 한다.
 
     시나리오:
-      스텝 0: next 봉 low=500 → buy_hi(≈999.9) 체결 → 포지션 매수
+      스텝 0: next 봉 low=999.5 → buy_hi(≈999.9)만 체결 (buy_lo=999.0은 차단)
+              → holdings ≈ 1.25 ≤ threshold_btc(2.5)
       스텝 1: next 봉 high=2000, low=500
-              → sell_lo(≈1000.1) 체결 (sell 먼저)
-              → holdings=0 → 사이클 종료
+              → sell_market(≈1000.1) 체결: 전량 청산(holdings ≤ threshold_btc) → 사이클 종료
               → buy_hi(≈999.9) 체결 → 새 사이클 시작
     """
 
@@ -448,9 +447,11 @@ class TestSellFirstPrinciple:
         highs  = [PRICE] * n
         lows   = [PRICE] * n
 
-        # 스텝 0의 다음 봉: low 낮게 → buy_hi 체결
+        # 스텝 0의 다음 봉: low를 buy_hi(≈999.9)와 buy_lo(=999.0) 사이로 설정
+        #   → buy_hi만 체결, buy_lo는 차단 → holdings ≈ 1.25 ≤ threshold_btc(2.5)
+        #   (500 사용 시 두 주문 모두 체결 → holdings ≈ 4.99 > threshold_btc → 전량 청산 불가)
         highs[WARMUP + 1] = PRICE
-        lows[WARMUP + 1]  = 500.0
+        lows[WARMUP + 1]  = 999.5   # buy_hi(≈999.9) 체결, buy_lo(=999.0) 차단
 
         # 스텝 1의 다음 봉: high 높게 + low 낮게 → sell + buy 동시
         highs[WARMUP + 2] = 2000.0

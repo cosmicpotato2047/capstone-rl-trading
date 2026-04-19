@@ -13,22 +13,24 @@ Action (2차원 연속, [0, 1]²):
     [1] profit_target  → sell_lo_gap, sell_hi_gap 결정
 
 주문 (매 스텝 4개 지정가 갱신):
-    buy_hi  = price × (1 - buy_hi_gap)   # 공격적 매수
-    buy_lo  = price × (1 - buy_lo_gap)   # 보수적 매수
-    sell_lo = price × (1 + sell_lo_gap)  # 빠른 익절
-    sell_hi = avg_price × (1 + sell_hi_gap)  # 느린 익절 (평단 기준)
+    buy_hi      = price     × (1 - buy_hi_gap)       # 공격적 매수
+    buy_lo      = price     × (1 - buy_lo_gap)       # 보수적 매수
+    sell_market = price     × (1 + sell_market_gap)  # 시장 모멘텀 활용 (현재가 기준)
+    sell_cost   = avg_price × (1 + sell_cost_gap)    # 원가 수익 보호 (평단가 기준)
 
-체결: 다음 봉 high/low 기준
-    next_high >= sell_lo  →  sell_lo 체결
-    next_low  <= buy_hi   →  buy_hi  체결
+체결: 다음 봉 high/low 기준, 조건 충족 시 그 시점 시장가(next_high / next_low)로 체결
+    next_high >= sell_market  →  next_high 가격으로 체결
+    next_high >= sell_cost    →  next_high 가격으로 체결
+    next_low  <= buy_hi       →  next_low  가격으로 체결
+    next_low  <= buy_lo       →  next_low  가격으로 체결
 
 주문 크기:
     매수: 사이클 시작 시 현금을 n_splits 슬롯으로 분할
           per_order_size = (cycle_start_cash / n_splits) / n_buy_orders
           슬롯 소진(cycle_budget_remaining < per_order_size) 후 추가 매수 완전 차단
-    매도: threshold_btc = cycle_slot_size / avg(sell_lo, sell_hi)
+    매도: threshold_btc = cycle_slot_size / price  (현재가 기준 1슬롯 BTC 수량)
           holdings ≤ threshold_btc → 전량 청산 (사이클 종료 유도)
-          holdings > threshold_btc → holdings / n_sell_orders (균등 분할)
+          holdings > threshold_btc → holdings / n_splits (매수와 대칭 균등 분할)
 
 Reward:
     매 스텝: (equity_t - equity_{t-1}) / start_capital - fee × n_trades
@@ -134,7 +136,7 @@ class BTCGridTradingEnv(gym.Env):
         # ── 1. 액션 → 4개 지정가 계산 ────────────────────────
         aggressiveness = float(action[0])
         profit_target = float(action[1])
-        buy_hi, buy_lo, sell_lo, sell_hi = self._compute_order_prices(
+        buy_hi, buy_lo, sell_market, sell_cost = self._compute_order_prices(
             aggressiveness, profit_target, price
         )
 
@@ -153,8 +155,8 @@ class BTCGridTradingEnv(gym.Env):
             next_price = float(next_row["close"])
 
             n_trades_this_step, cycle_bonus = self._process_fills(
-                next_high, next_low, next_price,
-                buy_hi, buy_lo, sell_lo, sell_hi,
+                price, next_high, next_low, next_price,
+                buy_hi, buy_lo, sell_market, sell_cost,
             )
         else:
             next_price = price
@@ -178,8 +180,8 @@ class BTCGridTradingEnv(gym.Env):
             "n_trades": self.n_trades,
             "buy_hi": buy_hi,
             "buy_lo": buy_lo,
-            "sell_lo": sell_lo,
-            "sell_hi": sell_hi,
+            "sell_market": sell_market,
+            "sell_cost": sell_cost,
         }
 
         return obs, float(step_reward), terminated, False, info
@@ -216,36 +218,57 @@ class BTCGridTradingEnv(gym.Env):
         profit_target: float,
         price: float,
     ) -> tuple[float, float, float, float]:
-        """액션값 → 4개 지정가 가격 반환."""
-        buy_hi_gap  = 0.0001 + aggressiveness * 0.05   # [0.01%,  5%]
-        buy_lo_gap  = 0.001  + aggressiveness * 0.10   # [0.10%, 10%]
-        sell_lo_gap = 0.0001 + profit_target  * 0.05   # [0.01%,  5%]
-        sell_hi_gap = 0.001  + profit_target  * 0.15   # [0.10%, 15%]
+        """액션값 → 4개 지정가 가격 반환.
 
-        buy_hi  = price * (1.0 - buy_hi_gap)
-        buy_lo  = price * (1.0 - buy_lo_gap)
-        sell_lo = price * (1.0 + sell_lo_gap)
+        Returns:
+            (buy_hi, buy_lo, sell_market, sell_cost)
+            sell_market : 현재가(price) 기준 — 시장 모멘텀 활용
+            sell_cost   : 평단가(avg_price) 기준 — 원가 수익 보호
+        """
+        buy_hi_gap       = 0.0001 + aggressiveness * 0.05   # [0.01%,  5%]
+        buy_lo_gap       = 0.001  + aggressiveness * 0.10   # [0.10%, 10%]
+        sell_market_gap  = 0.0001 + profit_target  * 0.05   # [0.01%,  5%]
+        sell_cost_gap    = 0.001  + profit_target  * 0.15   # [0.10%, 15%]
 
-        ref = self.avg_price if self.avg_price > 0.0 else price
-        sell_hi = ref * (1.0 + sell_hi_gap)
+        buy_hi      = price * (1.0 - buy_hi_gap)
+        buy_lo      = price * (1.0 - buy_lo_gap)
+        sell_market = price * (1.0 + sell_market_gap)
 
-        return buy_hi, buy_lo, sell_lo, sell_hi
+        ref       = self.avg_price if self.avg_price > 0.0 else price
+        sell_cost = ref * (1.0 + sell_cost_gap)
+
+        return buy_hi, buy_lo, sell_market, sell_cost
 
     def _process_fills(
         self,
+        price: float,
         next_high: float,
         next_low: float,
         next_price: float,
         buy_hi: float,
         buy_lo: float,
-        sell_lo: float,
-        sell_hi: float,
+        sell_market: float,
+        sell_cost: float,
     ) -> tuple[int, float]:
         """
         다음 봉 고/저가로 체결 여부 판단 후 포트폴리오 업데이트.
 
         원칙: sell 먼저, 그 다음 buy.
         같은 봉에서 buy + sell 동시 체결 가능.
+
+        체결가 (시장가 방식):
+            매도 조건 충족 시 → next_high 가격으로 체결
+            매수 조건 충족 시 → next_low  가격으로 체결
+
+        Args:
+            price:       현재 봉 close (threshold_btc 계산용)
+            next_high:   다음 봉 high
+            next_low:    다음 봉 low
+            next_price:  다음 봉 close (사이클 종료 처리용)
+            buy_hi:      공격적 매수 지정가
+            buy_lo:      보수적 매수 지정가
+            sell_market: 현재가 기준 매도 지정가
+            sell_cost:   평단가 기준 매도 지정가
 
         Returns:
             (n_trades, cycle_bonus)
@@ -255,45 +278,45 @@ class BTCGridTradingEnv(gym.Env):
 
         # ── 1. SELL 먼저 처리 (보유 포지션 우선 정리) ──────────────
 
-        # 매도 수량 결정 기준: 1슬롯 임계값
+        # threshold_btc: 현재가 기준 1슬롯 BTC 수량
         #   holdings ≤ threshold_btc → 전량 청산 (사이클 종료 유도)
-        #   holdings >  threshold_btc → holdings / n_sell_orders (균등 분할)
-        # cycle_slot_size > 0 보장: sell은 buy 이후에만 발생 (holdings > 0 조건)
-        avg_sell_price = (sell_lo + sell_hi) / 2.0
-        threshold_btc  = (self.cycle_slot_size / avg_sell_price
-                          if avg_sell_price > 0.0 else 0.0)
+        #   holdings >  threshold_btc → holdings / n_splits (매수와 대칭 균등 분할)
+        threshold_btc = (self.cycle_slot_size / price
+                         if price > 0.0 else 0.0)
 
-        # sell_lo: 빠른 익절 (현재가 근처)
-        if self.holdings > 0.0 and next_high >= sell_lo:
+        # sell_market: 현재가 기준 매도 — 시장 모멘텀 활용
+        if self.holdings > 0.0 and next_high >= sell_market:
             sell_qty = (self.holdings
                         if self.holdings <= threshold_btc
-                        else self.holdings / self.n_sell_orders)
+                        else self.holdings / self.n_splits)
             if sell_qty > 0.0:
-                bonus = self._execute_sell(sell_lo, sell_qty, next_price)
+                # 조건 충족 시 그 시점 시장가(next_high)로 체결
+                bonus = self._execute_sell(next_high, sell_qty, next_price)
                 cycle_bonus += bonus
                 n_trades += 1
 
-        # sell_hi: 느린 익절 (평단 기준, 더 높은 목표)
-        if self.holdings > 0.0 and next_high >= sell_hi:
+        # sell_cost: 평단가 기준 매도 — 원가 수익 보호
+        if self.holdings > 0.0 and next_high >= sell_cost:
             sell_qty = (self.holdings
                         if self.holdings <= threshold_btc
-                        else self.holdings / self.n_sell_orders)
+                        else self.holdings / self.n_splits)
             if sell_qty > 0.0:
-                bonus = self._execute_sell(sell_hi, sell_qty, next_price)
+                # 조건 충족 시 그 시점 시장가(next_high)로 체결
+                bonus = self._execute_sell(next_high, sell_qty, next_price)
                 cycle_bonus += bonus
                 n_trades += 1
 
         # ── 2. BUY 처리 ─────────────────────────────────────────
 
-        # buy_hi: 공격적 매수 (현재가에 가까운 주문)
+        # buy_hi: 공격적 매수 — 조건 충족 시 next_low로 체결 (지정가 이하 보장)
         if next_low <= buy_hi:
-            success = self._execute_buy(buy_hi)
+            success = self._execute_buy(next_low)
             if success:
                 n_trades += 1
 
-        # buy_lo: 보수적 매수 (현재가에서 더 낮은 주문)
+        # buy_lo: 보수적 매수 — 조건 충족 시 next_low로 체결
         if next_low <= buy_lo:
-            success = self._execute_buy(buy_lo)
+            success = self._execute_buy(next_low)
             if success:
                 n_trades += 1
 
