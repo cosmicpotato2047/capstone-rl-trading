@@ -92,18 +92,25 @@ def main() -> None:
         mlflow.set_experiment(exp_name)
         run = mlflow.start_run(run_name="ppo_train")
         # 하이퍼파라미터 기록
-        agent_cfg = config["agent"]
-        mlflow.log_params({
-            "algorithm":      agent_cfg["algorithm"],
-            "learning_rate":  agent_cfg["learning_rate"],
-            "n_steps":        agent_cfg["n_steps"],
-            "batch_size":     agent_cfg["batch_size"],
-            "n_epochs":       agent_cfg["n_epochs"],
-            "gamma":          agent_cfg["gamma"],
-            "ent_coef":       agent_cfg["ent_coef"],
+        agent_cfg   = config["agent"]
+        vec_cfg     = config.get("vec_normalize", {})
+        params = {
+            "algorithm":       agent_cfg["algorithm"],
+            "learning_rate":   agent_cfg["learning_rate"],
+            "lr_schedule":     agent_cfg.get("lr_schedule", "constant"),
+            "lr_end":          agent_cfg.get("lr_end", agent_cfg["learning_rate"]),
+            "n_steps":         agent_cfg["n_steps"],
+            "batch_size":      agent_cfg["batch_size"],
+            "n_epochs":        agent_cfg["n_epochs"],
+            "gamma":           agent_cfg["gamma"],
+            "ent_coef":        agent_cfg["ent_coef"],
             "total_timesteps": agent_cfg["total_timesteps"],
-            "n_splits":       config["environment"]["n_splits"],
-        })
+            "n_splits":        config["environment"]["n_splits"],
+            "vec_normalize":   vec_cfg.get("enabled", False),
+            "norm_obs":        vec_cfg.get("norm_obs", False),
+            "norm_reward":     vec_cfg.get("norm_reward", False),
+        }
+        mlflow.log_params(params)
         print(f"MLflow 실험: {exp_name}  (run_id: {run.info.run_id})")
 
     # ── 4. PPOAgent 생성 + 학습 ───────────────────────────────
