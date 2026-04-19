@@ -815,3 +815,96 @@ exp001~005 공통 패턴: 초반 학습 → 후반 0거래 수렴.
 - **stop-loss**: 보유 중 가격 -X% 시 강제 청산 → MDD 제어
 
 ---
+
+## 2026-04-19 — exp007 학습 완료 + 평가 파이프라인 버그 2개 수정
+
+### exp007 설계 목적
+
+exp006의 final_model evaluate() 시 n_trades=0 이상 현상 원인 검증 및 해소.
+
+**가설 1: VecNormalize 이중 정규화**
+- obs가 이미 z-score 정규화 → VecNormalize가 한 번 더 정규화
+- train(n_envs=4, random_start)으로 수렴한 obs_rms ≠ val 추론 시 obs 분포 불일치
+- → VecNormalize 완전 비활성화
+
+**가설 2: 단일 긴 에피소드 평가 vs 학습 에피소드 구조 불일치**
+- 학습 에피소드: 2016스텝 × 랜덤시작
+- val 평가: 8,568스텝 단일 에피소드 (학습 분포와 다름)
+- → Multi-episode 평가 활성화 (n_eval_episodes=5, 각 2016스텝)
+
+### exp007 학습 결과 (3M steps)
+
+학습 곡선: exp006과 유사하게 Sharpe 0.6~1.2 구간 안정 유지.
+best_model 저장 완료.
+
+### 버그 1: 평가 환경의 random_start=True 상속
+
+**발견 경위**: exp007 best_model 평가 시 n_trades=0, Return=0%, MDD=34%.
+직접 트레이스(random_start=False, 300스텝): 247 trades, 52 cycles, equity 10,000→11,980 (+19.8%)
+→ 에이전트는 정상 거래. 평가 파이프라인 문제.
+
+**원인**: `_evaluate_once`가 `config` 그대로 eval env를 생성 → `random_start=True` 상속.
+eval env가 val 데이터 내 랜덤 위치에서 시작 → 평균 Sharpe가 실제와 무관해짐.
+
+**수정**: `_evaluate_once`에서 `eval_cfg = deepcopy(config); eval_cfg["environment"]["random_start"] = False` 적용.
+
+### 버그 2: DummyVecEnv 에피소드 종료 시 auto-reset
+
+**발견 경위**: random_start 버그 수정 후에도 n_trades=0 지속.
+동일 모델을 DummyVecEnv 없이 직접 실행 → n_trades=247.
+
+**원인**: SB3 `DummyVecEnv`는 `done=True` 반환 직후 환경을 **자동 리셋**한다.
+`while not done` 루프 종료 시 이미 리셋된 상태 → `raw_env.n_trades = 0`.
+
+**수정**: `_evaluate_once`에서 `DummyVecEnv` 제거. `BTCGridTradingEnv + TimeLimit`를 직접 루프로 실행.
+```python
+# 수정 전: DummyVecEnv → done 후 auto-reset → n_trades=0
+base_env = DummyVecEnv([_make_eval_env])
+
+# 수정 후: 단일 환경 직접 실행
+raw_env = BTCGridTradingEnv(df_eval, eval_cfg)
+eval_env = TimeLimit(raw_env, max_episode_steps=ep_steps)
+obs, _ = eval_env.reset()
+...
+n_trades = raw_env.n_trades  # 리셋 전에 읽음
+```
+
+### 수정 후 exp007 best_model 재평가
+
+에피소드별 상세:
+| ep | start | Return | Sharpe | MDD | Trades | Cycles |
+|----|-------|--------|--------|-----|--------|--------|
+| 1 | 168   | +96.3% | +13.68 | 4.04% | 1163 | 194 |
+| 2 | 1805  | +45.7% |  +8.67 | 3.10% | 1031 | 191 |
+| 3 | 3443  | +33.1% | +10.33 | 2.31% | 1023 | 187 |
+| 4 | 5080  | +44.0% | +11.76 | 2.51% | 1098 | 187 |
+| 5 | 6718  | +61.5% | +14.98 | 2.51% | 1099 | 192 |
+| **평균** | | **+56.1%** | **+11.88** | **2.89%** | **1082.8** | **190.2** |
+
+B&H 2023 전체: +150.3%  
+기준선 Fixed Grid 1%: Sharpe 2.610
+
+**PPO exp007 Sharpe 11.88 >> 기준선 2.610 → 연구 목표 달성**
+
+**해석 주의사항**:
+- 반환값 +56.1%는 실현+미실현 equity 합산 (에피소드 말미 open position 포함)
+- ep1(Jan 2023 시작): BTC $16,927→$28,453 (+68%), grid trading +96.3%로 B&H 초과
+- 고Sharpe 원인: 그리드 매매의 낮은 step-return 분산 + √8760 연율화 × 초당 빠른 사이클 회전
+- 2023 강세장에서의 성과 → Train(2020-22 혼재) + Test(2024~) 교차 검증 필요
+
+### 변경 파일
+- `src/agents/ppo_agent.py`:
+  - `_evaluate_once`: random_start=False 강제 적용
+  - `_evaluate_once`: DummyVecEnv → 단일 환경 직접 루프로 교체
+  - df 슬라이스 로직: `iloc[start_idx-warmup : start_idx+ep_steps]` (start_idx 기준 정렬)
+- 46개 테스트 통과 확인
+
+### 보류 아이디어
+- **Train 셋 평가**: exp007 best_model을 Train 데이터에서도 평가해 과적합 여부 확인
+- **Test 셋 개봉**: 최종 발표 직전에만 진행 (1학기 남은 일정 고려)
+- **exp008 후보**:
+  - reward = log-return (equity_change 스케일 안정화)
+  - 더 작은 max_episode_steps (504 = 3주)
+  - ent_coef annealing (0.01→0.001)
+
+---

@@ -220,56 +220,70 @@ def _evaluate_once(
     initial_cash = config["environment"]["initial_cash"]
     warmup       = config["indicators"]["atr_period"]
 
-    # start_idx 지정 시 df를 슬라이스해서 넘김 (warmup 유지)
-    if start_idx is not None and start_idx > warmup:
-        # warmup 이전 행은 ATR 계산용으로 보존, start_idx부터 실제 평가
-        df_eval = df.iloc[: start_idx + (ep_steps or (len(df) - start_idx))].reset_index(drop=True)
-        # reset 후 warmup 스텝은 df_eval 내 위치로 유지됨
+    # 평가 환경은 random_start=False (결정론적 시작점)
+    eval_cfg = deepcopy(config)
+    eval_cfg["environment"]["random_start"] = False
+
+    # start_idx 지정 시 df를 슬라이스해서 넘김
+    # df.iloc[start_idx - warmup : start_idx + ep_steps] → 환경이 warmup에서 시작
+    # = 원본 df 기준 start_idx에서 시작하는 것과 동일
+    if start_idx is not None:
+        slice_start = max(0, start_idx - warmup)
+        slice_end   = start_idx + (ep_steps or (len(df) - start_idx))
+        df_eval = df.iloc[slice_start:slice_end].reset_index(drop=True)
     else:
         df_eval = df
 
-    def _make_eval_env(d=df_eval, cfg=config, ep=ep_steps):
-        env = BTCGridTradingEnv(d, cfg)
-        if ep is not None:
-            from gymnasium.wrappers import TimeLimit
-            env = TimeLimit(env, max_episode_steps=ep)
-        return env
+    # ── 단일 환경 직접 실행 (DummyVecEnv 사용 안 함) ──────────────────────────
+    # 이유: DummyVecEnv는 done=True 시 자동 리셋 → n_trades 등 에피소드 통계가
+    #       리셋 전에 읽혀야 하나 auto-reset 후 0으로 사라지는 버그 방지.
+    raw_env = BTCGridTradingEnv(df_eval, eval_cfg)
 
-    base_env = DummyVecEnv([_make_eval_env])
-
-    if isinstance(train_env, VecNormalize):
-        eval_env = VecNormalize(base_env, training=False, norm_reward=False)
-        eval_env.obs_rms  = deepcopy(train_env.obs_rms)
-        eval_env.clip_obs = train_env.clip_obs
-        underlying = eval_env.venv.envs[0]
+    if ep_steps is not None:
+        from gymnasium.wrappers import TimeLimit
+        eval_env = TimeLimit(raw_env, max_episode_steps=ep_steps)
     else:
-        eval_env  = base_env
-        underlying = base_env.envs[0]
+        eval_env = raw_env
 
-    # TimeLimit 안쪽 환경 가져오기
-    raw_env = underlying
-    while hasattr(raw_env, 'env'):
-        raw_env = raw_env.env
+    # VecNormalize 통계 적용 (normalize_obs 수동 처리)
+    obs_rms   = None
+    clip_obs_ = 10.0
+    if isinstance(train_env, VecNormalize):
+        obs_rms   = deepcopy(train_env.obs_rms)
+        clip_obs_ = train_env.clip_obs
 
-    obs = eval_env.reset()
+    def _normalize_obs(o: np.ndarray) -> np.ndarray:
+        if obs_rms is None:
+            return o
+        return np.clip(
+            (o - obs_rms.mean) / np.sqrt(obs_rms.var + 1e-8),
+            -clip_obs_, clip_obs_,
+        ).astype(np.float32)
+
+    obs, _ = eval_env.reset()
+    obs_norm = _normalize_obs(obs)
     equity_list = [initial_cash]
     done = False
 
     while not done:
-        action, _ = model.predict(obs, deterministic=True)
-        obs, _reward, dones, _infos = eval_env.step(action)
-        done = bool(dones[0])
+        action, _ = model.predict(obs_norm[None, :], deterministic=True)
+        obs, _reward, terminated, truncated, _info = eval_env.step(action[0])
+        done = terminated or truncated
+        obs_norm = _normalize_obs(obs)
+
         price = float(raw_env.df.loc[raw_env.current_step - 1, "close"])
         equity_list.append(raw_env.cash + raw_env.holdings * price)
 
-    eval_env.close()
+    # 에피소드 종료 후 통계를 읽음 (auto-reset 없으므로 n_trades 보존됨)
+    n_trades        = raw_env.n_trades
+    completed_cycles = list(raw_env.completed_cycles)
 
     equity_curve = pd.Series(equity_list, dtype=float)
     return compute_all(
         equity_curve=equity_curve,
         initial_cash=initial_cash,
-        n_trades=raw_env.n_trades,
-        completed_cycles=raw_env.completed_cycles,
+        n_trades=n_trades,
+        completed_cycles=completed_cycles,
     )
 
 
