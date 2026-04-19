@@ -79,6 +79,14 @@ class BTCGridTradingEnv(gym.Env):
         self.n_splits: int         = self.cfg_env["n_splits"]
         self.warmup: int           = self.cfg_ind["atr_period"]  # 168봉
 
+        # ── 랜덤 시작점 (멀티 환경 + 짧은 에피소드용) ──────────
+        # random_start=True: reset() 시 훈련 데이터 전체에서 무작위 시작
+        # max_episode_steps: 시작 가능 범위를 df 끝에서 역산 (TimeLimit과 연동)
+        self.random_start: bool = self.cfg_env.get("random_start", False)
+        self._max_ep_steps: int | None = config.get("training", {}).get(
+            "max_episode_steps", None
+        )
+
         # ── Gymnasium 공간 정의 ────────────────────────────────
         # Action: [aggressiveness, profit_target] ∈ [0, 1]²
         self.action_space = spaces.Box(
@@ -106,7 +114,20 @@ class BTCGridTradingEnv(gym.Env):
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
 
-        self.current_step = self.warmup
+        # ── 시작 스텝 결정 ──────────────────────────────────────
+        if self.random_start:
+            # 유효 시작 범위: [warmup, len(df) - ep_len - 2]
+            # TimeLimit 래퍼가 ep_len 이후 truncate하므로 끝에서 여유를 둠
+            ep_len = self._max_ep_steps or (len(self.df) - self.warmup - 1)
+            max_start = len(self.df) - ep_len - 2
+            if max_start > self.warmup:
+                self.current_step = int(
+                    self.np_random.integers(self.warmup, max_start)
+                )
+            else:
+                self.current_step = self.warmup
+        else:
+            self.current_step = self.warmup
 
         # 포트폴리오
         self.cash: float = self.start_capital

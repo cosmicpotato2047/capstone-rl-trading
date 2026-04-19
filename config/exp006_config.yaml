@@ -1,0 +1,108 @@
+# exp006 실험 설정
+# 베이스: exp005_config.yaml
+# 변경 사항:
+#   - 에피소드 길이 단축: 25,916스텝(3년) → 2,016스텝(12주)
+#     근거: γ=0.99^25000 ≈ 0 → 에피소드 후반 reward 미반영 → 학습 신호 약함
+#           2016스텝 기준 γ=0.99^2016 ≈ 2e-9, 유효 horizon ≈ 500스텝
+#   - 병렬 환경 4개 (DummyVecEnv): 다양한 시장 레짐 동시 학습
+#     실질 rollout = 4 × 8,192 = 32,768 스텝/update
+#   - random_start=True: 에피소드마다 훈련 데이터 전체에서 무작위 시작
+#   - 나머지 하이퍼파라미터: exp005 동일
+
+# ────────────────────────────────────────
+# 데이터
+# ────────────────────────────────────────
+data:
+  symbol: "BTC/USDT"
+  interval: "1h"
+  train_start: "2020-01-01"
+  train_end:   "2022-12-31"
+  val_start:   "2023-01-01"
+  val_end:     "2023-12-31"
+  test_start:  "2024-01-01"
+  test_end:    null
+
+# ────────────────────────────────────────
+# State 구성 지표
+# ────────────────────────────────────────
+indicators:
+  price_lookback: 168
+  atr_period: 168
+  zscore_window: 168
+
+# ────────────────────────────────────────
+# 환경 (MDP)
+# ────────────────────────────────────────
+environment:
+  initial_cash: 10000.0
+  transaction_cost: 0.0005
+
+  n_buy_orders: 2
+  n_sell_orders: 2
+  n_splits: 4
+
+  # exp006: 에피소드마다 랜덤 시작점 → 다양한 시장 레짐 경험
+  random_start: true
+
+# ────────────────────────────────────────
+# PPO 에이전트
+# ────────────────────────────────────────
+agent:
+  algorithm: "PPO"
+  policy: "MlpPolicy"
+
+  learning_rate: 0.0003
+  lr_schedule: "cosine"
+  lr_end: 0.00001
+
+  n_steps: 8192                  # per env; 총 rollout = 4 × 8192 = 32,768
+  batch_size: 256
+  n_epochs: 10
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_range: 0.2
+  ent_coef: 0.01
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+
+  n_envs: 4                      # 병렬 환경 수 (DummyVecEnv)
+
+  total_timesteps: 3000000       # 전체 env steps (n_envs × per-env steps)
+
+# ────────────────────────────────────────
+# VecNormalize
+# ────────────────────────────────────────
+vec_normalize:
+  enabled: true
+  norm_obs: true
+  norm_reward: true
+  clip_obs: 10.0
+  clip_reward: 10.0
+  gamma: 0.99
+
+# ────────────────────────────────────────
+# 베이스라인
+# ────────────────────────────────────────
+baselines:
+  buy_and_hold: true
+  fixed_grid:
+    gaps: [0.01, 0.02, 0.05]
+  atr_grid:
+    k_values: [0.5, 1.0, 2.0]
+
+# ────────────────────────────────────────
+# 학습 설정
+# ────────────────────────────────────────
+training:
+  seed: 42
+  eval_freq: 50000
+  n_eval_episodes: 3
+  experiment_name: "exp006_short_episode_multienv"
+  log_dir: "experiments/exp006_short_episode_multienv"
+
+  # 에피소드 길이 제한 (TimeLimit 래퍼)
+  # 2016 = 84일 × 24시간 = 12주 (대략 한 시장 사이클)
+  max_episode_steps: 2016
+
+  save_freq: 500000
+  save_best: true

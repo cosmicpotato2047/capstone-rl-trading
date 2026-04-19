@@ -10,6 +10,10 @@ exp003 이후 지원:
   - VecNormalize: config["vec_normalize"]["enabled"] = True 시 자동 활성화
   - LR 스케줄: config["agent"]["lr_schedule"] = "cosine" | "linear" | "constant"
 
+exp006 이후 지원:
+  - n_envs: config["agent"]["n_envs"] — 병렬 환경 수 (DummyVecEnv)
+  - max_episode_steps: config["training"]["max_episode_steps"] — TimeLimit 래퍼
+
 사용 예:
     agent = PPOAgent(config, df_train, df_val)
     agent.train()
@@ -271,7 +275,18 @@ class PPOAgent:
         self.use_vec_norm    = vec_cfg.get("enabled", False)
 
         # ── Train 환경 ──────────────────────────────────────────
-        base_env = DummyVecEnv([lambda: BTCGridTradingEnv(df_train, config)])
+        n_envs   = agent_cfg.get("n_envs", 1)
+        max_ep   = train_cfg.get("max_episode_steps", None)
+
+        def _make_train_env(df=df_train, cfg=config, ep_steps=max_ep):
+            """단일 훈련 환경 팩토리 (random_start + TimeLimit)."""
+            env = BTCGridTradingEnv(df, cfg)
+            if ep_steps is not None:
+                from gymnasium.wrappers import TimeLimit
+                env = TimeLimit(env, max_episode_steps=ep_steps)
+            return env
+
+        base_env = DummyVecEnv([_make_train_env] * n_envs)
 
         if self.use_vec_norm:
             self.train_env = VecNormalize(
@@ -346,7 +361,13 @@ class PPOAgent:
                 )
             )
 
+        agent_cfg  = self.config["agent"]
+        train_cfg  = self.config["training"]
+        n_envs     = agent_cfg.get("n_envs", 1)
+        max_ep     = train_cfg.get("max_episode_steps", None)
+
         print(f"\n학습 시작: {total_timesteps:,} 스텝")
+        print(f"  환경: {n_envs}개 병렬  |  에피소드 최대: {max_ep or '전체(제한 없음)'}스텝")
         if self.use_vec_norm:
             print("  VecNormalize: 활성 (norm_obs=True, norm_reward=True)")
         self.model.learn(
