@@ -68,13 +68,20 @@ def actions_to_gaps(actions: np.ndarray) -> pd.DataFrame:
     agg = actions[:, 0]
     pt  = actions[:, 1]
 
+    # ATR 비례 공식 계수만 반환 (atr_ratio는 실제 df에서 가져와야 정확하지만
+    # 행동 분포 분석용으로 val 평균 ATR_RATIO 사용)
+    AVG_ATR_RATIO = 0.00576   # val 2023 평균 ATR/price
+
     df = pd.DataFrame({
         "aggressiveness": agg,
         "profit_target":  pt,
-        "buy_hi_gap":     0.0001 + agg * 0.05,    # [0.01%,  5%]
-        "buy_lo_gap":     0.001  + agg * 0.10,    # [0.10%, 10%]
-        "sell_lo_gap":    0.0001 + pt  * 0.05,    # [0.01%,  5%]
-        "sell_hi_gap":    0.001  + pt  * 0.15,    # [0.10%, 15%]
+        "buy_hi_gap_coef":  0.5 + agg * 1.5,   # [0.5, 2.0] × ATR
+        "buy_lo_gap_coef":  2.5 + agg * 7.5,   # [2.5, 10] × ATR
+        "sell_market_coef": 0.5 + pt  * 1.5,
+        "sell_cost_coef":   2.5 + pt  * 7.5,
+        # val 평균 ATR 기준 실제 gap (%)
+        "buy_hi_gap_pct":  (0.5 + agg * 1.5) * AVG_ATR_RATIO * 100,
+        "sell_mkt_gap_pct":(0.5 + pt  * 1.5) * AVG_ATR_RATIO * 100,
     })
     return df
 

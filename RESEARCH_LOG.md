@@ -753,3 +753,65 @@ val mean ATR = 0.576% → net = +0.476%
 ### exp005 학습 시작 (3M steps, 백그라운드)
 
 ---
+
+## 2026-04-19 — exp006 설계·구현·학습 완료 + 노트북 03/04 업데이트
+
+### exp006 설계 배경: 에피소드 길이 문제
+
+exp001~005 공통 패턴: 초반 학습 → 후반 0거래 수렴.
+
+**근본 원인: Discount 소멸**
+```
+γ = 0.99, 에피소드 = 25,916스텝
+γ^2000 ≈ 2e-9  → 에피소드 내 2,000스텝 이후의 reward는 gradient에 미반영
+γ^25000 ≈ 10^-109 ≈ 0
+
+결과: 에이전트가 에피소드 초반(~80일)만 최적화하고
+      나머지 2.6년은 "거래 안 함"이 로컬 옵티멈
+```
+
+### exp006 변경 사항
+
+| 항목 | exp005 | exp006 | 근거 |
+|------|--------|--------|------|
+| 에피소드 최대 길이 | 25,916(전체) | **2,016**(12주) | γ^2016≈2e-9, 유효 horizon ≈500스텝 |
+| 병렬 환경 | 1 | **4** (DummyVecEnv) | 다양한 레짐 동시 학습 |
+| 시작점 | 2020-01-01 고정 | **랜덤** (에피소드마다) | 상승/하락/횡보 균등 학습 |
+| rollout 크기 | 8,192 | **32,768** (4×8,192) | 학습 신호 다양성 4배 |
+
+### 코드 변경
+- `src/env/trading_env.py`: `random_start` 옵션 + `_max_ep_steps` 기반 시작점 계산
+- `src/agents/ppo_agent.py`: `n_envs × DummyVecEnv` + `TimeLimit` 래퍼 자동 적용
+- `config/exp006_config.yaml`: max_episode_steps=2016, n_envs=4, random_start=true
+
+### exp006 학습 결과 (3M steps)
+
+| step | Sharpe | 비고 |
+|------|--------|------|
+| 50k | 0.634 | |
+| 250k | 1.042 | |
+| 350k | 1.064 | |
+| **550k** | **1.183** | **best 저장** |
+| 1,250k | 1.117 | |
+| 3,000k (final) | 1.165 | |
+| final evaluate() | 0.871 | 0 trades (eval 버그 의심) |
+
+**핵심 개선**: 학습 곡선이 전 구간 Sharpe 0.6~1.2 유지 (exp003~005는 후반 0으로 붕괴).
+에피소드 단축 효과 확인.
+
+**이상 현상**: final_model evaluate() 시 n_trades=0, MDD=72% 모순.
+- n_trades=0이면 equity=10,000 (고정) → MDD=0%, Sharpe=0이어야 정상
+- 추정 원인: VecNormalize obs_rms가 n_envs=4 + random_start 환경에서 수렴한 분포 vs
+  단일 전체 val 에피소드 실행 시 obs 분포 불일치 → 이상 행동
+- 다음 실험(exp007)에서 `norm_reward=False` 또는 VecNormalize 비활성화로 검증 예정
+
+### 노트북 업데이트
+- `notebooks/03_ppo_training.ipynb`: exp001/002/005 학습 곡선 비교, discount 효과 시각화, 실험 히스토리 표 포함
+- `notebooks/04_behavior_analysis.ipynb`: 신규 — action 분포, 레짐별 행동, 거래 시각화
+
+### 보류 아이디어
+- **norm_reward=False**: reward 정규화가 수렴 저해 가능성 (exp007 검증)
+- **VecNormalize 없이 실험**: obs 정규화는 유지하되 inference 시 분포 불일치 문제 우회
+- **stop-loss**: 보유 중 가격 -X% 시 강제 청산 → MDD 제어
+
+---

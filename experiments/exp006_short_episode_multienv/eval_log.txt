@@ -1,0 +1,65 @@
+  [eval] step=  50,000 | Sharpe=+0.634 | Return=+0.00% | MDD=58.59%
+  [best] Sharpe 0.634 ¡æ experiments/exp006_short_episode_multienv\best_model
+  [eval] step= 100,000 | Sharpe=+0.535 | Return=+0.00% | MDD=46.84%
+  [eval] step= 150,000 | Sharpe=+0.567 | Return=+0.00% | MDD=49.85%
+  [eval] step= 200,000 | Sharpe=+0.843 | Return=+0.00% | MDD=71.07%
+  [best] Sharpe 0.843 ¡æ experiments/exp006_short_episode_multienv\best_model
+  [eval] step= 250,000 | Sharpe=+1.042 | Return=+0.00% | MDD=78.95%
+  [best] Sharpe 1.042 ¡æ experiments/exp006_short_episode_multienv\best_model
+  [eval] step= 300,000 | Sharpe=+0.592 | Return=+0.00% | MDD=46.58%
+  [eval] step= 350,000 | Sharpe=+1.064 | Return=+0.00% | MDD=79.31%
+  [best] Sharpe 1.064 ¡æ experiments/exp006_short_episode_multienv\best_model
+  [eval] step= 400,000 | Sharpe=+0.992 | Return=+0.00% | MDD=76.59%
+  [eval] step= 450,000 | Sharpe=+0.595 | Return=+0.00% | MDD=46.84%
+  [eval] step= 500,000 | Sharpe=+0.766 | Return=+0.00% | MDD=65.92%
+  [eval] step= 550,000 | Sharpe=+1.183 | Return=+0.00% | MDD=83.83%
+  [best] Sharpe 1.183 ¡æ experiments/exp006_short_episode_multienv\best_model
+  [eval] step= 600,000 | Sharpe=+0.644 | Return=+0.00% | MDD=54.57%
+  [eval] step= 650,000 | Sharpe=+0.647 | Return=+0.00% | MDD=50.68%
+  [eval] step= 700,000 | Sharpe=+0.784 | Return=+0.00% | MDD=66.39%
+  [eval] step= 750,000 | Sharpe=+0.601 | Return=+0.00% | MDD=42.66%
+  [eval] step= 800,000 | Sharpe=+1.105 | Return=+0.00% | MDD=81.73%
+  [eval] step= 850,000 | Sharpe=+1.040 | Return=+0.00% | MDD=78.65%
+  [eval] step= 900,000 | Sharpe=+0.676 | Return=+0.00% | MDD=53.86%
+  [eval] step= 950,000 | Sharpe=+0.647 | Return=+0.00% | MDD=52.43%
+  [eval] step=1,000,000 | Sharpe=+0.684 | Return=+0.00% | MDD=56.62%
+  [eval] step=1,050,000 | Sharpe=+0.636 | Return=+0.00% | MDD=52.94%
+  [eval] step=1,100,000 | Sharpe=+0.639 | Return=+0.00% | MDD=50.05%
+  [eval] step=1,150,000 | Sharpe=+0.652 | Return=+0.00% | MDD=48.06%
+  [eval] step=1,200,000 | Sharpe=+0.759 | Return=+0.00% | MDD=64.56%
+  [eval] step=1,250,000 | Sharpe=+1.117 | Return=+0.00% | MDD=80.90%
+  [eval] step=1,300,000 | Sharpe=+1.096 | Return=+0.00% | MDD=80.56%
+  [eval] step=1,350,000 | Sharpe=+0.780 | Return=+0.00% | MDD=65.66%
+  [eval] step=1,400,000 | Sharpe=+0.638 | Return=+0.00% | MDD=45.03%
+  [eval] step=1,450,000 | Sharpe=+0.654 | Return=+0.00% | MDD=48.46%
+  [eval] step=1,500,000 | Sharpe=+0.665 | Return=+0.00% | MDD=54.34%
+  [eval] step=1,550,000 | Sharpe=+0.889 | Return=+0.00% | MDD=72.52%
+  [eval] step=1,600,000 | Sharpe=+0.682 | Return=+0.00% | MDD=57.47%
+  [eval] step=1,650,000 | Sharpe=+0.756 | Return=+0.00% | MDD=63.37%
+  [eval] step=1,700,000 | Sharpe=+0.780 | Return=+0.00% | MDD=66.26%
+  [eval] step=1,750,000 | Sharpe=+0.773 | Return=+0.00% | MDD=65.73%
+  [eval] step=1,800,000 | Sharpe=+0.631 | Return=+0.00% | MDD=48.88%
+  [eval] step=1,850,000 | Sharpe=+0.700 | Return=+0.00% | MDD=58.57%
+  [eval] step=1,900,000 | Sharpe=+0.849 | Return=+0.00% | MDD=71.03%
+  [eval] step=1,950,000 | Sharpe=+0.776 | Return=+0.00% | MDD=66.00%
+  [eval] step=2,000,000 | Sharpe=+0.695 | Return=+0.00% | MDD=58.57%
+  [eval] step=2,050,000 | Sharpe=+0.613 | Return=+0.00% | MDD=44.18%
+  [eval] step=2,100,000 | Sharpe=+0.661 | Return=+0.00% | MDD=53.49%
+  [eval] step=2,150,000 | Sharpe=+0.673 | Return=+0.00% | MDD=55.81%
+  [eval] step=2,200,000 | Sharpe=+0.676 | Return=+0.00% | MDD=54.85%
+  [eval] step=2,250,000 | Sharpe=+0.753 | Return=+0.00% | MDD=64.17%
+  [eval] step=2,300,000 | Sharpe=+0.768 | Return=+0.00% | MDD=65.83%
+  [eval] step=2,350,000 | Sharpe=+0.637 | Return=+0.00% | MDD=46.49%
+  [eval] step=2,400,000 | Sharpe=+0.611 | Return=+0.00% | MDD=43.61%
+  [eval] step=2,450,000 | Sharpe=+0.690 | Return=+0.00% | MDD=56.63%
+  [eval] step=2,500,000 | Sharpe=+0.748 | Return=+0.00% | MDD=63.65%
+  [eval] step=2,550,000 | Sharpe=+0.969 | Return=+0.00% | MDD=75.92%
+  [eval] step=2,600,000 | Sharpe=+0.680 | Return=+0.00% | MDD=54.00%
+  [eval] step=2,650,000 | Sharpe=+0.774 | Return=+0.00% | MDD=63.10%
+  [eval] step=2,700,000 | Sharpe=+0.606 | Return=+0.00% | MDD=44.14%
+  [eval] step=2,750,000 | Sharpe=+0.854 | Return=+0.00% | MDD=70.52%
+  [eval] step=2,800,000 | Sharpe=+0.668 | Return=+0.00% | MDD=56.48%
+  [eval] step=2,850,000 | Sharpe=+0.988 | Return=+0.00% | MDD=77.24%
+  [eval] step=2,900,000 | Sharpe=+0.669 | Return=+0.00% | MDD=56.82%
+  [eval] step=2,950,000 | Sharpe=+0.670 | Return=+0.00% | MDD=51.23%
+  [eval] step=3,000,000 | Sharpe=+1.165 | Return=+0.00% | MDD=83.53%
