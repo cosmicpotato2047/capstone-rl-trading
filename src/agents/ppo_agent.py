@@ -14,6 +14,11 @@ exp006 이후 지원:
   - n_envs: config["agent"]["n_envs"] — 병렬 환경 수 (DummyVecEnv)
   - max_episode_steps: config["training"]["max_episode_steps"] — TimeLimit 래퍼
 
+exp007 이후 지원:
+  - multi-episode 평가: config["training"]["n_eval_episodes"] 회 실행 후 Sharpe 평균
+    각 에피소드는 max_episode_steps 길이로 val 데이터에서 서로 다른 시작점 사용
+    (학습과 동일한 길이/분포로 평가 → 학습/추론 불일치 해소)
+
 사용 예:
     agent = PPOAgent(config, df_train, df_val)
     agent.train()
@@ -102,8 +107,11 @@ def _get_base_env(vec_env) -> BTCGridTradingEnv:
 
 class ValMetricsCallback(BaseCallback):
     """
-    eval_freq 스텝마다 Val 환경에서 1 에피소드를 실행하고
-    Sharpe Ratio / 수익률 / MDD를 계산한다.
+    eval_freq 스텝마다 Val 환경에서 n_eval_episodes 에피소드를 실행하고
+    Sharpe Ratio / 수익률 / MDD 평균을 계산한다.
+
+    max_episode_steps가 설정된 경우 val 데이터를 여러 시작점에서 평가
+    (학습 에피소드와 동일한 길이 → 학습/추론 분포 불일치 해소).
 
     최고 Sharpe 모델을 best_model_path에 자동 저장한다.
     VecNormalize 사용 시 통계도 함께 저장한다.
@@ -127,16 +135,18 @@ class ValMetricsCallback(BaseCallback):
         self.train_env       = train_env
         self.best_sharpe     = -np.inf
         self.initial_cash    = config["environment"]["initial_cash"]
+        self.n_eval_episodes = config.get("training", {}).get("n_eval_episodes", 5)
 
     def _on_step(self) -> bool:
         if self.num_timesteps % self.eval_freq != 0:
             return True
 
-        metrics = _evaluate_once(
+        metrics = _evaluate_multi(
             model=self.model,
             df=self.df_val,
             config=self.config,
             train_env=self.train_env,
+            n_episodes=self.n_eval_episodes,
         )
         sharpe = metrics["sharpe_ratio"]
         ret    = metrics["total_return_pct"]
@@ -191,6 +201,8 @@ def _evaluate_once(
     df: pd.DataFrame,
     config: dict,
     train_env=None,
+    ep_steps: int | None = None,
+    start_idx: int | None = None,
 ) -> dict:
     """
     학습된 모델로 df를 1 에피소드 실행하고 metrics dict를 반환한다.
@@ -202,14 +214,30 @@ def _evaluate_once(
         config     : 실험 설정 dict
         train_env  : VecNormalize 인스턴스 (있으면 obs 정규화 통계 복사).
                      None이면 정규화 없이 실행.
+        ep_steps   : 에피소드 최대 길이 (None이면 전체 df)
+        start_idx  : 에피소드 시작 스텝 인덱스 (None이면 warmup부터)
     """
     initial_cash = config["environment"]["initial_cash"]
+    warmup       = config["indicators"]["atr_period"]
 
-    # 평가 환경 생성
-    base_env = DummyVecEnv([lambda: BTCGridTradingEnv(df, config)])
+    # start_idx 지정 시 df를 슬라이스해서 넘김 (warmup 유지)
+    if start_idx is not None and start_idx > warmup:
+        # warmup 이전 행은 ATR 계산용으로 보존, start_idx부터 실제 평가
+        df_eval = df.iloc[: start_idx + (ep_steps or (len(df) - start_idx))].reset_index(drop=True)
+        # reset 후 warmup 스텝은 df_eval 내 위치로 유지됨
+    else:
+        df_eval = df
+
+    def _make_eval_env(d=df_eval, cfg=config, ep=ep_steps):
+        env = BTCGridTradingEnv(d, cfg)
+        if ep is not None:
+            from gymnasium.wrappers import TimeLimit
+            env = TimeLimit(env, max_episode_steps=ep)
+        return env
+
+    base_env = DummyVecEnv([_make_eval_env])
 
     if isinstance(train_env, VecNormalize):
-        # 학습 통계를 복사해서 inference-only VecNormalize로 감쌈
         eval_env = VecNormalize(base_env, training=False, norm_reward=False)
         eval_env.obs_rms  = deepcopy(train_env.obs_rms)
         eval_env.clip_obs = train_env.clip_obs
@@ -217,6 +245,11 @@ def _evaluate_once(
     else:
         eval_env  = base_env
         underlying = base_env.envs[0]
+
+    # TimeLimit 안쪽 환경 가져오기
+    raw_env = underlying
+    while hasattr(raw_env, 'env'):
+        raw_env = raw_env.env
 
     obs = eval_env.reset()
     equity_list = [initial_cash]
@@ -226,8 +259,8 @@ def _evaluate_once(
         action, _ = model.predict(obs, deterministic=True)
         obs, _reward, dones, _infos = eval_env.step(action)
         done = bool(dones[0])
-        price = float(underlying.df.loc[underlying.current_step - 1, "close"])
-        equity_list.append(underlying.cash + underlying.holdings * price)
+        price = float(raw_env.df.loc[raw_env.current_step - 1, "close"])
+        equity_list.append(raw_env.cash + raw_env.holdings * price)
 
     eval_env.close()
 
@@ -235,9 +268,64 @@ def _evaluate_once(
     return compute_all(
         equity_curve=equity_curve,
         initial_cash=initial_cash,
-        n_trades=underlying.n_trades,
-        completed_cycles=underlying.completed_cycles,
+        n_trades=raw_env.n_trades,
+        completed_cycles=raw_env.completed_cycles,
     )
+
+
+def _evaluate_multi(
+    model: PPO,
+    df: pd.DataFrame,
+    config: dict,
+    train_env=None,
+    n_episodes: int = 5,
+) -> dict:
+    """
+    val 데이터에서 n_episodes 회 실행 후 지표를 평균하여 반환한다.
+
+    각 에피소드는 max_episode_steps 길이로 val 데이터 내
+    서로 다른 시작점에서 실행된다 (학습 에피소드와 동일한 구조).
+
+    단일 에피소드 평가보다 분산이 낮고 다양한 시장 레짐을 커버한다.
+    """
+    ep_steps = config.get("training", {}).get("max_episode_steps", None)
+    warmup   = config["indicators"]["atr_period"]
+
+    # val 내 가능한 시작점 범위
+    if ep_steps is not None:
+        max_start = len(df) - ep_steps - 2
+    else:
+        max_start = warmup  # 단일 에피소드
+
+    if max_start <= warmup:
+        # ep_steps가 val 전체보다 길면 단일 실행
+        return _evaluate_once(model, df, config, train_env, ep_steps=ep_steps)
+
+    # 균등 간격으로 시작점 분산
+    starts = np.linspace(warmup, max_start, n_episodes, dtype=int)
+
+    all_metrics = []
+    for start in starts:
+        m = _evaluate_once(
+            model, df, config, train_env,
+            ep_steps=ep_steps,
+            start_idx=int(start),
+        )
+        all_metrics.append(m)
+
+    # 지표 평균 (equity_curve, completed_cycles 제외)
+    scalar_keys = ["total_return_pct", "sharpe_ratio", "max_drawdown_pct",
+                   "n_trades", "n_cycles", "avg_cycle_pnl_pct", "avg_cycle_hours"]
+    averaged = {}
+    for k in scalar_keys:
+        vals = [m[k] for m in all_metrics if k in m]
+        averaged[k] = float(np.mean(vals)) if vals else 0.0
+
+    # 마지막 에피소드의 equity_curve를 대표로 첨부
+    averaged["equity_curve"]     = all_metrics[-1].get("equity_curve", pd.Series())
+    averaged["completed_cycles"] = all_metrics[-1].get("completed_cycles", [])
+
+    return averaged
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -379,59 +467,27 @@ class PPOAgent:
 
     # ── 평가 ──────────────────────────────────────────────────
 
-    def evaluate(self, df: pd.DataFrame) -> dict:
+    def evaluate(self, df: pd.DataFrame, n_episodes: int | None = None) -> dict:
         """
-        학습된 모델로 df를 1 에피소드 실행하고 metrics dict를 반환한다.
+        학습된 모델로 df를 평가하고 metrics dict를 반환한다.
 
-        VecNormalize 활성 시 학습 통계를 복사해 inference-only로 실행한다.
+        max_episode_steps가 설정된 경우: n_episodes 회 실행 후 평균
+        (학습과 동일한 에피소드 길이/분포 → 학습/추론 분포 불일치 해소)
+
+        max_episode_steps가 없는 경우: 전체 df 단일 실행
 
         Returns:
             compute_all() 결과 dict + "equity_curve" + "completed_cycles"
         """
-        metrics = _evaluate_once(
+        n_ep = n_episodes or self.config.get("training", {}).get("n_eval_episodes", 5)
+
+        metrics = _evaluate_multi(
             model=self.model,
             df=df,
             config=self.config,
             train_env=self.train_env if self.use_vec_norm else None,
+            n_episodes=n_ep,
         )
-
-        # equity_curve, completed_cycles는 별도로 수집 (compute_all에 없음)
-        # _evaluate_once를 직접 확장하지 않고 한 번 더 실행하는 대신
-        # 내부 결과에 equity_curve/completed_cycles를 덧붙임
-        initial_cash = self.config["environment"]["initial_cash"]
-        base_env = DummyVecEnv([lambda: BTCGridTradingEnv(df, self.config)])
-
-        if self.use_vec_norm:
-            eval_env = VecNormalize(base_env, training=False, norm_reward=False)
-            eval_env.obs_rms  = deepcopy(self.train_env.obs_rms)
-            eval_env.clip_obs = self.train_env.clip_obs
-            underlying = eval_env.venv.envs[0]
-        else:
-            eval_env   = base_env
-            underlying = base_env.envs[0]
-
-        obs = eval_env.reset()
-        equity_list = [initial_cash]
-        done = False
-
-        while not done:
-            action, _ = self.model.predict(obs, deterministic=True)
-            obs, _reward, dones, _infos = eval_env.step(action)
-            done = bool(dones[0])
-            price = float(underlying.df.loc[underlying.current_step - 1, "close"])
-            equity_list.append(underlying.cash + underlying.holdings * price)
-
-        eval_env.close()
-
-        equity_curve = pd.Series(equity_list, dtype=float)
-        metrics = compute_all(
-            equity_curve=equity_curve,
-            initial_cash=initial_cash,
-            n_trades=underlying.n_trades,
-            completed_cycles=underlying.completed_cycles,
-        )
-        metrics["equity_curve"]      = equity_curve
-        metrics["completed_cycles"]  = underlying.completed_cycles
         return metrics
 
     # ── 저장 / 로드 ────────────────────────────────────────────
