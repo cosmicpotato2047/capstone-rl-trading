@@ -14,7 +14,7 @@ BTCGridTradingEnv 포트폴리오 수학 검증 테스트.
   8.  threshold_btc 기준 전량 / 분할 매도
   9.  SELL 우선 원칙 (같은 봉에서 buy + sell 동시 체결)
   10. 미보유 구간 divergence — last_avg_price 활용
-  11. Reward = equity_change / start_capital - fee_rate × n_trades
+  11. Reward = equity_change / start_capital  (수수료는 equity에 이미 반영)
   12. gymnasium env_checker 통과
 """
 
@@ -584,7 +584,11 @@ class TestReward:
     def test_reward_equals_equity_change_normalized(self):
         """
         체결이 있는 스텝:
-        reward = (equity_after - equity_before) / start_capital - fee × n_trades
+        reward = (equity_after - equity_before) / start_capital
+
+        수수료는 _execute_buy/_execute_sell에서 cash에 이미 반영됨:
+          매수: cash -= spend (fee 포함), holdings += (spend-fee)/price
+        → equity 변화분 자체에 수수료가 포함되므로 별도 차감 없음.
 
         next_low=999.5: buy_hi(999.9) 체결, buy_lo(999.0) 미체결 → n_trades=1 확정.
         """
@@ -601,12 +605,10 @@ class TestReward:
         env.reset(seed=0)
 
         equity_before = env.cash   # holdings=0 이므로 equity = cash
-        n_trades_before = env.n_trades
         _, reward, _, _, _ = env.step(_act(0.0, 0.0))
         equity_after = env.cash + env.holdings * PRICE
-        n_trades_step = env.n_trades - n_trades_before   # 실제 체결 수
 
-        expected = (equity_after - equity_before) / INITIAL_CASH - FEE * n_trades_step
+        expected = (equity_after - equity_before) / INITIAL_CASH
         assert reward == pytest.approx(expected, rel=1e-4)
 
     def test_no_cycle_bonus_on_cycle_end(self):
@@ -641,8 +643,8 @@ class TestReward:
         # 사이클 종료 확인
         assert len(env.completed_cycles) == 1
 
-        # reward = equity_change / start_capital - fee × n_trades (보너스 없음)
-        expected = (equity_after - equity_before) / INITIAL_CASH - FEE * n_trades_step
+        # reward = equity_change / start_capital (수수료 이미 equity에 반영, 보너스 없음)
+        expected = (equity_after - equity_before) / INITIAL_CASH
         assert reward == pytest.approx(expected, rel=1e-4)
 
 

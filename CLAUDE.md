@@ -77,9 +77,13 @@ sell_hi = avg_price * (1 + sell_hi_gap)  # avg_price=0이면 price fallback
 ### Reward
 
 ```python
-step_reward = (equity_t - equity_{t-1}) / start_capital - fee_rate * n_trades
+step_reward = (equity_t - equity_{t-1}) / start_capital
 ```
 
+- 수수료는 `_execute_buy` / `_execute_sell`에서 cash에 이미 반영됨:
+  - 매수: `cash -= spend` (fee 포함), `holdings += (spend - fee) / price`
+  - 매도: `cash += qty × price - fee`
+  - → equity 변화분 자체에 수수료가 포함되므로 별도 차감 불필요.
 - `fee_rate`: 0.05% (Binance maker fee)
 - 사이클 종료 시 별도 보너스 없음. `completed_cycles` 리스트에 통계만 기록.
 - 사이클: holdings == 0 → 첫 체결 시 시작 / holdings → 0 복귀 시 종료

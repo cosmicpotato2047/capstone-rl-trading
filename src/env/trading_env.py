@@ -33,7 +33,8 @@ Action (2차원 연속, [0, 1]²):
           holdings > threshold_btc → holdings / n_splits (매수와 대칭 균등 분할)
 
 Reward:
-    매 스텝: (equity_t - equity_{t-1}) / start_capital - fee × n_trades
+    매 스텝: (equity_t - equity_{t-1}) / start_capital
+             수수료는 _execute_buy/_execute_sell에서 cash에 반영되므로 별도 차감 없음.
     사이클 종료 시: 보너스 없음 (통계 기록만 — completed_cycles)
 """
 
@@ -162,12 +163,13 @@ class BTCGridTradingEnv(gym.Env):
             next_price = price
 
         # ── 3. Reward 계산 ────────────────────────────────────
+        # 수수료는 _execute_buy/_execute_sell에서 cash에 이미 반영됨:
+        #   매수: cash -= spend (fee 포함),  BTC += (spend - fee) / price
+        #   매도: cash += qty × price - fee
+        # → equity 변화분 자체가 수수료를 포함하므로 별도 패널티 불필요.
+        # (- fee_rate * n_trades 항은 단위 불일치로 수수료를 8배 중복 계산함)
         equity_after = self._equity(next_price)
-        step_reward = (
-            (equity_after - equity_before) / self.start_capital
-            - self.fee_rate * n_trades_this_step
-            + cycle_bonus
-        )
+        step_reward = (equity_after - equity_before) / self.start_capital
 
         self.n_trades += n_trades_this_step
         self.current_step = next_step
