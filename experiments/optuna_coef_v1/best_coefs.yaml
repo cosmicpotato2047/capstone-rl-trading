@@ -1,0 +1,13 @@
+baseline_sharpe: 17.579
+best_sharpe: 42.9966
+best_trial: 42
+formula_coefs:
+  A_b: 0.284795
+  A_s: 0.100632
+  B_b: 1.748282
+  B_s: 0.889956
+  C_b: 5.222758
+  C_s: 6.912664
+  D_b: 18.68343
+  D_s: 5.456958
+study_name: coef_tuning_v1
