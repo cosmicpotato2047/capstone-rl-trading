@@ -32,13 +32,15 @@ indicators:
   zscore_window: 168
 
 # ────────────────────────────────────────
-# State 변수 (5차원)
+# State 변수 (7차원) — Phase 2 재설계
 # ────────────────────────────────────────
-# 0. log_price           = log(price / price.rolling(168).mean())
-# 1. divergence          = (avg_price - price) / avg_price  (미보유 시 0)
+# 0. log_price            = log(price / price.rolling(168).mean())
+# 1. divergence           = (avg_price - price) / avg_price  (미보유 시 0)
 # 2. holdings_value_ratio = (holdings × price) / start_capital  (미보유 시 0)
-# 3. cash_ratio          = cash / start_capital
-# 4. volatility          = ATR(168) / price
+# 3. cash_ratio           = cash / start_capital
+# 4. volatility           = ATR(168) / price
+# 5. trend_1d             = pct_change(24)  — 24h 단기 방향성 (regime 감지용)
+# 6. trend_1w             = pct_change(168) — 168h 주간 방향성 (regime 감지용)
 # → 모두 rolling z-score 정규화 후 observation space에 입력
 
 # ────────────────────────────────────────
@@ -51,13 +53,28 @@ environment:
   transaction_cost: 0.0005      # 0.05% per trade
 
   # 주문 개수
-  n_buy_orders: 2               # buy_hi, buy_lo (탐색 중)
+  n_buy_orders: 2               # buy_hi, buy_lo
 
   # 예산 분할 — 사이클 시작 시 현금을 n_splits 슬롯으로 나눔
-  # per_order_size = (cycle_start_cash / n_splits) / n_buy_orders
-  # 예: cash=10000, n_splits=4, n_buy_orders=2 → slot=2500, per_order=1250
-  # 슬롯 소진(cycle_budget_remaining < per_order_size) 후 추가 매수 완전 차단
-  n_splits: 4                   # 사이클당 총 매수 슬롯 수 (Val 셋 튜닝 예정)
+  n_splits: 4
+
+  # sell_market 임계값 기준: "price" | "avg_price"
+  threshold_basis: "avg_price"
+
+  # ── 공식 계수 (Phase 2 재설계) ──────────────────────────
+  # buy side: Bayesian Trial #42 참고값 (신뢰 가능)
+  # sell side: 재설계값 — A_s/B_s는 Bayesian 튜닝 대상 제외
+  #   ※ Bayesian 튜닝 대상: n_splits, n_buy_orders 만 허용
+  #      gap 계수(A_s, B_s 등)는 RL action과 역할 충돌 → 금지
+  formula_coefs:
+    A_b: 0.285
+    B_b: 1.748
+    C_b: 5.223
+    D_b: 18.683
+    A_s: 0.05    # 재설계: 0.5 → 0.05 (Bayesian 탐색 하한 이하 허용)
+    B_s: 1.95    # 재설계: sell_market 범위 [0.05×ATR, 2.0×ATR]
+    C_s: 2.5
+    D_s: 7.5
 
   # 사이클 정의
   # 시작: holdings == 0 → 첫 체결

@@ -1,26 +1,39 @@
 """
 BTC 그리드 트레이딩 Gymnasium 환경
 
-State (5차원, rolling z-score 정규화):
+State (7차원, rolling z-score 정규화):
     [0] log_price            = log(price / price.rolling(168).mean())
     [1] divergence           = (avg_price - price) / avg_price  (미보유 시 last_avg_price 활용, 거래 이력 없으면 0)
     [2] holdings_value_ratio = (holdings × price) / start_capital  (미보유 시 0)
     [3] cash_ratio           = cash / start_capital
     [4] volatility           = ATR(168) / price
+    [5] trend_1d             = pct_change(24)  — 24h 단기 방향성
+    [6] trend_1w             = pct_change(168) — 168h 주간 방향성
+
+    trend 피처 추가 이유:
+        방향성 피처 없이는 RL이 상승/하락/횡보 regime을 구분할 수 없어 [0,0] 포화 수렴.
 
 Action (2차원 연속, [0, 1]²):
     [0] aggressiveness → buy_hi_gap, buy_lo_gap 결정
     [1] profit_target  → sell_market_gap, sell_cost_gap 결정
 
 주문 (매 스텝 4개 지정가 갱신 — ATR 비례 스케일링):
-    atr_ratio   = ATR(168) / price              # 현재 변동성 수준
+    atr_ratio   = ATR(168) / price
 
-    buy_hi_gap      = atr_ratio × (A_b + aggressiveness × B_b)  # 기본: [0.5×ATR, 2.0×ATR]
-    buy_lo_gap      = atr_ratio × (C_b + aggressiveness × D_b)  # 기본: [2.5×ATR, 10×ATR]
-    sell_market_gap = atr_ratio × (A_s + profit_target  × B_s)  # 기본: [0.5×ATR, 2.0×ATR]
-    sell_cost_gap   = atr_ratio × (C_s + profit_target  × D_s)  # 기본: [2.5×ATR, 10×ATR]
-    # 계수 기본값: A_b=0.5, B_b=1.5, C_b=2.5, D_b=7.5, A_s=0.5, B_s=1.5, C_s=2.5, D_s=7.5
-    # environment.formula_coefs 딕셔너리로 재정의 가능 (Bayesian 튜닝용)
+    buy_hi_gap      = atr_ratio × (A_b + aggressiveness × B_b)  # [0.285×ATR, 2.033×ATR]
+    buy_lo_gap      = atr_ratio × (C_b + aggressiveness × D_b)  # [5.223×ATR, 23.906×ATR]
+    sell_market_gap = atr_ratio × (A_s + profit_target  × B_s)  # [0.05×ATR,  2.0×ATR]  ← 재설계
+    sell_cost_gap   = atr_ratio × (C_s + profit_target  × D_s)  # [2.5×ATR,   10.0×ATR]
+
+    sell_market 범위 재설계:
+        - 기존 A_s=0.5 → 새 A_s=0.05 (Bayesian 탐색 하한 0.1 이하로 확장)
+        - RL이 낮게 선택하면 수수료로 reward 음수 → 학습으로 적절한 하한 발견
+        - A_s, B_s는 Bayesian 튜닝 대상에서 제외 (RL action 역할과 충돌 방지)
+
+    buy side 계수 (Bayesian Trial #42 참고값 — 탐색 중간값, 신뢰 가능):
+        A_b=0.285, B_b=1.748, C_b=5.223, D_b=18.683
+    sell side 계수 (재설계 기본값):
+        A_s=0.05,  B_s=1.95,  C_s=2.5,   D_s=7.5
 
     buy_hi      = price     × (1 - buy_hi_gap)
     buy_lo      = price     × (1 - buy_lo_gap)
@@ -92,13 +105,15 @@ class BTCGridTradingEnv(gym.Env):
         # buy_lo_gap  = atr_ratio × (C_b + aggressiveness × D_b)
         # sell_market_gap = atr_ratio × (A_s + profit_target × B_s)
         # sell_cost_gap   = atr_ratio × (C_s + profit_target × D_s)
+        # buy side: Bayesian Trial #42 참고값 (config 재정의 가능)
+        # sell side: 재설계값 — A_s/B_s는 Bayesian 대상에서 제외 (RL action 충돌 방지)
         _coefs = self.cfg_env.get("formula_coefs", {})
-        self.A_b: float = float(_coefs.get("A_b", 0.5))
-        self.B_b: float = float(_coefs.get("B_b", 1.5))
-        self.C_b: float = float(_coefs.get("C_b", 2.5))
-        self.D_b: float = float(_coefs.get("D_b", 7.5))
-        self.A_s: float = float(_coefs.get("A_s", 0.5))
-        self.B_s: float = float(_coefs.get("B_s", 1.5))
+        self.A_b: float = float(_coefs.get("A_b", 0.285))
+        self.B_b: float = float(_coefs.get("B_b", 1.748))
+        self.C_b: float = float(_coefs.get("C_b", 5.223))
+        self.D_b: float = float(_coefs.get("D_b", 18.683))
+        self.A_s: float = float(_coefs.get("A_s", 0.05))   # 재설계: 0.5 → 0.05
+        self.B_s: float = float(_coefs.get("B_s", 1.95))   # 재설계: 1.5 → 1.95
         self.C_s: float = float(_coefs.get("C_s", 2.5))
         self.D_s: float = float(_coefs.get("D_s", 7.5))
 
@@ -120,10 +135,12 @@ class BTCGridTradingEnv(gym.Env):
         )
 
         # Observation: z-score 정규화 후 대략 [-4, 4] 범위
+        # shape=(7,): log_price, divergence, holdings_value_ratio, cash_ratio,
+        #             volatility, trend_1d, trend_1w
         self.observation_space = spaces.Box(
             low=np.float32(-5.0),
             high=np.float32(5.0),
-            shape=(5,),
+            shape=(7,),
             dtype=np.float32,
         )
 
@@ -498,10 +515,10 @@ class BTCGridTradingEnv(gym.Env):
 
     def _get_observation(self) -> np.ndarray:
         """
-        현재 스텝의 5차원 state 벡터 반환.
+        현재 스텝의 7차원 state 벡터 반환.
 
         Returns:
-            np.ndarray shape (5,) float32, z-score 정규화 완료
+            np.ndarray shape (7,) float32, z-score 정규화 완료
         """
         row   = self.df.iloc[self.current_step]
         price = float(row["close"])
@@ -516,13 +533,11 @@ class BTCGridTradingEnv(gym.Env):
         if self.holdings > 0.0 and self.avg_price > 0.0:
             divergence = (self.avg_price - price) / self.avg_price
         elif self.last_avg_price > 0.0:
-            # 미보유 구간: 직전 사이클 평단가 기준 괴리율 유지
             divergence = (self.last_avg_price - price) / self.last_avg_price
         else:
-            divergence = 0.0  # 거래 이력 없음 (에피소드 초반)
+            divergence = 0.0
 
         # [2] 포지션 규모: 현재 BTC 평가액 / 초기 자본
-        #     가격이 오르면 같은 수량이어도 비율 증가 → 리스크 인식
         holdings_value_ratio = (self.holdings * price) / self.start_capital
 
         # [3] 현금 여력: 추가 매수 가능 자본 비율
@@ -531,12 +546,20 @@ class BTCGridTradingEnv(gym.Env):
         # [4] 시장 변동성: ATR(168) / price, rolling z-score 적용
         zscore_volatility = float(row["zscore_volatility"])
 
+        # [5] 단기 방향성: 24h 수익률 rolling z-score
+        zscore_trend_1d = float(row["zscore_trend_1d"])
+
+        # [6] 주간 방향성: 168h 수익률 rolling z-score
+        zscore_trend_1w = float(row["zscore_trend_1w"])
+
         obs = np.array([
             zscore_log_price,
             divergence,
             holdings_value_ratio,
             cash_ratio,
             zscore_volatility,
+            zscore_trend_1d,
+            zscore_trend_1w,
         ], dtype=np.float32)
 
         return np.clip(obs, -5.0, 5.0)

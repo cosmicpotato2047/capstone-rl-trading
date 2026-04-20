@@ -58,6 +58,11 @@ def compute_log_price(close: pd.Series, lookback: int) -> pd.Series:
     return np.log(close / close.rolling(lookback).mean())
 
 
+def compute_trend(close: pd.Series, window: int) -> pd.Series:
+    """window봉 단순 수익률 — 추세 방향성 피처."""
+    return close.pct_change(window)
+
+
 def rolling_zscore(series: pd.Series, window: int) -> pd.Series:
     """Rolling z-score 정규화. 미래 데이터 누수 없음."""
     mean = series.rolling(window).mean()
@@ -79,14 +84,20 @@ def main():
     atr        = compute_atr(df, ATR_PERIOD)
     log_price  = compute_log_price(df["close"], LOOKBACK)
     volatility = atr / df["close"]
+    trend_1d   = compute_trend(df["close"], window=24)   # 24h 수익률
+    trend_1w   = compute_trend(df["close"], window=168)  # 168h 수익률
 
     # 3. Rolling z-score 정규화
     df["log_price"]         = log_price
     df["volatility_raw"]    = volatility
+    df["trend_1d_raw"]      = trend_1d
+    df["trend_1w_raw"]      = trend_1w
     df["zscore_log_price"]  = rolling_zscore(log_price,  ZSCORE_WIN)
     df["zscore_volatility"] = rolling_zscore(volatility, ZSCORE_WIN)
+    df["zscore_trend_1d"]   = rolling_zscore(trend_1d,   ZSCORE_WIN)
+    df["zscore_trend_1w"]   = rolling_zscore(trend_1w,   ZSCORE_WIN)
 
-    # 4. NaN 제거 (warmup: 첫 168봉 × 2 = 336봉 이후부터 유효)
+    # 4. NaN 제거 (warmup: trend_1w가 168봉, z-score가 추가 168봉 → 336봉 이후 유효)
     before = len(df)
     df = df.dropna()
     print(f"  NaN 제거: {before - len(df)}행 제거 → {len(df):,}행 남음")
@@ -94,7 +105,8 @@ def main():
     # 5. 컬럼 정리 (환경에서 필요한 컬럼만 유지)
     keep_cols = ["open", "high", "low", "close", "volume",
                  "log_price", "volatility_raw",
-                 "zscore_log_price", "zscore_volatility"]
+                 "zscore_log_price", "zscore_volatility",
+                 "zscore_trend_1d",  "zscore_trend_1w"]
     df = df[keep_cols]
 
     # 6. 분할
@@ -120,7 +132,8 @@ def main():
 
     # 8. 간단 통계 출력
     print(f"\nTrain 기초 통계:")
-    print(train[["close", "zscore_log_price", "zscore_volatility"]].describe().round(4))
+    print(train[["close", "zscore_log_price", "zscore_volatility",
+                 "zscore_trend_1d", "zscore_trend_1w"]].describe().round(4))
 
 
 if __name__ == "__main__":
