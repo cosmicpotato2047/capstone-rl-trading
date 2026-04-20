@@ -1261,3 +1261,143 @@ Test가 Val보다 높은 이유: 2024~2025 BTC 강세장이 그리드 전략에 
 최종 보고서 작성 (Phase 3)
 
 ---
+
+## 2026-04-21 — ★ Milestone 1: Phase 1 완료 + 구조적 문제 발견 + Phase 2 계획
+
+### Milestone 1 요약
+
+**Phase 1 (2026-04-05 ~ 2026-04-21)**이 완료됐다.
+완성된 논문(`reports/paper/main.tex`, `main_ko.tex`)을 **중간 보고서**로 확정한다.
+여기서 발견한 구조적 설계 결함이 Phase 2의 출발점이 된다.
+
+---
+
+### 지금까지 한 것 (Phase 1 전체)
+
+| 단계 | 내용 | 결과 |
+|------|------|------|
+| 환경 구현 | BTCGridTradingEnv (5D state, 2D continuous action) | gymnasium check_env 통과 |
+| 베이스라인 | Buy-and-Hold, Fixed Grid 1/2/5%, ATR-proportional | Sharpe 최대 1.472 |
+| PPO 학습 | exp001~016, 총 16회 실험 | Val Sharpe 35.4, Test Sharpe 43.0 |
+| Bayesian 계수 튜닝 | 50 trials, 4.34시간 | Sharpe +144.6% (17.6 → 43.0) |
+| 행동 분석 | Test set action 분포 수집 | 정책 포화 발견 (아래 참고) |
+| 논문 작성 | main.tex (영문) + main_ko.tex (국문) | 16페이지, XeLaTeX 컴파일 완료 |
+
+---
+
+### 발견된 구조적 문제: 정책 포화 (Policy Saturation)
+
+**현상:**
+exp016 최종 모델의 결정론적 행동: `[aggressiveness=0.000, profit_target=0.000]`
+정책 네트워크 raw mean: `[-9.19, -4.30]` → tanh+rescale → `[≈0, ≈0]`
+모든 state 입력에서 동일한 action 출력 → regime adaptation 불가
+
+**근본 원인: Bayesian-RL 역할 충돌**
+```
+sell_market_gap = ATR × (A_s + B_s × profit_target)
+Bayesian이 A_s = 0.101 최적화 (탐색 하한 0.1에 도달)
+→ profit_target = 0 일 때 gap이 이미 Bayesian 최적값
+→ RL이 profit_target을 높여봤자 gap이 커질 뿐 (더 나빠짐)
+→ profit_target = 0 이 항상 우세 → 정책이 [0, 0]으로 수렴
+```
+
+**A_s=0.101 추가 해석:**
+- A_s 탐색 범위: `[0.1, 3.0]` → 결과 0.100632 = 하한 도달
+- 경제적 의미: `ATR=0.5% 기준 gap=0.05%` ≈ 수수료 왕복 손익분기점
+- **Bayesian이 말하는 것: "손익분기까지 최대한 빠르게 팔아라"**
+- 진짜 최적값은 0.1 이하일 가능성 있음 (Round 2 미실시)
+
+**설계 원칙 위반:**
+- 올바른 구조: 계수 = gap의 구조적 범위 결정 / RL action = 그 범위 안에서 state 기반 선택
+- 실제 구현: 계수와 RL action이 동일한 파라미터(gap 크기)를 동시 제어 → 충돌
+
+**공정한 평가:**
+- Sharpe 43.0의 대부분은 Bayesian 계수 최적화 기여
+- RL이 기여한 부분: 계수 최적화 이후의 미세한 적응 (있다면)
+- Regime adaptation은 이번 설계에서 측정 불가
+
+---
+
+### Bayesian 결과에서 보존할 인사이트
+
+Phase 2에서 활용할 유효한 발견:
+
+| 계수 | 발견값 | 해석 | Phase 2 반영 |
+|------|--------|------|--------------|
+| A_b | 0.285 | buy_hi 기저 최적값 (하한 도달 아님 → 유효) | 고정 구조 파라미터로 채택 |
+| C_b, D_b | 5.22, 18.68 | buy_lo 범위 대폭 확장이 유리 | 참고값으로 활용 |
+| A_s | 0.101 | 하한 도달 → 진짜 최적은 0.1 이하 가능 | RL 범위 하한을 0.05로 확장 |
+| B_s | 0.890 | A_s 오염으로 신뢰도 낮음 | 재학습으로 대체 |
+
+---
+
+### Phase 2 계획
+
+**목표: RL이 실제로 state를 보고 다르게 행동하는 시스템 구현**
+
+#### Phase 2-A: RL 재설계 (환경 개선)
+
+**변경 1 — State 확장 (5D → 7D):**
+```
+기존: [log_price, divergence, holdings_value_ratio, cash_ratio, volatility]
+추가: [trend_1d, trend_1w]
+  trend_1d = 24시간 수익률 (단기 방향성)
+  trend_1w = 168시간 수익률 (주간 방향성)
+```
+이 피처가 있어야 RL이 상승/하락/횡보를 구분하고 다르게 행동할 수 있다.
+
+**변경 2 — sell_market 범위 확장 (Bayesian 인사이트 반영):**
+```python
+# 기존 (Bayesian 오염)
+sell_market_gap = atr_ratio * (0.101 + 0.890 * profit_target)  # 좁은 범위
+
+# 재설계 (RL 자율 선택)
+sell_market_gap = atr_ratio * (0.05 + 1.95 * profit_target)  # [0.05×ATR, 2.0×ATR]
+```
+- 하한 0.05: 고변동성(ATR≥1%)에서도 수익 가능, 저변동성에서의 손실은 reward로 학습
+- RL이 state 보고 적정 수준 스스로 발견
+
+**변경 3 — Bayesian 튜닝 대상 분리:**
+- RL action과 겹치는 계수(A_s, B_s 등) Bayesian 대상에서 제거
+- Bayesian 대상: n_splits, n_buy_orders (구조 파라미터만)
+
+**검증 기준:**
+- `check_env()` 통과
+- 학습 중 `action_std > 0.1` 유지 (포화 모니터링)
+- Regime별 행동 분포 시각적으로 다름
+
+#### Phase 2-B: 라이브 트레이딩 봇 (병렬 진행)
+
+**목표: Bayesian 최적 고정 공식으로 실제 Binance 연결**
+
+```
+live_trading/
+├── exchange.py    — ccxt Binance 래퍼 (잔고/주문/체결)
+├── state_tracker.py — 포지션·사이클 영속화 (sqlite)
+└── bot.py         — 1시간봉마다 실행, gap 계산·주문 갱신
+```
+
+단계: Testnet 검증 → 실계좌 소액 → RL 재설계 완료 후 정책 교체
+
+**재설계 완료 후 연결 포인트:**
+```python
+# 현재: 고정 공식
+sell_market_gap = atr_ratio * (0.101 + 0)
+
+# 이후: RL 정책 교체
+action = model.predict(current_state)
+sell_market_gap = atr_ratio * (0.05 + 1.95 * action[1])
+```
+환경 로직(src/env/)은 동일하므로 action 계산 부분만 교체하면 됨.
+
+---
+
+### 다음 작업 순서
+
+1. `scripts/preprocess_data.py` — trend_1d, trend_1w 컬럼 추가, parquet 재생성
+2. `src/env/trading_env.py` — state 7D, sell 공식 수정, check_env 재확인
+3. `config/experiment_config.yaml` — state_dim 업데이트, Bayesian 범위 수정
+4. smoke test 1회 (10k steps, action_std 체크)
+5. 정식 학습 + Optuna
+
+---
