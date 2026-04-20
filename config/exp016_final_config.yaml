@@ -1,0 +1,89 @@
+# exp016: 최종 모델 (Bayesian 최적 계수 적용, 3M 스텝 full 훈련)
+# 베이스: exp013b (n_splits=2, threshold=avg_price, ent_coef=0.05)
+# 계수: Optuna TPE 50 trials Trial #42 — Val Sharpe 42.997 (1M 스텝 기준)
+#
+# formula_coefs (최적값 vs 기본값):
+#   A_b: 0.2848  (기본 0.5  ↓)  buy_hi_gap base
+#   B_b: 1.7483  (기본 1.5  ↑)  buy_hi_gap range
+#   C_b: 5.2228  (기본 2.5  ↑)  buy_lo_gap base
+#   D_b: 18.683  (기본 7.5  ↑)  buy_lo_gap range
+#   A_s: 0.1006  (기본 0.5  ↓)  sell_market_gap base  ← 핵심 (하한 근접)
+#   B_s: 0.8900  (기본 1.5  ↓)  sell_market_gap range
+#   C_s: 6.9127  (기본 2.5  ↑)  sell_cost_gap base
+#   D_s: 5.4570  (기본 7.5  ↓)  sell_cost_gap range
+
+data:
+  symbol: "BTC/USDT"
+  interval: "1h"
+  train_start: "2020-01-01"
+  train_end:   "2022-12-31"
+  val_start:   "2023-01-01"
+  val_end:     "2023-12-31"
+  test_start:  "2024-01-01"
+  test_end:    null
+
+indicators:
+  price_lookback: 168
+  atr_period: 168
+  zscore_window: 168
+
+environment:
+  initial_cash: 10000.0
+  transaction_cost: 0.0005
+
+  n_buy_orders: 2
+  n_splits: 2
+  threshold_basis: "avg_price"
+
+  random_start: true
+
+  formula_coefs:
+    A_b: 0.284795
+    B_b: 1.748282
+    C_b: 5.222758
+    D_b: 18.68343
+    A_s: 0.100632
+    B_s: 0.889956
+    C_s: 6.912664
+    D_s: 5.456958
+
+agent:
+  algorithm: "PPO"
+  policy: "MlpPolicy"
+
+  learning_rate: 0.0003
+  lr_schedule: "cosine"
+  lr_end: 0.00001
+
+  n_steps: 8192
+  batch_size: 256
+  n_epochs: 10
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_range: 0.2
+  ent_coef: 0.05
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+
+  n_envs: 4
+  total_timesteps: 3000000
+
+vec_normalize:
+  enabled: false
+
+baselines:
+  buy_and_hold: true
+  fixed_grid:
+    gaps: [0.01, 0.02, 0.05]
+  atr_grid:
+    k_values: [0.5, 1.0, 2.0]
+
+training:
+  seed: 42
+  eval_freq: 50000
+  n_eval_episodes: 5
+  experiment_name: "exp016_final"
+  log_dir: "experiments/exp016_final"
+  max_episode_steps: 2016
+  save_freq: 500000
+  save_best: true

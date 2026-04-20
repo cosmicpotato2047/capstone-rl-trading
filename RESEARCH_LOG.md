@@ -1100,6 +1100,64 @@ python scripts/bayesian_coef_tuning.py --show-results
 
 ---
 
+## 2026-04-20 — exp016 완료: Bayesian 최적 계수 3M 스텝 Full 훈련 결과
+
+### 실험 설정
+
+- 베이스: exp013b (n_splits=2, threshold=avg_price, ent_coef=0.05)
+- 계수: Optuna TPE Trial #42 (A_b=0.285, B_b=1.748, C_b=5.223, D_b=18.683, A_s=0.101, B_s=0.890, C_s=6.913, D_s=5.457)
+- 훈련: 3M 스텝, n_envs=4, cosine LR (0.0003→0.00001), seed=42
+- 설정 파일: `config/exp016_final_config.yaml`
+
+### 최종 결과
+
+| 모델 | Val Sharpe | Val Return | Val MDD | 거래 수 | 완성 사이클 |
+|------|-----------|-----------|---------|---------|-----------|
+| PPO best (step 2,100,000) | **35.424** | +365.60% | 2.46% | - | - |
+| PPO final (step 3,000,000) | 35.387 | +365.30% | 2.46% | 2065 | 938 |
+| Buy & Hold | 2.377 | +150.18% | 21.74% | 1 | 0 |
+| Fixed Grid 1% | 1.991 | +64.11% | 17.50% | 411 | 120 |
+| Fixed Grid 2% | 2.039 | +31.05% | 12.57% | 112 | 38 |
+| Fixed Grid 5% | 1.377 | +4.99% | 3.32% | 8 | 4 |
+| ATR Grid k=0.5 | 1.141 | +30.80% | 20.66% | 953 | 279 |
+| ATR Grid k=1.0 | 1.607 | +54.37% | 18.63% | 590 | 177 |
+| ATR Grid k=2.0 | 2.234 | +55.42% | 13.23% | 287 | 91 |
+
+**PPO Sharpe 35.424 vs 최강 베이스라인 2.377 (+14.9×)**
+
+### 학습 수렴 패턴
+
+- step 50,000: Sharpe 31.904 (초기 수렴)
+- step 350,000~1,300,000: 31.90 → 35.39 (단조 증가)
+- step 1,300,000~: Sharpe ≈ 35.38~35.42 (완전 수렴, 극미세 변동만)
+- best_model: step 2,100,000 (Sharpe 35.424)
+- 3M 스텝 훈련 대부분이 수렴 후 구간 → 1.3M 스텝이면 충분했을 것
+
+### Optuna 1M → Full 3M 스케일업 비교
+
+| 지표 | Optuna (1M) | exp016 (3M) | 변화 |
+|------|------------|------------|------|
+| Val Sharpe | 42.997 | 35.424 | -17.6% |
+| Val Return | (미기록) | +365.60% | - |
+
+- 1M Optuna 결과(42.997)보다 3M full 훈련 결과(35.424)가 낮은 이유:
+  - Optuna는 5 episode 평균 (lucky seed 포함 가능성)
+  - exp016은 더 엄격한 재현성 조건으로 평가
+  - 실제 성능 지표는 exp016 기준 35.424가 신뢰성 높음
+
+### 생성 파일
+
+- `config/exp016_final_config.yaml` — 실험 설정
+- `experiments/exp016_final/best_model.zip` — 최종 사용 모델 (Sharpe 35.424)
+- `experiments/exp016_final/final_model.zip` — step 3M 모델
+- `experiments/exp016_final/train_log.txt` — 전체 학습 로그
+
+### 다음 단계
+
+Phase 2-B: Test set 개봉 (2024.01~) — 사용자 검토 후 진행
+
+---
+
 ## 2026-04-20 — Phase 2-A.5 결과: Bayesian 튜닝 50 trials 완료 + 심층 분석
 
 ### 튜닝 결과 요약

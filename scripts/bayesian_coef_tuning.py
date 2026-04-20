@@ -398,12 +398,53 @@ def main():
     optuna.logging.set_verbosity(optuna.logging.WARNING)
     total_start = time.time()
 
+    # ── 주기적 상황 출력 콜백 ────────────────────────────────────────────────
+    BASELINE = 17.579   # exp013b Val Sharpe
+
+    def progress_callback(study: optuna.Study, trial: optuna.trial.FrozenTrial) -> None:
+        """Trial 완료마다 현황 출력."""
+        completed = [t for t in study.trials
+                     if t.state == optuna.trial.TrialState.COMPLETE]
+        pruned    = [t for t in study.trials
+                     if t.state == optuna.trial.TrialState.PRUNED]
+        n_done    = len(completed) + len(pruned)
+        elapsed   = (time.time() - total_start) / 60  # 분
+
+        # 완료 Trial만 출력 (pruned는 값 없음)
+        if trial.state != optuna.trial.TrialState.COMPLETE:
+            return
+
+        best_so_far = study.best_value
+        delta       = best_so_far - BASELINE
+        sign        = "+" if delta >= 0 else ""
+
+        # 현재 Trial 계수 핵심 요약 (A_b, C_b, A_s, C_s만 표시)
+        p = trial.params
+        coef_str = (f"A_b={p.get('A_b',0):.2f} B_b={p.get('B_b',0):.2f} "
+                    f"C_b={p.get('C_b',0):.2f} D_b={p.get('D_b',0):.2f} | "
+                    f"A_s={p.get('A_s',0):.2f} B_s={p.get('B_s',0):.2f} "
+                    f"C_s={p.get('C_s',0):.2f} D_s={p.get('D_s',0):.2f}")
+
+        is_best = (trial.value == best_so_far)
+        marker  = " <-- BEST" if is_best else ""
+
+        print(
+            f"[Trial {trial.number:>3}] "
+            f"Sharpe={trial.value:>7.3f}{marker}\n"
+            f"  계수: {coef_str}\n"
+            f"  현황: 완료 {len(completed)}회 | 조기중단 {len(pruned)}회 | "
+            f"경과 {elapsed:.1f}분\n"
+            f"  누적 최고: {best_so_far:.3f} ({sign}{delta:.3f} vs baseline)\n",
+            flush=True,
+        )
+
     study.optimize(
         lambda trial: objective(trial, train_df, val_df),
         n_trials    = n_trials,
         n_jobs      = args.n_jobs,
-        show_progress_bar = (args.n_jobs == 1),
+        show_progress_bar = False,   # 콜백 출력과 중복 방지
         gc_after_trial    = True,
+        callbacks   = [progress_callback],
     )
 
     elapsed = (time.time() - total_start) / 3600
