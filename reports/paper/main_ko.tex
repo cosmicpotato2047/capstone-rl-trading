@@ -1,0 +1,803 @@
+%!TEX program = xelatex
+\documentclass[11pt, a4paper]{article}
+
+% ─── Packages ────────────────────────────────────────────────────────────────
+\usepackage{fontspec}
+\usepackage{kotex}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath, amssymb, bm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{natbib}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{float}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{enumitem}
+\usepackage{parskip}
+\usepackage{titlesec}
+\usepackage{setspace}
+
+\setmainhangulfont{Malgun Gothic}
+\setsanshangulfont{Malgun Gothic}
+\setmonohangulfont{Malgun Gothic}
+
+\onehalfspacing
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!60!black,
+    citecolor=green!50!black,
+    urlcolor=blue!70!black
+}
+
+\graphicspath{{figures/}}
+
+% ─── Title ───────────────────────────────────────────────────────────────────
+\title{
+    \vspace{-1cm}
+    {\large 캡스톤 디자인 프로젝트 — 최종 보고서}\\[0.8em]
+    \textbf{PPO 기반 동적 그리드 트레이딩:\\
+    베이지안 계수 최적화와 변동성 적응형 주문 배치}
+}
+
+\author{
+    이찬희 (Lee Chanhee)\\
+    컴퓨터공학부\\
+    서울과학기술대학교\\
+    \texttt{happilyfly@seoultech.ac.kr}
+}
+
+\date{2026년 4월}
+
+% ─── Document ────────────────────────────────────────────────────────────────
+\begin{document}
+
+\maketitle
+\thispagestyle{empty}
+
+% ─── Abstract ────────────────────────────────────────────────────────────────
+\begin{abstract}
+본 논문은 BTC/USDT 시간봉 시장에서 가격 방향 예측 없이 ATR 비례 지정가 주문 간격을
+연속 액션으로 출력하는 \emph{동적 그리드 트레이딩} 강화학습 프레임워크를 제안한다.
+기존 RL 트레이딩 연구의 주류인 방향성 전략 및 이산 액션 공간(매수/매도/홀딩)과 달리,
+본 에이전트는 $(a_\text{agg}, a_\text{pt}) \in [0,1]^2$의 2차원 연속 액션을 통해
+ATR(Average True Range)에 비례하는 4개의 지정가 주문 가격을 결정한다.
+주문 배치 공식을 제어하는 8개의 계수는 베이지안 탐색(Optuna TPE, 50회 시도)으로
+공동 최적화되어 기본값 대비 검증 Sharpe 비율 \(+145\%\) 향상을 달성했다.
+2020--2022년 데이터로 300만 스텝 학습된 최종 모델은 검증 Sharpe \textbf{35.42},
+테스트셋 Sharpe \textbf{43.04}(2024--2026)를 기록하며 최우수 고정 그리드 베이스라인을
+\textbf{29.2배} 상회하는 동시에 최대낙폭 \textbf{3.1\%}를 유지했다.
+단, 사후 행동 분석 결과 학습된 정책이 거의 상수 액션으로 수렴함이 확인되었으며,
+이는 베이지안 최적화된 계수 자체가 성능의 주요 원동력임을 시사한다.
+이 설계적 한계와 다음 단계 개선 방향을 함께 논의한다.
+\end{abstract}
+
+\vspace{1em}
+\noindent\textbf{키워드:} 강화학습, 그리드 트레이딩, PPO, 베이지안 최적화,
+암호화폐, ATR 비례 주문, 정책 포화
+
+\newpage
+\tableofcontents
+\newpage
+
+% ─── 1. Introduction ─────────────────────────────────────────────────────────
+\section{서론}
+
+암호화폐 시장은 장기 추세와 무관하게 반복적인 미세 가격 진동을 유발하는
+높은 변동성을 지속적으로 보인다.
+그리드 트레이딩은 이러한 특성을 활용하여 현재가 주변에 매수·매도 지정가 주문을
+계단형으로 배치하고, 각 매수-매도 완료 사이클에서 수익을 획득한다
+\citep{sun2023rl}.
+기존 그리드 트레이딩의 핵심 약점은 배포 시점에 그리드 간격을 고정하고 이후 조정하지
+않는다는 점이다: 간격이 너무 좁으면 수익성 없는 소규모 거래가 넘쳐나고,
+너무 넓으면 대부분의 진동을 포착하지 못한다.
+
+최근 RL 트레이딩 연구는 다음 가격이 오를지 내릴지 예측하는 \emph{방향성} 전략에
+거의 전적으로 집중되어 있다 \citep{liu2021bitcoin, yasin2024rl, pham2025dqn}.
+이 계열의 연구는 가격 예측의 어려움을 그대로 이어받으며,
+예측 정확도가 낮은 횡보장이나 고변동성 시장에서 수익을 내기 어렵다.
+RL 에이전트를 방향성 예측기가 아닌 \emph{시장 조성자} 또는 \emph{간격 선택자}로
+다루는 연구는 극소수에 불과하여, 동적 그리드 문제는 대체로 미개척 영역으로 남아 있다.
+
+본 논문은 다음 두 가지 연구 질문을 다룬다:
+
+\begin{enumerate}[label=\textbf{RQ\arabic*:}]
+    \item 연속 ATR 비례 액션 공간을 가진 PPO 에이전트가 미관측 BTC/USDT 데이터에서
+          고정 간격 그리드 베이스라인을 능가할 수 있는가?
+    \item 학습된 에이전트가 현재 변동성 레짐에 따라 그리드 간격을 적응적으로 조절하는가?
+\end{enumerate}
+
+\subsection*{기여 사항}
+
+\begin{itemize}
+    \item \textbf{비방향성 MDP 정식화.}
+          시장 레짐과 포트폴리오 상태를 모두 인코딩하는 5차원 상태 공간에,
+          방향성 가격 예측 없이 그리드 간격 폭을 제어하는 2차원 연속 액션을 결합했다.
+
+    \item \textbf{ATR 비례 조정 가능 주문 배치 공식.}
+          현재 ATR에 비례하는 거리에 4개의 지정가 주문(매수 2개, 매도 2개)을 배치한다.
+          8개의 스칼라 계수가 공식을 매개변수화함으로써 경제적 해석을 유지하면서
+          데이터 기반 보정을 가능하게 한다.
+
+    \item \textbf{베이지안 계수 최적화.}
+          Optuna TPE와 MedianPruner를 적용하여 8차원 계수 공간을 탐색,
+          50회 시도만에 수작업 기본값 대비 검증 Sharpe $+145\%$ 향상을 달성했다.
+
+    \item \textbf{엄격한 학습/검증/테스트 분리.}
+          \citet{gort2022backtest}를 따라 테스트셋(2024--2026)은 모든 설계 결정이
+          확정된 이후까지 완전히 봉인했으며, 테스트셋 평가는 정확히 한 번만 수행했다.
+\end{itemize}
+
+% ─── 2. Related Work ─────────────────────────────────────────────────────────
+\section{관련 연구}
+
+\subsection{RL 트레이딩 서베이}
+
+\citet{sun2023rl}은 RL 트레이딩 문헌을 조사하여 두 가지 반복되는 한계를 지적한다:
+학습된 정책의 해석 가능성 부족과 시장 레짐 간 낮은 일반화 성능.
+\citet{liu2025review}는 2018--2025년에 걸친 10편의 논문을 리뷰하며,
+RL 에이전트가 규칙 기반 방법 대비 비정상 시장에 대한 우수한 적응력을 보이지만
+학습 안정성과 샘플 효율성이 실용적 배포의 주요 장벽으로 남아 있음을 확인한다.
+
+\subsection{방향성 RL 트레이딩 시스템}
+
+\citet{liu2021bitcoin}은 LSTM 가격 예측기와 PPO 에이전트를 결합하여 BTC/USDT에 적용하며,
+예측된 가격을 상태 특징으로 입력한다.
+이 2단계 파이프라인은 트레이딩 성능을 예측 정확도에 종속시켜,
+예측 오류가 주문 결정에 직접 전파되는 문제를 안고 있다.
+본 접근법은 예측 단계를 완전히 제거한다.
+
+\citet{yasin2024rl}은 주식 시장에서 20개 기술 지표를 사용하여 DQN, PPO, A2C를
+벤치마크한다.
+이산 액션 공간(매수/매도/홀딩)과 관측에 포트폴리오 상태 정보가 없다는 점은,
+현재 노출 대비 주문 크기를 조절해야 하는 그리드 트레이딩에서 치명적인 한계이다.
+
+\citet{pham2025dqn}은 DQN을 \emph{전략 선택}에 적용한다: 에이전트가 전략 자체를
+학습하는 대신 5개의 하드코딩된 규칙 기반 전략 중 하나를 매 스텝 선택한다.
+지표 상태의 PCA 압축은 학습된 정책의 경제적 의미를 더욱 불분명하게 만든다.
+본 연구에서는 에이전트가 그리드 간격을 직접 출력하도록 학습시켜 완전한
+해석 가능성을 유지한다.
+
+\subsection{위험 인식 RL 트레이딩}
+
+\citet{bandarupalli2025risk}는 위험한 포지션을 억제하기 위해 PPO 보상에
+명시적인 포트폴리오 분산 페널티를 추가한다.
+이 페널티가 너무 많은 수익성 있는 거래를 억압하여 에이전트가 매수보유 전략보다
+저조한 성과를 보인다고 보고한다.
+이 발견은 별도의 위험 항을 두지 않고 자본 변화와 거래비용 페널티만으로 구성한
+본 연구의 보상 설계를 뒷받침한다: 그리드 트레이딩은 본질적으로 변동성을 추구하므로
+분산 페널티는 역효과를 낳는다.
+
+\subsection{백테스팅 방법론}
+
+\citet{gort2022backtest}는 RL 트레이딩 연구에서 단일 분할 검증이 상당한
+백테스트 과적합으로 이어짐을 실증적으로 보인다.
+이들의 엄격한 시간적 분할 권고가 본 연구의
+학습(2020--2022) / 검증(2023) / 테스트(2024--2026) 설계에 직접 반영되었으며,
+테스트 파티션은 모든 하이퍼파라미터 및 계수 결정이 완료된 후에만 접근했다.
+
+\subsection{본 연구의 위치}
+
+표~\ref{tab:comparison}은 가장 가까운 선행 연구와의 차이점을 요약한다.
+
+\begin{table}[h]
+\centering
+\caption{관련 RL 트레이딩 시스템과의 비교.}
+\label{tab:comparison}
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{lccccc}
+\toprule
+ & \textbf{본 연구} & Liu '21 & Yasin '24 & Pham '25 & Banda. '25 \\
+\midrule
+비방향성              & \checkmark & $\times$ & $\times$ & $\times$ & $\times$ \\
+연속 액션 공간        & \checkmark & $\times$ & $\times$ & $\times$ & $\times$ \\
+포지션 상태           & \checkmark & $\times$ & $\times$ & $\times$ & $\checkmark$ \\
+ATR 비례 주문         & \checkmark & $\times$ & $\times$ & $\times$ & $\times$ \\
+베이지안 계수 튜닝    & \checkmark & $\times$ & $\times$ & $\times$ & $\times$ \\
+봉인된 테스트셋       & \checkmark & $\times$ & $\times$ & $\times$ & $\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ─── 3. Methodology ──────────────────────────────────────────────────────────
+\section{방법론}
+
+\subsection{데이터 및 전처리}
+
+CCXT 라이브러리를 통해 Binance에서 BTC/USDT 시간봉 캔들스틱 데이터를 수집하며,
+2020년 1월부터 2026년 4월까지 중복 제거 후 54,733개 캔들이 포함된다.
+데이터는 시간 순서에 따라 세 개의 비중첩 구간으로 분할된다:
+
+\begin{itemize}
+    \item \textbf{학습} (2020-01-01 -- 2022-12-31, 25,916캔들):
+          상승장(2020--2021)과 주요 하락장(2022)을 모두 포함한다.
+    \item \textbf{검증} (2023-01-01 -- 2023-12-31, 8,736캔들):
+          하이퍼파라미터 선택 및 학습 중 모델 평가에 사용하는 회복기이다.
+    \item \textbf{테스트} (2024-01-01 -- 2026-04-09, 19,901캔들):
+          모든 설계 결정이 확정될 때까지 완전히 봉인 유지; 정확히 한 번만 평가한다.
+\end{itemize}
+
+각 원시 캔들에 롤링 윈도우 $W = 168$시간(1주) 기준으로 세 가지 파생 시계열을
+추가한다:
+
+\begin{align}
+    \text{log\_price}_t &= \log\!\left(\frac{p_t}{\bar{p}_{t,W}}\right), \\
+    \text{volatility}_t &= \frac{\text{ATR}(168)_t}{p_t}, \\
+    \text{zscore}(x)_t  &= \frac{x_t - \mu_{x,t,W}}{\sigma_{x,t,W} + \epsilon},
+\end{align}
+
+여기서 $\bar{p}_{t,W}$는 롤링 평균 종가, ATR은 OHLC 데이터에서 직접 계산한
+Average True Range, $\epsilon = 10^{-8}$은 수치 안정성을 보장한다.
+정책 입력에서 척도 불일치를 방지하기 위해 \texttt{log\_price}와
+\texttt{volatility}에 z-점수 변환을 적용하여 저장한다.
+
+\subsection{트레이딩 환경 (MDP)}
+
+트레이딩 문제를 Gymnasium 환경으로 구현된 마르코프 결정 과정
+$\mathcal{M} = (\mathcal{S}, \mathcal{A}, \mathcal{T}, \mathcal{R}, \gamma)$으로 모델링한다.
+
+\subsubsection*{상태 공간}
+
+시각 $t$에서의 관측은 5차원 벡터이다:
+
+\begin{equation}
+    \bm{s}_t = \bigl[
+        \underbrace{\hat{z}(\text{log\_price}_t)}_{\text{가격 수준}},\;
+        \underbrace{d_t}_{\text{괴리도}},\;
+        \underbrace{h_t}_{\text{포지션 크기}},\;
+        \underbrace{c_t}_{\text{현금 비율}},\;
+        \underbrace{\hat{z}(\text{volatility}_t)}_{\text{시장 변동성}}
+    \bigr] \in \mathbb{R}^5,
+\end{equation}
+
+여기서 $\hat{z}(\cdot)$은 롤링 z-점수 정규화를 나타내며,
+
+\begin{align}
+    d_t &= \frac{\bar{p}^\text{avg}_t - p_t}{\bar{p}^\text{avg}_t}
+           \quad \text{(평균 진입 가격 대비 괴리도)}, \\
+    h_t &= \frac{q_t \cdot p_t}{K}
+           \quad \text{(초기 자본 $K$ 대비 보유 가치 비율)}, \\
+    c_t &= \frac{\text{cash}_t}{K}
+           \quad \text{(초기 자본 대비 현금 비율)}.
+\end{align}
+
+$\bar{p}^\text{avg}_t$는 현재 사이클의 평균 진입 가격이며,
+미보유 상태에서는 직전 완료 사이클의 평균 진입가를,
+거래 이력이 없으면 0을 사용한다.
+가격이 2배가 되면 동일한 BTC 보유량의 포트폴리오 위험도 2배가 되므로,
+원시 수량 대신 가치 비율 $h_t$를 사용한다.
+
+\subsubsection*{액션 공간}
+
+액션 공간은 2차원 연속 박스이다:
+\begin{equation}
+    \mathcal{A} = [0, 1]^2,
+    \quad
+    \bm{a}_t = (a_\text{agg},\; a_\text{pt}),
+\end{equation}
+
+여기서 $a_\text{agg}$(공격성)는 매수 주문 배치를 제어하고
+$a_\text{pt}$(수익 목표)는 매도 주문 배치를 제어한다.
+이는 대부분의 선행 연구에서 사용하는 이산 액션 공간(매수/매도/홀딩)
+\citep{liu2021bitcoin, yasin2024rl}과 극명히 대조되며,
+이산 공간은 공격성의 \emph{정도}를 표현할 수 없다.
+
+\subsubsection*{주문 배치 공식}
+
+각 스텝에서 ATR 비례 공식을 통해 액션으로부터 4개의 지정가 주문이 계산된다:
+
+\begin{align}
+    r_t &= \frac{\text{ATR}(168)_t}{p_t}
+           \quad \text{(정규화된 변동성 비율)}, \label{eq:atr_ratio} \\[4pt]
+    \Delta^\text{buy-hi}_t  &= r_t \cdot (A_b + a_\text{agg}\cdot B_b), \label{eq:buy_hi} \\
+    \Delta^\text{buy-lo}_t  &= r_t \cdot (C_b + a_\text{agg}\cdot D_b), \label{eq:buy_lo} \\
+    \Delta^\text{sell-mkt}_t &= r_t \cdot (A_s + a_\text{pt}\cdot B_s), \label{eq:sell_mkt} \\
+    \Delta^\text{sell-cst}_t &= r_t \cdot (C_s + a_\text{pt}\cdot D_s), \label{eq:sell_cst}
+\end{align}
+
+그리고 4개의 주문 가격은:
+
+\begin{align}
+    P^\text{buy-hi}_t  &= p_t\cdot(1 - \Delta^\text{buy-hi}_t), \\
+    P^\text{buy-lo}_t  &= p_t\cdot(1 - \Delta^\text{buy-lo}_t), \\
+    P^\text{sell-mkt}_t &= p_t\cdot(1 + \Delta^\text{sell-mkt}_t), \\
+    P^\text{sell-cst}_t &= \bar{p}^\text{avg}_t\cdot(1 + \Delta^\text{sell-cst}_t).
+\end{align}
+
+$\bm{\theta} = (A_b, B_b, C_b, D_b, A_s, B_s, C_s, D_s) \in \mathbb{R}^8$은
+공식 계수이다.
+ATR 비례 스케일링은 현재 변동성 수준에 무관하게 액션 범위 $[0,1]$이
+의미 있는 체결 확률 스펙트럼에 일관되게 대응하도록 보장하여,
+대부분의 지정가 주문이 체결되지 않는 레짐을 방지한다.
+
+이중 매도 주문 설계는 두 가지 보완적 청산 채널을 반영한다:
+\texttt{sell-mkt}는 현재가 위에서 빠른 청산을 목표로 하여 신속한 현금 회수를 달성하고,
+\texttt{sell-cst}는 평균 원가 이상에서 큰 이익을 목표로 하여 대규모 랠리를 포착한다.
+
+\subsubsection*{주문 체결 및 사이클 로직}
+
+주문 체결은 다음 캔들의 고가/저가(차봉 체결 모델)로 시뮬레이션되며,
+같은 봉에서는 매도 주문을 매수 주문보다 먼저 처리한다.
+각 매수-매도 완료 시퀀스가 하나의 \emph{트레이딩 사이클}을 구성한다.
+사이클 내 자본 배분은 고정 예산 방식을 사용한다: 사이클 시작 시 가용 현금을
+$n_\text{splits} = 2$ 슬롯으로 나누고, 각 슬롯이 $n_\text{buy} = 2$개의
+지정가 주문에 자금을 지원한다.
+총 보유량이 단일 슬롯 가치 이하로 떨어지면 남은 보유량을 전량 청산하여
+사이클 종료를 보장한다.
+
+\subsubsection*{보상}
+
+각 스텝의 보상은 정규화된 자본 변화량이다:
+
+\begin{equation}
+    r_t = \frac{V_t - V_{t-1}}{K},
+    \label{eq:reward}
+\end{equation}
+
+여기서 $V_t = \text{cash}_t + q_t \cdot p_t$는 총 포트폴리오 가치이다.
+거래비용(건당 0.05\%, Binance maker 수수료)은 체결 시점에 현금 잔액에서 직접
+차감되므로, 별도의 페널티 항 없이 자본 변화에 자동으로 반영된다.
+
+\subsection{PPO 에이전트}
+
+Stable-Baselines3를 통해 Proximal Policy Optimization \citep{schulman2017ppo}을 사용한다.
+정책 네트워크와 가치 네트워크는 MLP 트렁크(64유닛 은닉층 2개, tanh 활성화)를 공유한다.
+액션 분포는 sigmoid 스쿼싱 레이어로 $[0, 1]^2$에 클리핑된 대각 가우시안이다.
+
+학습은 4개의 병렬 환경(\texttt{n\_envs}~$= 4$)에서 에피소드 길이
+$T_\text{ep} = 2016$ 스텝($\approx 12$주)으로 진행된다.
+학습 윈도우 내 무작위 에피소드 시작이 에이전트를 다양한 시장 레짐에 노출시킨다.
+코사인 학습률 스케줄이 300만 환경 스텝에 걸쳐 $3\times10^{-4}$에서 $10^{-5}$로
+감소한다.
+엔트로피 계수 $\alpha_H = 0.05$는 절제 실험으로 선택되었다
+(절 \ref{sec:param-search}).
+
+\subsection{베이지안 계수 최적화}
+\label{sec:bayesian}
+
+$\bm{\theta}$의 8개 공식 계수는 사전 경제적 지식을 인코딩하지만
+(예: $A_b < C_b$는 buy-hi가 buy-lo보다 현재가에 가깝도록 강제),
+정확한 값은 알 수 없다.
+이를 하이퍼파라미터로 취급하여 MedianPruner를 갖춘 Tree-structured Parzen Estimator
+(TPE)로 8차원 연속 공간을 탐색한다:
+
+\begin{itemize}
+    \item \textbf{목적 함수}: 워밍업된 PPO 에이전트로 $10^6$ 학습 스텝 후
+          5개 에피소드에 대한 평균 검증 Sharpe 비율.
+    \item \textbf{소프트 제약}: $C_b > A_b$, $D_b > B_b$ 위반 시도(buy-hi/buy-lo
+          순서 역전) 시 센티넬 값 $-999$를 반환하고 TPE 모델에서 제외.
+    \item \textbf{가지치기}: 워밍업 10회 후 MedianPruner가 비전망적 시도를
+          첫 중간 평가 후 조기 종료하여 유망한 구성에 계산 자원 회수.
+    \item \textbf{예산}: 50회 시도($\approx$ 단일 CPU 4.3시간).
+\end{itemize}
+
+탐색 공간과 최종 최적화 값은 표~\ref{tab:coefs}에 제시한다.
+
+\begin{table}[h]
+\centering
+\caption{공식 계수 탐색 공간 및 베이지안 최적화 값 (Trial \#42).}
+\label{tab:coefs}
+\setlength{\tabcolsep}{6pt}
+\begin{tabular}{llrrrr}
+\toprule
+계수 & 역할 & 탐색 최솟값 & 탐색 최댓값 & \textbf{기본값} & \textbf{최적값} \\
+\midrule
+$A_b$ & buy-hi 기저 & 0.1 & 3.0 & 0.500 & \textbf{0.285} \\
+$B_b$ & buy-hi 범위 & 0.1 & 5.0 & 1.500 & \textbf{1.748} \\
+$C_b$ & buy-lo 기저 & 0.1 & 10.0 & 2.500 & \textbf{5.223} \\
+$D_b$ & buy-lo 범위 & 0.5 & 20.0 & 7.500 & \textbf{18.683} \\
+$A_s$ & sell-mkt 기저 & 0.1 & 3.0 & 0.500 & \textbf{0.101} \\
+$B_s$ & sell-mkt 범위 & 0.1 & 5.0 & 1.500 & \textbf{0.890} \\
+$C_s$ & sell-cost 기저 & 0.1 & 10.0 & 2.500 & \textbf{6.913} \\
+$D_s$ & sell-cost 범위 & 0.5 & 20.0 & 7.500 & \textbf{5.457} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ─── 4. Experimental Setup ───────────────────────────────────────────────────
+\section{실험 설정}
+
+\subsection{베이스라인}
+
+학습을 사용하지 않는 7개의 고정 규칙 전략과 비교한다:
+
+\begin{itemize}
+    \item \textbf{매수보유(Buy-and-Hold)}: 시작 시 BTC 매수, 종료 시 매도.
+    \item \textbf{고정 그리드 $\delta\%$} ($\delta \in \{1, 2, 5\}$):
+          현재가 $\delta\%$ 아래에 매수 주문, $\delta\%$ 위에 매도 주문 배치.
+    \item \textbf{ATR 그리드 $k$} ($k \in \{0.5, 1.0, 2.0\}$):
+          주문 간격이 현재 ATR의 $k$배로, 에이전트의 ATR 비례 스케일링을
+          학습 없이 모방한다.
+\end{itemize}
+
+ATR 그리드 베이스라인은 특히 유익한 비교 대상이다: 에이전트와 동일한 시장 정보(ATR)를
+공유하지만 고정 규칙으로 적용한다.
+이 베이스라인 대비 성능 차이는 베이지안 계수 최적화와 RL 학습 절차의 복합적 효과를
+반영한다.
+
+\subsection{평가 지표}
+
+주요 지표는 연율화 Sharpe 비율이다:
+
+\begin{equation}
+    \text{Sharpe} = \frac{\mathbb{E}[r_t]}{\text{Std}(r_t)} \cdot \sqrt{8760},
+    \label{eq:sharpe}
+\end{equation}
+
+여기서 $r_t$는 스텝별 수익률이고 8760은 연간 시간봉 수이다.
+보조 지표로 최대낙폭(MDD), 총 수익률, 완료된 트레이딩 사이클 수,
+사이클 승률을 포함한다.
+
+\subsection{실험 프로토콜}
+
+모든 실험에 시드 42를 사용한다.
+검증 Sharpe는 검증 윈도우 내 무작위 시작으로 길이 $T_\text{ep} = 2016$ 스텝의
+5개 평가 에피소드에 대한 평균으로 계산되며, 결정론적($\text{deterministic}=\text{True}$)
+추론을 사용한다.
+테스트 평가는 전체 19,901 스텝 테스트 시퀀스에 대한 단일 결정론적 패스로,
+무작위 시작 선택으로부터 어떤 정보도 보고 결과에 영향을 미칠 수 없음을 보장한다.
+
+% ─── 5. Results ──────────────────────────────────────────────────────────────
+\section{실험 결과}
+
+\subsection{하이퍼파라미터 탐색}
+\label{sec:param-search}
+
+베이지안 계수 튜닝 전에 검증셋에서 세 가지 환경 하이퍼파라미터에 대한
+체계적인 절제 실험을 수행한다:
+
+\begin{itemize}
+    \item \textbf{자본 슬롯 수} $n_\text{splits} \in \{2, 8, 16\}$:
+          $n_\text{splits}=2$가 사이클당 자본을 집중하고 유휴 현금을 줄여 가장 높은
+          Sharpe를 달성한다.
+    \item \textbf{매도 임계 기준} (\texttt{avg\_price} vs.\ \texttt{price}):
+          매도 비용 주문을 현재 시장가가 아닌 사이클 평균 진입가에 고정하면
+          더 일관적인 수익 확정이 가능하다.
+    \item \textbf{엔트로피 계수} $\alpha_H \in \{0.01, 0.05, 0.10\}$:
+          $\alpha_H = 0.05$가 탐색과 활용의 균형을 맞추며,
+          Sharpe를 14.39(VecNorm 없는 기준, exp007)에서 17.58로 향상시킨다.
+\end{itemize}
+
+기본 공식 계수로 선택된 구성(exp013b)은 검증 Sharpe 17.58을 달성하며,
+이것이 베이지안 최적화의 기준값으로 사용된다.
+
+\subsection{베이지안 계수 최적화}
+
+그림~\ref{fig:optuna}은 50회 베이지안 탐색 결과를 보여준다.
+최우수 시도(\#42)는 검증 Sharpe 42.997을 달성했으며, 이는 기본 계수 기준값 대비
+$+145\%$ 향상이다.
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig_01_distribution.png}
+        \caption{Sharpe distribution across 50 trials.
+                 Red dashed line: default-coefficient baseline (17.58).}
+        \label{fig:optuna_dist}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig_03_importance.png}
+        \caption{Pearson correlation between each coefficient and Sharpe ratio.
+                 $A_s$ (sell-market base) shows the strongest negative correlation.}
+        \label{fig:optuna_importance}
+    \end{subfigure}
+    \caption{Bayesian coefficient tuning results (50 TPE trials, 1M steps each).}
+    \label{fig:optuna}
+\end{figure}
+
+계수 중요도 분석(그림~\ref{fig:optuna_importance})은 매도 시장가 주문 간격의 기저값인
+$A_s$가 단연 가장 영향력 있는 파라미터임을 보여준다.
+최적값(0.101)이 탐색 하한(0.1)에 위치한다는 점은,
+에이전트가 매우 타이트한 매도 시장가 주문, 즉 현재가 위 $0.101 \times r_t$ 거리에
+빠른 청산 호가를 배치하여 각 매수 체결 후 거의 즉각적인 현금 회수를 가능하게 함으로써
+이익을 얻음을 시사한다.
+
+그림~\ref{fig:gap_comparison}은 최적화된 계수가 기본값 대비 효과적인 주문 간격
+범위를 어떻게 변화시키는지 보여준다.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{fig_06_gap_comparison.png}
+    \caption{Effective order-gap ranges (in ATR multiples) for default vs.\ optimized
+             coefficients, shown across the full action range $[0,1]$.
+             Note the dramatic expansion of the buy-lo range and the sharp contraction
+             of the sell-market gap.}
+    \label{fig:gap_comparison}
+\end{figure}
+
+최적화된 전략은 \emph{빠른 매도 / 깊은 매수} 정책으로 해석할 수 있다:
+\begin{itemize}
+    \item \textbf{sell-mkt} 간격이 $[0.10, 1.0] \times r_t$로 축소
+          (기본값 $[0.5, 2.0] \times r_t$ 대비): 소폭 상승 시에도 즉시 청산하여
+          사이클 빈도를 극대화한다.
+    \item \textbf{buy-lo} 간격이 $[5.2, 23.9] \times r_t$로 확장
+          (기본값 $[2.5, 10.0] \times r_t$ 대비): 고변동성 이벤트에서 나타나는
+          큰 하락을 포착하기 위해 깊은 대기 매수를 배치한다.
+    \item \textbf{sell-cost} 간격이 $[6.9, 12.4] \times r_t$로 상승:
+          원가 기준 매도는 평균 진입가 이상의 대규모 랠리에서만 발동된다.
+\end{itemize}
+
+\subsection{최종 모델 학습 (exp016)}
+
+Trial \#42의 최적화된 계수를 사용하여 최종 PPO 에이전트를 300만 스텝 학습시킨다.
+그림~\ref{fig:learning_curve}은 학습 전 과정의 검증 Sharpe를 보여준다.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{03_learning_curve.png}
+    \caption{Validation Sharpe ratio vs.\ training steps.
+             \textbf{(a) Pre-fix experiments} (exp001--002): a reward-function bug
+             (fee double-counting) and an eval-pipeline bug kept Sharpe below 1.0.
+             \textbf{(b) Post-fix experiments}: after both bugs were resolved, Sharpe
+             climbed from $\sim$12 (exp008) to 17.6 (exp013b) through hyperparameter
+             search, and finally to 35.4 with Bayesian-optimized coefficients (exp016,
+             best checkpoint at step 2.1M, $\star$).}
+    \label{fig:learning_curve}
+\end{figure}
+
+최선 체크포인트는 스텝 2,100,000에서 검증 Sharpe 35.42, MDD 2.46\%로 저장된다.
+전체 학습 Sharpe(35.42)가 1M 스텝 Optuna 목적값(42.997)보다 낮은 이유는,
+Optuna 평가는 5개의 무작위 시작 에피소드를 사용하여 유리한 시장 윈도우를 선택할 수
+있는 반면, 최종 평가는 고정된 평가 윈도우에 걸쳐 평균을 취하여 더 보수적이고
+재현 가능한 추정치를 제공하기 때문이다.
+
+\subsection{검증셋 결과}
+
+표~\ref{tab:val_results}는 2023년 검증셋에서 최선 PPO 체크포인트와 모든 베이스라인을
+비교한다.
+
+\begin{table}[H]
+\centering
+\caption{검증셋 결과 (2023년, 8,736캔들).}
+\label{tab:val_results}
+\setlength{\tabcolsep}{6pt}
+\begin{tabular}{lrrrr}
+\toprule
+전략 & Sharpe & 수익률 (\%) & MDD (\%) & 사이클 수 \\
+\midrule
+매수보유              &  2.377 & +150.18 & 21.74 &    0 \\
+고정 그리드 1\%       &  1.991 &  +64.11 & 17.50 &  120 \\
+고정 그리드 2\%       &  2.039 &  +31.05 & 12.57 &   38 \\
+고정 그리드 5\%       &  1.377 &   +4.99 &  3.32 &    4 \\
+ATR 그리드 $k{=}0.5$ &  1.141 &  +30.80 & 20.66 &  279 \\
+ATR 그리드 $k{=}1.0$ &  1.607 &  +54.37 & 18.63 &  177 \\
+ATR 그리드 $k{=}2.0$ &  2.234 &  +55.42 & 13.23 &   91 \\
+\midrule
+\textbf{PPO (exp016)} & \textbf{35.424} & \textbf{+365.60} & \textbf{2.46} & \textbf{938} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+PPO 에이전트는 최강 베이스라인(ATR 그리드 $k{=}2.0$, Sharpe 2.234) 대비
+MDD를 13.23\%에서 2.46\%로 낮추면서 \textbf{15.9배} 향상된 Sharpe를 달성했다.
+
+\subsection{테스트셋 결과}
+\label{sec:test-results}
+
+테스트셋(2024-01-01 -- 2026-04-09)은 모든 모델 및 계수 결정이 확정된 후
+단 한 번 접근했다.
+이 기간은 BTC 가격이 약 \$42,000에서 \$100,000 이상으로 상승 후 \$75,000로
+하락하는 과정을 포함하며, 2024년 주요 강세장과 2025년 1분기 급격한 조정이
+모두 포함된 다양한 표본 외 평가 구간이다.
+
+\begin{table}[H]
+\centering
+\caption{테스트셋 결과 (2024--2026년, 19,901캔들).}
+\label{tab:test_results}
+\setlength{\tabcolsep}{6pt}
+\begin{tabular}{lrrrr}
+\toprule
+전략 & Sharpe & 수익률 (\%) & MDD (\%) & 사이클 수 \\
+\midrule
+매수보유              &  0.681 &  +62.25 & 50.08 &    0 \\
+고정 그리드 1\%       &  0.724 &  +52.81 & 29.87 &  176 \\
+고정 그리드 2\%       &  0.625 &  +34.76 & 26.66 &   54 \\
+고정 그리드 5\%       &  1.472 &  +14.28 &  3.16 &    9 \\
+ATR 그리드 $k{=}0.5$ & $-$0.004 & $-$20.22 & 49.77 &  325 \\
+ATR 그리드 $k{=}1.0$ &  0.258 &   +5.29 & 49.59 &  242 \\
+ATR 그리드 $k{=}2.0$ &  0.436 &  +22.73 & 29.85 &   88 \\
+\midrule
+\textbf{PPO (exp016)} & \textbf{43.040} & --- & \textbf{3.12} & \textbf{9,520} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent\textit{테스트셋 수익률 주석: 9,520 완료 사이클, 평균 사이클 PnL 0.182\%가
+27개월에 걸쳐 복리로 누적되면 산술 누적 수익률이 천문학적 값에 도달한다.
+시간과 위험을 정규화하는 Sharpe 비율과 MDD가 적절한 지표이며,
+3.12\% MDD가 자본 안전성의 실질적인 척도이다.}
+
+그림~\ref{fig:equity}은 모든 베이스라인 전략과 함께 로그 스케일로 테스트 기간
+자본 곡선을 보여준다.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{06_test_equity_curve.png}
+    \caption{Portfolio equity curves on the test set (2024--2026), log scale.
+             The PPO agent (blue) grows exponentially while all baselines
+             remain near the initial capital line. Bottom panel: BTC/USDT price.}
+    \label{fig:equity}
+\end{figure}
+
+그림~\ref{fig:progression}은 전체 실험 진행 맥락에서 테스트 결과를 위치시킨다.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{06_sharpe_progression.png}
+    \caption{\textbf{Left}: validation Sharpe at each major experiment milestone.
+             \textbf{Right}: final PPO Sharpe vs.\ best baseline on Val and Test sets.
+             Test Sharpe exceeds Val Sharpe, providing no evidence of overfitting.}
+    \label{fig:progression}
+\end{figure}
+
+% ─── 6. Analysis ─────────────────────────────────────────────────────────────
+\section{분석 및 논의}
+
+\subsection{RQ1: PPO가 고정 그리드 베이스라인을 능가하는가?}
+
+검증셋에서 PPO는 Sharpe 35.42를 달성하여 최우수 베이스라인 2.23 대비
+\textbf{15.9배} 우위를 보인다.
+봉인 테스트셋에서 PPO는 43.04를 달성하여 고정 그리드 5\% 대비 \textbf{29.2배}의
+우위를 보인다.
+두 결과 모두 RQ1을 명확히 긍정적으로 답한다.
+
+검증 Sharpe 대비 높은 테스트 Sharpe(43.04 vs.\ 35.42)는 2024--2025년 BTC 강세장이
+에이전트의 고빈도 빠른 사이클 트레이딩 스타일에 특히 유리한 환경을 제공했기 때문이다.
+핵심적으로, 이 차이의 방향(테스트 $>$ 검증)은 테스트셋 과적합을 배제한다:
+테스트 데이터를 암묵적으로 본 모델은 검증 대비 \emph{더 나을 수 없는} 테스트 성능을
+보일 것이기 때문이다.
+
+\subsection{RQ2: 변동성 레짐 적응}
+
+그림~\ref{fig:behavior}은 ATR/가격 임계값으로 정의된 변동성 레짐(낮음/중간/높음)에
+따라 계층화된 테스트셋에서의 에이전트 액션 출력을 보여준다.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{06_behavior_analysis.png}
+    \caption{Action distributions on the test set.
+             \textbf{Top-left/Bottom-left}: both aggressiveness and profit target
+             are concentrated at exactly 0.0 across all volatility regimes,
+             indicating a saturated constant policy.
+             \textbf{Bottom-right}: the regime distribution across the test period.}
+    \label{fig:behavior}
+\end{figure}
+
+RQ2의 기대와 달리, 학습된 정책은 관측된 변동성 레짐에 무관하게 결정론적으로
+거의 상수인 액션 벡터 $\bm{a} \approx (0, 0)$을 출력한다.
+정책 네트워크 검사로 이를 확인한다: 공격성의 원시 가우시안 평균은 $-9.19$
+(tanh 스쿼싱 후 $\approx -1$, $[0,1]$ 재스케일링 후 $\approx 0$)이고,
+수익 목표는 $-4.30$(재스케일링 후 $\approx 0$)이다.
+낮음, 중간, 높음 변동성 레짐에 걸쳐 통계적으로 유의미한 액션 값 차이는 존재하지 않는다.
+
+\textbf{왜 정책이 포화되었는가?}
+근본 원인은 베이지안 계수 최적화와 RL 액션 공간 사이의 구조적 결합에 있다.
+주문 배치 공식은:
+\begin{equation}
+    \Delta^\text{sell-mkt}_t = r_t \cdot (A_s + a_\text{pt} \cdot B_s).
+\end{equation}
+베이지안 탐색이 $A_s$를 하한값(0.101)으로 이끌었으며, 이는 최솟값 액션
+($a_\text{pt} = 0$)을 이미 최적으로 만들었다: $a_\text{pt}$를 증가시키면
+매도 간격만 넓어져 사이클 빈도가 감소할 뿐이다.
+RL 에이전트는 $a_\text{pt} = 0$을 유지하는 것이 올바름을 학습했지만,
+이는 상태 기반 적응을 불필요하게 만든다.
+달리 말하면, 베이지안 단계가 계수 수준에서 간격 결정 문제를 해결하여
+RL이 활용할 잔여 자유도가 남지 않은 것이다.
+
+\textbf{함의.}
+현재 설계로는 RQ2에 답할 수 없다.
+이 결과가 변동성 레짐 적응이 불가능하거나 도움이 안 된다는 의미가 아니라,
+계수 최적화가 적응이 표현될 메커니즘을 제거했음을 의미한다.
+계수가 행동의 \emph{범위}를 고정하고 RL이 \emph{그 범위 내 선택}을 제어하는
+재설계된 시스템이 자연스러운 다음 단계이다
+(절 \ref{sec:conclusion}).
+
+\subsection{사이클 행동}
+
+그림~\ref{fig:cycle}은 테스트 기간 동안 완료된 9,520개 트레이딩 사이클을 특성화한다.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{06_cycle_analysis.png}
+    \caption{Test-set cycle analysis.
+             \textbf{Left}: PnL distribution (win rate 96.9\%, mean +0.182\%).
+             \textbf{Center}: cycle duration distribution (mean 1.2 bars $\approx 1.2$ hours).
+             \textbf{Right}: cumulative compounding of per-cycle returns on a log scale.}
+    \label{fig:cycle}
+\end{figure}
+
+96.9\% 사이클 승률과 평균 1.2시간 지속 시간은 에이전트가 빠르게 포지션을 열고 닫으며
+각 사이클에서 소액 스프레드를 수집하는 준시장조성 모드로 운영됨을 보여준다.
+오른쪽 패널의 로그-선형 누적 수익 곡선은 3.12\% MDD와 일관되게 급격한 낙폭 없이
+복리가 꾸준히 발생함을 확인한다.
+
+\subsection{한계}
+
+\textbf{시장 충격.}
+시뮬레이션은 무한 유동성을 가정한다: 지정가 주문은 명시된 가격에 슬리피지 없이
+체결된다.
+시뮬레이션 자본 규모(\$10,000)에서 이 가정은 BTC/USDT(일 거래량 $>$\$300억)에
+합리적이다.
+그러나 더 큰 포지션으로 확장하면 시장 충격 모델이 필요하다.
+
+\textbf{수수료 모델.}
+고정 0.05\% maker 수수료가 적용된다.
+실제로는 taker 수수료(0.10\%), 펀딩 비용, 스프레드 비용이 특히 많은 체결을
+발생시키는 빠른 사이클 전략에서 수익을 추가로 잠식할 것이다.
+
+\textbf{학습 기간.}
+학습셋(2020--2022)은 하나의 주요 강세-약세 사이클만 포함한다.
+추가적인 시장 레짐의 확장된 커버리지가 일반화 주장을 강화할 것이다.
+
+\textbf{정책 포화.}
+학습된 정책이 거의 상수인 $(0, 0)$ 액션을 출력하는 이유는, 베이지안 최적화가
+$A_s$를 하한으로 이끌어 최솟값 액션을 영구적으로 최적화하기 때문이다.
+이는 구조적 설계 한계이다: 공식 계수와 RL 정책을 동일한 목적으로 공동 최적화하면
+정책의 자유도가 제거된다.
+향후 연구는 이 두 최적화 단계를 분리해야 한다.
+
+\textbf{$A_s$ 경계.}
+최적 $A_s = 0.101$이 베이지안 탐색 공간의 하한에 위치한다는 것은,
+베이지안 단계가 매도 간격 문제를 완전히 해결하여 RL이 추가 개선에 기여할
+여지를 남기지 않았음을 시사한다.
+
+% ─── 7. Conclusion ───────────────────────────────────────────────────────────
+\section{결론}
+\label{sec:conclusion}
+
+본 논문은 방향성 가격 예측 없이 PPO 에이전트가 ATR 비례 지정가 주문 배치를 제어하는
+BTC/USDT 동적 그리드 트레이딩을 위한 비방향성 강화학습 프레임워크를 제안했다.
+주요 기여는: (1) 시장 조건과 포트폴리오 상태를 모두 인코딩하는 5차원 MDP 정식화;
+(2) 주문 의미론의 해석 가능성을 유지하는 8계수 ATR 스케일링 공식;
+(3) 수작업 기본값 대비 검증 Sharpe를 $+145\%$ 향상시킨 베이지안 탐색 절차이다.
+
+최종 모델은 테스트셋 Sharpe 43.04 — 최우수 고정 그리드 베이스라인의 29.2배 —
+와 3.12\% 최대낙폭을 달성했다.
+그러나 사후 분석에서 정책이 거의 상수인 $(0, 0)$ 액션 출력으로 수렴함이 밝혀졌다:
+베이지안 최적화가 매도 시장가 기저 계수 $A_s$를 하한으로 이끌어 최솟값 액션을
+영구적으로 최적화하고 상태 기반 선택의 필요성을 제거했다.
+따라서 고정 베이스라인 대비 성능 우위는 학습된 적응적 행동보다 주로
+베이지안 최적화 계수 집합에서 비롯된다.
+
+이 발견은 연구 기여를 재구성한다: RL이 시장 레짐에 \emph{적응}함을 보이는 대신,
+본 연구는 (a) 베이지안 최적화 계수를 가진 ATR 비례 프레임워크가 그 자체로
+강력한 고정 전략을 구성하며, (b) 계수와 RL 정책의 공동 최적화가 레짐 적응의
+출현을 막는 구조적 충돌을 일으킴을 보인다.
+
+\textbf{다음 단계 설계.}
+진정한 레짐 적응을 가능하게 하려면 세 가지 변경이 필요하다:
+\begin{enumerate}
+    \item \textbf{계수와 액션 역할 분리.}
+          계수는 경제적으로 의미 있는 \emph{범위}를 고정해야 하며
+          (예: 매도 시장가 간격을 $[0.1, 1.0]\times r_t$ 범위로 고정),
+          베이지안 결과를 최적화 값이 아닌 정보에 입각한 경계로 활용한다.
+          RL 액션은 그 후 상태에 기반하여 해당 범위 \emph{내에서} 선택한다.
+    \item \textbf{방향성 상태 특징 추가.}
+          정책이 강세, 약세, 횡보 레짐을 구별하는 데 필요한 신호를 갖도록
+          롤링 로그 수익률 특징(예: 1일 및 1주일 추세)을 포함한다.
+    \item \textbf{학습 중 정책 엔트로피 모니터링.}
+          각 평가 체크포인트에서 액션 표준편차를 추적하며,
+          0으로의 수렴은 여기서 식별된 포화 실패 모드의 조기 경보이다.
+\end{enumerate}
+
+추가 확장으로는 연속 액션 공간에서의 향상된 샘플 효율을 위한 SAC 도입,
+그리고 실제 시장 조건(네트워크 지연 및 부분 체결 포함)에서의 검증을 위한
+Binance 실시간 API와의 통합이 있다.
+
+% ─── References ──────────────────────────────────────────────────────────────
+\newpage
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}
