@@ -255,8 +255,6 @@ def plot_behavior(
         save_dir    : 저장 폴더 (None이면 저장 안 함)
         show        : True이면 plt.show() 호출
     """
-    import matplotlib
-    matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     import matplotlib.font_manager as fm
 

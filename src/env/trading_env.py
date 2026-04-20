@@ -15,10 +15,12 @@ Action (2차원 연속, [0, 1]²):
 주문 (매 스텝 4개 지정가 갱신 — ATR 비례 스케일링):
     atr_ratio   = ATR(168) / price              # 현재 변동성 수준
 
-    buy_hi_gap      = atr_ratio × (0.5 + aggressiveness × 1.5)  # [0.5×ATR, 2.0×ATR]
-    buy_lo_gap      = atr_ratio × (2.5 + aggressiveness × 7.5)  # [2.5×ATR, 10×ATR]
-    sell_market_gap = atr_ratio × (0.5 + profit_target  × 1.5)  # [0.5×ATR, 2.0×ATR]
-    sell_cost_gap   = atr_ratio × (2.5 + profit_target  × 7.5)  # [2.5×ATR, 10×ATR]
+    buy_hi_gap      = atr_ratio × (A_b + aggressiveness × B_b)  # 기본: [0.5×ATR, 2.0×ATR]
+    buy_lo_gap      = atr_ratio × (C_b + aggressiveness × D_b)  # 기본: [2.5×ATR, 10×ATR]
+    sell_market_gap = atr_ratio × (A_s + profit_target  × B_s)  # 기본: [0.5×ATR, 2.0×ATR]
+    sell_cost_gap   = atr_ratio × (C_s + profit_target  × D_s)  # 기본: [2.5×ATR, 10×ATR]
+    # 계수 기본값: A_b=0.5, B_b=1.5, C_b=2.5, D_b=7.5, A_s=0.5, B_s=1.5, C_s=2.5, D_s=7.5
+    # environment.formula_coefs 딕셔너리로 재정의 가능 (Bayesian 튜닝용)
 
     buy_hi      = price     × (1 - buy_hi_gap)
     buy_lo      = price     × (1 - buy_lo_gap)
@@ -84,6 +86,21 @@ class BTCGridTradingEnv(gym.Env):
         # 미지정 시 기존 동작("price") 유지 → 하위 호환
         self.threshold_basis: str  = self.cfg_env.get("threshold_basis", "price")
         self.warmup: int           = self.cfg_ind["atr_period"]  # 168봉
+
+        # ── MDP 공식 계수 (Bayesian 튜닝 가능, 기본값 = 설계 기본값) ──
+        # buy_hi_gap  = atr_ratio × (A_b + aggressiveness × B_b)
+        # buy_lo_gap  = atr_ratio × (C_b + aggressiveness × D_b)
+        # sell_market_gap = atr_ratio × (A_s + profit_target × B_s)
+        # sell_cost_gap   = atr_ratio × (C_s + profit_target × D_s)
+        _coefs = self.cfg_env.get("formula_coefs", {})
+        self.A_b: float = float(_coefs.get("A_b", 0.5))
+        self.B_b: float = float(_coefs.get("B_b", 1.5))
+        self.C_b: float = float(_coefs.get("C_b", 2.5))
+        self.D_b: float = float(_coefs.get("D_b", 7.5))
+        self.A_s: float = float(_coefs.get("A_s", 0.5))
+        self.B_s: float = float(_coefs.get("B_s", 1.5))
+        self.C_s: float = float(_coefs.get("C_s", 2.5))
+        self.D_s: float = float(_coefs.get("D_s", 7.5))
 
         # ── 랜덤 시작점 (멀티 환경 + 짧은 에피소드용) ──────────
         # random_start=True: reset() 시 훈련 데이터 전체에서 무작위 시작
@@ -274,10 +291,11 @@ class BTCGridTradingEnv(gym.Env):
             sell_cost   : 평단가(avg_price) 기준 — 원가 수익 보호
         """
         # ATR 비례 간격 — 변동성이 크면 자동으로 간격이 넓어짐
-        buy_hi_gap      = atr_ratio * (0.5 + aggressiveness * 1.5)  # [0.5×ATR, 2.0×ATR]
-        buy_lo_gap      = atr_ratio * (2.5 + aggressiveness * 7.5)  # [2.5×ATR, 10×ATR]
-        sell_market_gap = atr_ratio * (0.5 + profit_target  * 1.5)  # [0.5×ATR, 2.0×ATR]
-        sell_cost_gap   = atr_ratio * (2.5 + profit_target  * 7.5)  # [2.5×ATR, 10×ATR]
+        # 계수는 __init__에서 설정 (기본값: A_b=0.5, B_b=1.5, C_b=2.5, D_b=7.5 등)
+        buy_hi_gap      = atr_ratio * (self.A_b + aggressiveness * self.B_b)
+        buy_lo_gap      = atr_ratio * (self.C_b + aggressiveness * self.D_b)
+        sell_market_gap = atr_ratio * (self.A_s + profit_target  * self.B_s)
+        sell_cost_gap   = atr_ratio * (self.C_s + profit_target  * self.D_s)
 
         buy_hi      = price * (1.0 - buy_hi_gap)
         buy_lo      = price * (1.0 - buy_lo_gap)

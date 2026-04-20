@@ -1,0 +1,47 @@
+# Phase 2-A.5: Bayesian 계수 튜닝 설정
+# 실행: python scripts/bayesian_coef_tuning.py [--n-trials N] [--trial-steps N]
+#
+# 탐색 대상 8개 계수 (MDP Action → Gap 변환 공식):
+#   buy_hi_gap      = atr_ratio × (A_b + aggressiveness × B_b)
+#   buy_lo_gap      = atr_ratio × (C_b + aggressiveness × D_b)
+#   sell_market_gap = atr_ratio × (A_s + profit_target  × B_s)
+#   sell_cost_gap   = atr_ratio × (C_s + profit_target  × D_s)
+#
+# 기본값 (exp013b 설계값):
+#   A_b=0.5, B_b=1.5, C_b=2.5, D_b=7.5
+#   A_s=0.5, B_s=1.5, C_s=2.5, D_s=7.5
+
+optuna:
+  study_name:    "coef_tuning_v1"
+  n_trials:      50
+  trial_timesteps: 1_000_000
+  n_envs:        4
+  seed:          42
+
+  sampler:
+    type:            "TPE"
+    n_startup_trials: 10    # 첫 10회 랜덤 탐색 (warm-up)
+
+  pruner:
+    type:             "MedianPruner"
+    n_startup_trials: 10    # 첫 10회 pruning 면제
+    n_warmup_steps:   1     # 첫 번째 중간 체크 이후 pruning 시작
+
+  # 탐색 범위 (현재 설계값이 범위 내 포함됨)
+  search_space:
+    A_b: [0.1, 3.0]     # buy_hi_gap base
+    B_b: [0.0, 8.0]     # buy_hi_gap range
+    C_b: [1.0, 12.0]    # buy_lo_gap base  (C_b > A_b 권장)
+    D_b: [2.0, 25.0]    # buy_lo_gap range (D_b > B_b 권장)
+    A_s: [0.1, 3.0]     # sell_market_gap base
+    B_s: [0.0, 8.0]     # sell_market_gap range
+    C_s: [1.0, 12.0]    # sell_cost_gap base    (C_s > A_s 권장)
+    D_s: [2.0, 25.0]    # sell_cost_gap range   (D_s > B_s 권장)
+
+base_config:  "config/exp013b_config.yaml"
+output_dir:   "experiments/optuna_coef_v1"
+
+# 베이스라인 참고
+baseline:
+  exp013b_val_sharpe: 17.579
+  config: "n_splits=2, threshold=avg_price, n_buy_orders=2, ent_coef=0.05"
