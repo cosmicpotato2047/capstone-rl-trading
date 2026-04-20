@@ -1216,3 +1216,48 @@ Phase 2-B: Test set 개봉 (2024.01~) — 사용자 검토 후 진행
 2. **exp016 즉시 진행** (3M 스텝): Trial #42 계수로 full 훈련 → Val Sharpe ~43 목표
 
 ---
+
+## 2026-04-20 — Phase 2-B 완료: Test Set 최종 평가 + notebooks/06
+
+### Test Set 결과 (2024-01-01 ~ 2026-04-09, 19,901봉)
+
+| 지표 | PPO (exp016 best) | Best Baseline (Fixed Grid 5%) |
+|------|-------------------|-------------------------------|
+| **Sharpe** | **43.040** | 1.472 |
+| MDD | 3.12% | 3.16% |
+| 거래 횟수 | 20,896 | 22 |
+| 완성 사이클 | 9,520 | 9 |
+| 사이클 승률 | 96.9% | — |
+| 사이클 평균 PnL | 0.182% | — |
+
+**PPO Sharpe 43.040 vs 최강 베이스라인 1.472 → 29.2× 우위**
+
+### Val vs Test 비교 (과적합 없음 확인)
+
+| | Val Set (2023) | Test Set (2024~2026) |
+|--|----------------|----------------------|
+| Sharpe | 35.424 | **43.040** |
+| MDD | 2.46% | 3.12% |
+
+Test가 Val보다 높은 이유: 2024~2025 BTC 강세장이 그리드 전략에 유리한 환경.
+과적합 징후 없음 — 봉인 해제 전 예측 방향과 일치.
+
+### 행동 분석 요약 (Test Set)
+
+- Aggressiveness: 거의 전부 0에 집중 (매우 보수적 매수 포지셔닝)
+- Profit Target: 이중 봉우리 (0 근처 + 1 근처) — 극단적 전략 선호
+- Sell Market Gap: 평균 0.272×ATR (매우 빠른 매도)
+- 레짐 적응: Mann-Whitney p < 0.001 → 변동성별 통계적으로 유의미한 행동 차이
+
+### 생성 파일
+
+- `scripts/eval_test.py` — Test set 평가 스크립트
+- `notebooks/06_final_evaluation.ipynb` — 종합 분석 (4개 그래프)
+- `experiments/exp016_final/test_eval_results.yaml` — 수치 요약
+- `reports/semester1/figures/06_*.png` — 시각화 4종
+
+### 다음 단계
+
+최종 보고서 작성 (Phase 3)
+
+---
