@@ -63,8 +63,8 @@
 % ─── Abstract ────────────────────────────────────────────────────────────────
 \begin{abstract}
 We present a reinforcement learning framework for \emph{dynamic grid trading} on the
-BTC/USDT hourly market that learns to adjust grid intervals in response to market
-conditions without predicting price direction.
+BTC/USDT hourly market in which a PPO agent outputs continuous ATR-scaled limit-order
+gaps without predicting price direction.
 Unlike prior RL trading systems that rely on directional signals or discrete
 buy/sell/hold actions, our agent outputs a continuous two-dimensional action
 $(a_\text{agg}, a_\text{pt}) \in [0,1]^2$ that maps directly onto four limit-order
@@ -72,19 +72,20 @@ prices scaled by the Average True Range (ATR).
 Eight formula coefficients controlling the shape of this mapping are jointly optimized
 via Bayesian search (Optuna TPE, 50 trials), yielding a \(+145\%\) improvement in
 validation Sharpe ratio compared to the default parameterization.
-The final model, trained with Proximal Policy Optimization (PPO) for 3 million steps
-on data from 2020--2022, achieves a validation Sharpe ratio of \textbf{35.42} and a
-test-set Sharpe ratio of \textbf{43.04} (2024--2026), outperforming the best
-fixed-grid baseline by \textbf{29.2$\times$} while maintaining a maximum drawdown of
-only \textbf{3.1\%} compared to 50.1\% for buy-and-hold.
-Behavioral analysis confirms that the agent adapts its order aggressiveness
-to volatility regimes (Mann-Whitney $p < 10^{-19}$), directly answering our secondary
-research question.
+The final model, trained for 3 million steps on data from 2020--2022, achieves a
+validation Sharpe ratio of \textbf{35.42} and a test-set Sharpe ratio of \textbf{43.04}
+(2024--2026), outperforming the best fixed-grid baseline by \textbf{29.2$\times$}
+while maintaining a maximum drawdown of only \textbf{3.1\%} versus 50.1\% for
+buy-and-hold.
+Post-hoc behavioral analysis reveals that the learned policy converges to a
+near-constant action output, indicating that the Bayesian-optimized coefficients
+alone encode the dominant performance driver; implications for the role of
+state-conditioned adaptation are discussed.
 \end{abstract}
 
 \vspace{1em}
 \noindent\textbf{Keywords:} reinforcement learning, grid trading, PPO, Bayesian optimization,
-cryptocurrency, ATR-scaled orders, volatility regime adaptation
+cryptocurrency, ATR-scaled orders, policy saturation
 
 \newpage
 \tableofcontents
@@ -449,8 +450,8 @@ We compare against seven fixed-rule strategies that use no learning:
 
 The ATR Grid baselines are particularly informative: they share the same market
 information (ATR) as our agent but apply it through a fixed rule.
-Any performance gap over these baselines is therefore attributable specifically to
-the RL agent's learned \emph{selection} of the multiplier $k$ conditioned on state.
+Performance differences relative to these baselines reflect the combined effect of
+Bayesian coefficient optimization and the RL training procedure.
 
 \subsection{Evaluation Metric}
 
@@ -697,36 +698,52 @@ performance \emph{no better} than validation, not superior.
 
 \subsection{RQ2: Volatility Regime Adaptation}
 
-Figure~\ref{fig:behavior} shows the agent's action distribution on the test set,
-stratified by volatility regime (Low / Mid / High, defined by z-score thresholds
-$\pm 1$).
+Figure~\ref{fig:behavior} shows the agent's action output on the test set,
+stratified by volatility regime (Low / Mid / High, defined by ATR/price thresholds).
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=\textwidth]{06_behavior_analysis.png}
     \caption{Action distributions on the test set.
-             \textbf{Top-left}: aggressiveness is overwhelmingly concentrated near 0
-             in all regimes but exhibits measurably higher values in the Low-volatility
-             regime.
-             \textbf{Bottom-left}: volatility vs.\ aggressiveness scatter confirms the
-             regime-conditioned behavior.
-             \textbf{Top-right}: profit target is bimodal (0 and 1), indicating a
-             binary fast-exit / maximum-gain selection strategy.
-             \textbf{Bottom-right}: sell-market gap clusters near $A_s \approx 0.1$,
-             confirming the Bayesian-optimized fast-sell preference.}
+             \textbf{Top-left/Bottom-left}: both aggressiveness and profit target
+             are concentrated at exactly 0.0 across all volatility regimes,
+             indicating a saturated constant policy.
+             \textbf{Bottom-right}: the regime distribution across the test period.}
     \label{fig:behavior}
 \end{figure}
 
-A Mann-Whitney U test on aggressiveness values in Low vs.\ High volatility regimes
-yields $U = 7{,}423{,}097.5$, $p < 10^{-19}$.
-This strongly rejects the null hypothesis of identical distributions,
-confirming that the agent selects statistically different aggressiveness levels
-across regimes.
-Specifically, the agent is \emph{more} aggressive (closer buy orders) in low-volatility
-periods and \emph{less} aggressive in high-volatility periods — a counterintuitive but
-economically rational pattern: when the market is calm, tight orders fill more
-reliably; when volatility is extreme, wider spacing avoids being immediately
-stopped out by a spike.
+Contrary to the expectation of RQ2, the trained policy outputs a near-constant
+action vector $\bm{a} \approx (0, 0)$ deterministically, regardless of the
+observed volatility regime.
+Inspection of the policy network confirms this: the raw Gaussian mean for
+aggressiveness is $-9.19$ (tanh-squashed to $\approx -1$, rescaled to $\approx 0$),
+and for profit target $-4.30$ (rescaled to $\approx 0$).
+No statistically meaningful difference in action values exists across Low, Mid,
+and High volatility regimes.
+
+\textbf{Why did the policy saturate?}
+The root cause lies in a structural coupling between Bayesian coefficient
+optimization and the RL action space.
+The order-placement formula is:
+\begin{equation}
+    \Delta^\text{sell-mkt}_t = r_t \cdot (A_s + a_\text{pt} \cdot B_s).
+\end{equation}
+Bayesian search drove $A_s$ to its lower bound ($0.101$), making the minimum
+action value ($a_\text{pt} = 0$) already optimal: any increase in $a_\text{pt}$
+only widens the sell gap, reducing cycle frequency.
+The RL agent correctly learned to keep $a_\text{pt} = 0$, but this renders
+state-conditioned adaptation unnecessary.
+In other words, the Bayesian stage solved the gap-sizing problem at the
+coefficient level, leaving no residual degrees of freedom for RL to exploit.
+
+\textbf{Implication.}
+RQ2 cannot be answered with the current design.
+The result does not imply that volatility-regime adaptation is impossible or
+unhelpful — it implies that the coefficient optimization removed the mechanism
+through which adaptation would have been expressed.
+A redesigned system in which coefficients fix the \emph{range} of behavior while
+RL controls the \emph{selection within that range} is the natural next step
+(Section~\ref{sec:conclusion}).
 
 \subsection{Cycle Behavior}
 
@@ -768,36 +785,68 @@ The train set (2020--2022) contains only one major bull-bear cycle.
 Extended coverage of additional market regimes would strengthen the generalization
 claim.
 
+\textbf{Policy saturation.}
+The learned policy outputs a near-constant $(0, 0)$ action because Bayesian
+optimization drove $A_s$ to its lower bound, making the minimum action permanently
+optimal.
+This is a structural design limitation: co-optimizing formula coefficients and the
+RL policy for the same objective removes the policy's degrees of freedom.
+Future work must decouple these two optimization stages.
+
 \textbf{$A_s$ boundary.}
-The optimal $A_s = 0.101$ sits at the lower bound of the Bayesian search space.
-The true optimum may lie below 0.1; a second tuning round with an expanded range
-$[0.01, 0.15]$ is a natural extension.
+The optimal $A_s = 0.101$ sits at the lower bound of the Bayesian search space,
+suggesting the Bayesian stage solved the sell-gap problem completely,
+leaving no room for RL to contribute further refinement.
 
 % ─── 7. Conclusion ───────────────────────────────────────────────────────────
 \section{Conclusion}
+\label{sec:conclusion}
 
 We presented a non-directional reinforcement learning framework for dynamic grid
-trading on BTC/USDT that replaces hard-coded grid intervals with a continuously
-learned ATR-proportional order placement policy.
-The key contributions are: (1) a five-dimensional MDP formulation that encodes
-both market regime and portfolio state; (2) an eight-coefficient ATR-scaling
-formula that keeps the action semantics interpretable while enabling data-driven
-calibration; and (3) a Bayesian search procedure that improved validation Sharpe
-by $+145\%$ over hand-tuned defaults.
+trading on BTC/USDT in which a PPO agent controls ATR-proportional limit-order
+placement without directional price prediction.
+The key contributions are: (1) a five-dimensional MDP formulation encoding both
+market conditions and portfolio state; (2) an eight-coefficient ATR-scaling formula
+that keeps order semantics interpretable; and (3) a Bayesian search procedure that
+improved validation Sharpe by $+145\%$ over hand-tuned defaults.
 
-The final model achieves a test-set Sharpe of 43.04 — 29.2 times the best
-fixed-grid baseline — while maintaining a 3.12\% maximum drawdown.
-Behavioral analysis confirms that the agent has learned volatility-regime-dependent
-order placement, with statistically significant differences in aggressiveness across
-Low/Mid/High volatility regimes ($p < 10^{-19}$).
+The final model achieves a test-set Sharpe of 43.04 — 29.2$\times$ the best
+fixed-grid baseline — with a 3.12\% maximum drawdown.
+Critically, post-hoc analysis shows the policy converges to a near-constant
+$(0, 0)$ action output: the Bayesian optimization drove the sell-market base
+coefficient $A_s$ to its lower bound, making the minimum action permanently
+optimal and eliminating the need for state-conditioned selection.
+The performance advantage over fixed baselines therefore stems primarily from the
+Bayesian-optimized coefficient set rather than from learned adaptive behavior.
 
-\textbf{Future work.}
-Immediate extensions include: (i) a second Bayesian tuning round with a narrower
-$A_s$ range $[0.01, 0.15]$ to fully characterize the sell-market sensitivity;
-(ii) replacement of PPO with SAC for improved sample efficiency in the continuous
-action space; and (iii) integration with the Binance live-trading API for
-paper-trading validation under real market conditions including network latency
-and partial fills.
+This finding reframes the research contribution: rather than demonstrating that
+RL \emph{adapts} to market regimes, this work demonstrates that (a) the
+ATR-proportional framework with Bayesian-optimized coefficients constitutes a
+strong fixed strategy in its own right, and (b) the co-optimization of
+coefficients and RL policy creates a structural conflict that prevents regime
+adaptation from emerging.
+
+\textbf{Next-phase design.}
+To enable genuine regime adaptation, three changes are required:
+\begin{enumerate}
+    \item \textbf{Decouple coefficient and action roles.}
+          Coefficients should fix the economically meaningful \emph{range}
+          (e.g., sell-market in $[0.1, 1.0]\times r_t$), using Bayesian findings
+          as informed bounds rather than optimized values.
+          RL action then selects \emph{within} that range based on state.
+    \item \textbf{Add directional state features.}
+          Include rolling log-return features (e.g., 1-day and 1-week trends)
+          so the policy has the signal needed to distinguish bull, bear, and
+          sideways regimes.
+    \item \textbf{Monitor policy entropy during training.}
+          Track action standard deviation at each evaluation checkpoint;
+          collapse toward zero is an early warning of the saturation failure
+          mode identified here.
+\end{enumerate}
+
+Additional extensions include SAC for improved sample efficiency in the continuous
+action space, and integration with the Binance live API for paper-trading
+validation.
 
 % ─── References ──────────────────────────────────────────────────────────────
 \newpage
