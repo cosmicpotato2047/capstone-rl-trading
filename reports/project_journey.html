@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BTC Dynamic Grid Trading — Project Journey</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --blue-dark:   #1565C0;
+    --blue-mid:    #1976D2;
+    --blue-light:  #E3F2FD;
+    --orange-dark: #E65100;
+    --orange-light:#FFF3E0;
+    --green-dark:  #2E7D32;
+    --green-light: #E8F5E9;
+    --red-dark:    #C62828;
+    --red-light:   #FCE4EC;
+    --purple-dark: #3949AB;
+    --purple-light:#E8EAF6;
+    --gray-bg:     #F5F7FA;
+    --gray-text:   #37474F;
+    --card-radius: 12px;
+    --shadow:      0 2px 12px rgba(0,0,0,0.10);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+    background: var(--gray-bg);
+    color: var(--gray-text);
+    font-size: 15px;
+    line-height: 1.65;
+  }
+
+  /* ── 헤더 ── */
+  .site-header {
+    background: linear-gradient(135deg, #0D47A1 0%, #1565C0 60%, #1976D2 100%);
+    color: white;
+    padding: 36px 48px;
+    text-align: center;
+  }
+  .site-header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    margin-bottom: 8px;
+  }
+  .site-header p {
+    font-size: 1rem;
+    opacity: 0.85;
+  }
+
+  /* ── 레이아웃 ── */
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 32px;
+    max-width: 1400px;
+    margin: 36px auto;
+    padding: 0 32px 64px;
+    align-items: start;
+  }
+
+  /* ── 오른쪽 패널 (sticky) ── */
+  .right-panel {
+    position: sticky;
+    top: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .chart-card {
+    background: white;
+    border-radius: var(--card-radius);
+    box-shadow: var(--shadow);
+    padding: 24px 20px 16px;
+  }
+  .chart-card h3 {
+    font-size: 1rem;
+    color: var(--blue-dark);
+    margin-bottom: 16px;
+    text-align: center;
+  }
+
+  .summary-card {
+    background: var(--purple-light);
+    border: 2px solid var(--purple-dark);
+    border-radius: var(--card-radius);
+    padding: 22px 24px;
+  }
+  .summary-card h3 {
+    color: var(--purple-dark);
+    font-size: 1rem;
+    margin-bottom: 14px;
+    font-weight: 700;
+  }
+  .summary-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 12px;
+    font-size: 0.92rem;
+    line-height: 1.55;
+  }
+  .summary-row .badge {
+    background: var(--purple-dark);
+    color: white;
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    white-space: nowrap;
+    margin-top: 1px;
+  }
+  .summary-row .badge.green { background: var(--green-dark); }
+  .summary-row .badge.red   { background: var(--red-dark); }
+
+  /* ── 타임라인 ── */
+  .timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    position: relative;
+  }
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 28px;
+    top: 0; bottom: 0;
+    width: 3px;
+    background: linear-gradient(to bottom, #1565C0, #C62828);
+    border-radius: 2px;
+    z-index: 0;
+  }
+
+  /* ── 단계 카드 ── */
+  .phase-card {
+    background: white;
+    border-radius: var(--card-radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    position: relative;
+    z-index: 1;
+    transition: box-shadow 0.2s;
+  }
+  .phase-card:hover { box-shadow: 0 6px 24px rgba(0,0,0,0.15); }
+
+  .phase-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 24px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .phase-header:hover { filter: brightness(0.96); }
+
+  .phase-num {
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    background: white;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.25rem;
+    font-weight: 800;
+    flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  }
+
+  .phase-title-block { flex: 1; }
+  .phase-title-block h2 {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: white;
+    margin-bottom: 3px;
+  }
+  .phase-title-block .week-tag {
+    font-size: 0.82rem;
+    color: rgba(255,255,255,0.8);
+  }
+
+  .toggle-icon {
+    color: rgba(255,255,255,0.8);
+    font-size: 1.3rem;
+    transition: transform 0.25s;
+    flex-shrink: 0;
+  }
+  .phase-card.collapsed .toggle-icon { transform: rotate(-90deg); }
+
+  /* 단계별 배경색 */
+  .ph-design  .phase-header { background: linear-gradient(90deg,#1565C0,#1976D2); }
+  .ph-data    .phase-header { background: linear-gradient(90deg,#0277BD,#0288D1); }
+  .ph-bug     .phase-header { background: linear-gradient(90deg,#BF360C,#E64A19); }
+  .ph-search  .phase-header { background: linear-gradient(90deg,#00695C,#00897B); }
+  .ph-bayes   .phase-header { background: linear-gradient(90deg,#6A1B9A,#8E24AA); }
+  .ph-train   .phase-header { background: linear-gradient(90deg,#1565C0,#2196F3); }
+  .ph-test    .phase-header { background: linear-gradient(90deg,#B71C1C,#E53935); }
+
+  .ph-design  .phase-num { color: #1565C0; }
+  .ph-data    .phase-num { color: #0277BD; }
+  .ph-bug     .phase-num { color: #BF360C; }
+  .ph-search  .phase-num { color: #00695C; }
+  .ph-bayes   .phase-num { color: #6A1B9A; }
+  .ph-train   .phase-num { color: #1565C0; }
+  .ph-test    .phase-num { color: #B71C1C; }
+
+  /* ── 카드 본문 ── */
+  .phase-body {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    transition: all 0.3s ease;
+  }
+  .phase-card.collapsed .phase-body {
+    display: none;
+  }
+
+  /* ── 서브 섹션 ── */
+  .sub-section {
+    border-radius: 10px;
+    padding: 18px 20px;
+    border-left: 5px solid;
+  }
+  .sub-section.did    { background: var(--blue-light);   border-color: var(--blue-mid); }
+  .sub-section.prob   { background: var(--orange-light); border-color: var(--orange-dark); }
+  .sub-section.fix    { background: var(--green-light);  border-color: var(--green-dark); }
+  .sub-section.result { background: var(--red-light);    border-color: var(--red-dark); }
+  .sub-section.info   { background: #F3E5F5;             border-color: #8E24AA; }
+
+  .sub-section h4 {
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .sub-section.did    h4 { color: var(--blue-dark); }
+  .sub-section.prob   h4 { color: var(--orange-dark); }
+  .sub-section.fix    h4 { color: var(--green-dark); }
+  .sub-section.result h4 { color: var(--red-dark); }
+  .sub-section.info   h4 { color: #6A1B9A; }
+
+  .sub-section ul {
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .sub-section ul li { font-size: 0.95rem; }
+
+  .sub-section p { font-size: 0.95rem; }
+
+  /* 두 컬럼 서브섹션 */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  /* 강조 수치 */
+  .highlight {
+    display: inline-block;
+    background: var(--red-dark);
+    color: white;
+    border-radius: 6px;
+    padding: 1px 8px;
+    font-weight: 700;
+    font-size: 0.95rem;
+  }
+  .highlight.blue   { background: var(--blue-dark); }
+  .highlight.green  { background: var(--green-dark); }
+  .highlight.orange { background: var(--orange-dark); }
+  .highlight.purple { background: var(--purple-dark); }
+
+  /* 실험 태그 */
+  .exp-tag {
+    display: inline-block;
+    background: #ECEFF1;
+    color: #546E7A;
+    border-radius: 5px;
+    padding: 1px 8px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    margin-right: 4px;
+    margin-bottom: 2px;
+    border: 1px solid #B0BEC5;
+  }
+
+  /* 결과 테이블 */
+  .result-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.92rem;
+    margin-top: 6px;
+  }
+  .result-table th {
+    background: #ECEFF1;
+    padding: 8px 12px;
+    text-align: left;
+    font-size: 0.82rem;
+    color: #546E7A;
+    font-weight: 600;
+  }
+  .result-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #ECEFF1;
+  }
+  .result-table tr:last-child td { border-bottom: none; }
+  .result-table tr.ppo-row td {
+    font-weight: 700;
+    background: #FFF8E1;
+    color: var(--red-dark);
+  }
+
+  /* 하단 결론 배너 */
+  .conclusion-banner {
+    background: linear-gradient(135deg, #1A237E, #283593);
+    color: white;
+    border-radius: var(--card-radius);
+    padding: 28px 32px;
+    position: relative;
+    z-index: 1;
+  }
+  .conclusion-banner h2 {
+    font-size: 1.2rem;
+    margin-bottom: 18px;
+    text-align: center;
+  }
+  .rq-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 14px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 8px;
+    padding: 14px 18px;
+  }
+  .rq-label {
+    background: rgba(255,255,255,0.2);
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .rq-row p { font-size: 0.95rem; line-height: 1.55; }
+  .rq-row strong { color: #82B1FF; }
+</style>
+</head>
+<body>
+
+<div class="site-header">
+  <h1>BTC Dynamic Grid Trading — Project Journey</h1>
+  <p>PPO + ATR-Scaled Orders + Bayesian Coefficient Optimization &nbsp;|&nbsp; 캡스톤 디자인 전체 흐름</p>
+</div>
+
+<div class="layout">
+
+  <!-- ══════════════════════════════════════════
+       왼쪽: 타임라인
+  ══════════════════════════════════════════ -->
+  <div class="timeline">
+
+    <!-- ① 프로젝트 설계 -->
+    <div class="phase-card ph-design" id="ph1">
+      <div class="phase-header" onclick="toggle('ph1')">
+        <div class="phase-num">①</div>
+        <div class="phase-title-block">
+          <h2>프로젝트 설계 — 비방향성 그리드 트레이딩 아이디어</h2>
+          <span class="week-tag">Week 1~2</span>
+        </div>
+        <span class="toggle-icon">▼</span>
+      </div>
+      <div class="phase-body">
+        <div class="sub-section did">
+          <h4>핵심 아이디어</h4>
+          <ul>
+            <li>기존 RL 트레이딩은 모두 <strong>방향성 예측</strong> (RSI, LSTM 가격 예측) → 예측 오류가 거래 결정에 직접 전파</li>
+            <li>우리 접근: <strong>방향 예측 없이 변동성 자체에서 수익</strong> — 그리드 간격을 얼마로 설정할지를 학습</li>
+          </ul>
+        </div>
+        <div class="two-col">
+          <div class="sub-section did">
+            <h4>Action 공간 설계</h4>
+            <ul>
+              <li>연속 2차원: <strong>(aggressiveness, profit_target) ∈ [0,1]²</strong></li>
+              <li>이산 Buy/Sell/Hold 방식 완전 탈피</li>
+              <li>action 하나가 매수 2개 + 매도 2개 limit order 결정</li>
+            </ul>
+          </div>
+          <div class="sub-section did">
+            <h4>State 공간 설계 (5차원)</h4>
+            <ul>
+              <li><strong>log_price</strong> — 최근 평균 대비 가격 수준</li>
+              <li><strong>divergence</strong> — 평단가 대비 현재 손익</li>
+              <li><strong>holdings_value_ratio</strong> — 포지션 규모</li>
+              <li><strong>cash_ratio</strong> — 추가 매수 여력</li>
+              <li><strong>volatility</strong> (ATR/price) — 시장 변동성</li>
+            </ul>
+          </div>
+        </div>
+        <div class="sub-section info">
+          <h4>ATR 비례 주문 공식 (핵심 설계)</h4>
+          <p>gap = (ATR / price) × <strong>(A + action × B)</strong></p>
+          <p style="margin-top:8px;">고정 절대 간격 → action의 대부분이 "체결 불가" 영역에 집중되는 문제 해결. ATR 비례로 action [0,1] 전체가 의미있는 체결 확률 스펙트럼에 고르게 대응됨.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ② 데이터 & 환경 구현 -->
+    <div class="phase-card ph-data" id="ph2">
+      <div class="phase-header" onclick="toggle('ph2')">
+        <div class="phase-num">②</div>
+        <div class="phase-title-block">
+          <h2>데이터 수집 & 환경 구현</h2>
+          <span class="week-tag">Week 2~3</span>
+        </div>
+        <span class="toggle-icon">▼</span>
+      </div>
+      <div class="phase-body">
+        <div class="two-col">
+          <div class="sub-section did">
+            <h4>데이터</h4>
+            <ul>
+              <li>ccxt Binance API → BTC/USDT 1시간봉</li>
+              <li>총 <strong>54,933 캔들</strong> (2020~2026)</li>
+              <li>ATR(168) · log_price · rolling z-score 전처리</li>
+            </ul>
+            <br>
+            <table class="result-table">
+              <tr><th>구분</th><th>기간</th><th>봉 수</th></tr>
+              <tr><td>Train</td><td>2020~2022</td><td>25,916</td></tr>
+              <tr><td>Val</td><td>2023</td><td>8,736</td></tr>
+              <tr><td>Test 🔒</td><td>2024~2026</td><td>19,901</td></tr>
+            </table>
+          </div>
+          <div class="sub-section did">
+            <h4>거래 환경 (trading_env.py)</h4>
+            <ul>
+              <li>Gymnasium 표준 환경 — env_checker 통과</li>
+              <li>다음 봉 high/low 기준 limit order 체결 시뮬레이션</li>
+              <li><strong>Sell 우선 원칙</strong> — 같은 봉에서 동시 체결 시 매도 먼저</li>
+              <li><strong>n_splits 자본 슬롯</strong> — 사이클 시작 시 예산 고정</li>
+              <li>사이클 추적 — holdings=0 기준 시작/종료</li>
+              <li>Reward = Δequity / initial_capital (수수료 자동 반영)</li>
+            </ul>
+          </div>
+        </div>
+        <div class="sub-section fix">
+          <h4>설계 결정: Gort et al.(2022) 백테스트 과적합 방지</h4>
+          <p>Test set을 <strong>완전 봉인</strong>. 모든 하이퍼파라미터 결정이 끝날 때까지 단 한 번도 열지 않음. 최종 평가는 딱 한 번만 수행.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ③ 초기 학습 & 버그 -->
+    <div class="phase-card ph-bug" id="ph3">
+      <div class="phase-header" onclick="toggle('ph3')">
+        <div class="phase-num">③</div>
+        <div class="phase-title-block">
+          <h2>초기 학습 (exp001~006) — 버그와의 전쟁</h2>
+          <span class="week-tag">Week 3~5</span>
+        </div>
+        <span class="toggle-icon">▼</span>
+      </div>
+      <div class="phase-body">
+        <div class="sub-section prob">
+          <h4>🚨 버그 1 — Reward 수수료 이중계산</h4>
+          <ul>
+            <li>reward 계산 시 fee를 별도 차감했으나 이미 cash 잔액에 반영되어 있었음</li>
+            <li>결과: <strong>모든 거래 = 손해로 인식</strong> → 에이전트가 aggressiveness=0으로 수렴 → <strong>거래 0건</strong></li>
+            <li>exp001~005 공통 패턴: 초반 탐색 → 후반 0거래 수렴</li>
+          </ul>
+        </div>
+        <div class="sub-section prob">
+          <h4>🚨 버그 2+3 — Eval 파이프라인 2개</h4>
+          <ul>
+            <li><strong>random_start 상속</strong>: 학습 환경의 random_start=True가 평가 환경에 그대로 상속 → 평가 시작점이 랜덤 → Sharpe가 매번 달라져 학습 신호 불안정</li>
+            <li><strong>DummyVecEnv auto-reset</strong>: 에피소드 종료 후 자동 리셋으로 n_trades 등 통계가 소실 → 항상 0으로 읽힘</li>
+          </ul>
+        </div>
+        <div class="sub-section fix">
+          <h4>✅ 해결</h4>
+          <ul>
+            <li>reward 공식에서 fee 항 완전 제거 (equity 변화분에 이미 포함됨)</li>
+            <li>eval 환경 생성 시 random_start=False 강제 주입</li>
+            <li>DummyVecEnv 대신 <strong>단일 env 직접 실행</strong>으로 교체 — 에피소드 종료 후 통계 보존</li>
+          </ul>
+        </div>
+        <div class="sub-section result">
+          <h4>비고</h4>
+          <p>버그 수정 이전 exp001~006의 Sharpe 수치는 신뢰할 수 없음. 재실험 불필요 — 이 실험들은 탐색 단계이며, 최종 결과는 모두 수정 이후의 실험에서 도출됨.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ④ 파라미터 탐색 -->
+    <div class="phase-card ph-search" id="ph4">
+      <div class="phase-header" onclick="toggle('ph4')">
+        <div class="phase-num">④</div>
+        <div class="phase-title-block">
+          <h2>체계적 파라미터 탐색 (exp007~015)</h2>
+          <span class="week-tag">Week 5~6</span>
+        </div>
+        <span class="toggle-icon">▼</span>
+      </div>
+      <div class="phase-body">
+        <div class="sub-section did">
+          <h4>탐색 항목 및 결과</h4>
+          <table class="result-table" style="margin-top:0">
+            <tr>
+              <th>실험</th><th>변경 내용</th><th>Val Sharpe</th><th>결과</th>
+            </tr>
+            <tr>
+              <td><span class="exp-tag">exp007</span></td>
+              <td>VecNormalize 제거</td><td>14.39</td><td>수렴 시작 ✓</td>
+            </tr>
+            <tr>
+              <td><span class="exp-tag">exp008</span></td>
+              <td>ent_coef 0.01 → 0.05</td><td>16.38</td><td>탐색 증가 ✓</td>
+            </tr>
+            <tr>
+              <td><span class="exp-tag">exp009a-c</span></td>
+              <td>n_splits ∈ {2, 8, 16}</td><td>n_splits=2 최고</td><td>사이클당 집중 자본 ✓</td>
+            </tr>
+            <tr>
+              <td><span class="exp-tag">exp012</span></td>
+              <td>n_buy_orders 2→3</td><td>개선 없음</td><td>기본값 유지</td>
+            </tr>
+            <tr>
+              <td><span class="exp-tag">exp013b</span></td>
+              <td>threshold=avg_price</td><td><strong>17.58</strong></td><td>최종 베이스라인 ✓</td>
+            </tr>
+            <tr>
+              <td><span class="exp-tag">exp014-015</span></td>
+              <td>추가 탐색 (gamma, window)</td><td>개선 없음</td><td>exp013b 확정</td>
+            </tr>
+          </table>
+        </div>
+        <div class="sub-section fix">
+          <h4>✅ 최적 설정 확정 (exp013b)</h4>
+          <p>
+            n_splits = <strong>2</strong> &nbsp;|&nbsp;
+            threshold = <strong>avg_price</strong> &nbsp;|&nbsp;
+            ent_coef = <strong>0.05</strong> &nbsp;|&nbsp;
+            Val Sharpe = <span class="highlight blue">17.58</span>
+          </p>
+          <p style="margin-top:10px;">이 설정이 Bayesian 튜닝의 베이스라인으로 사용됨</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ⑤ Bayesian 계수 최적화 -->
+    <div class="phase-card ph-bayes" id="ph5">
+      <div class="phase-header" onclick="toggle('ph5')">
+        <div class="phase-num">⑤</div>
+        <div class="phase-title-block">
+          <h2>Bayesian 계수 최적화 — Optuna TPE, 50 trials</h2>
+          <span class="week-tag">Week 6</span>
+        </div>
+        <span class="toggle-icon">▼</span>
+      </div>
+      <div class="phase-body">
+        <div class="two-col">
+          <div class="sub-section info">
+            <h4>방법</h4>
+            <ul>
+              <li>ATR 비례 공식의 <strong>8개 계수</strong> 자동 탐색</li>
+              <li>목적함수: Val Sharpe (1M step)</li>
+              <li>TPE Sampler + MedianPruner</li>
+              <li>SQLite 저장 — 중단/재개 가능</li>
+              <li>소요: <strong>50 trials × 4.3시간</strong></li>
+            </ul>
+          </div>
+          <div class="sub-section result">
+            <h4>Trial #42 최적 계수</h4>
+            <ul>
+              <li>A_s = <strong>0.101</strong> (탐색 하한에 도달 — 매우 빠른 매도)</li>
+              <li>C_b = 5.22, D_b = 18.68 (buy-lo 범위 대폭 확장)</li>
+              <li>C_s = 6.91 (sell-cost 고기준 — 대형 랠리 전용)</li>
+              <li>Val Sharpe: <span class="highlight">42.997</span> (+145% vs 기본값)</li>
+            </ul>
+          </div>
+        </div>
+        <div class="sub-section fix">
+          <h4>✅ 발견한 전략 패턴 (Bayesian이 학습한 것)</h4>
+          <ul>
+            <li><strong>sell-market 즉각 실행</strong>: 0.1×ATR만 올라도 바로 매도 → 빈번한 소수익 사이클</li>
+            <li><strong>buy-lo 범위 대폭 확장</strong>: 최대 23.9×ATR — 큰 조정 때 저점 매수 포착</li>
+            <li><strong>sell-cost 고기준 유지</strong>: 6.9×ATR 이상 랠리가 있을 때만 평단가 기준 매도</li>
+          </ul>
+        </div>
+        <div class="sub-section prob">
+          <h4>⚠️ 발생한 문제: NumPy 2.x 호환성 오류</h4>
+          <p>PyTorch가 numpy.float32 dtype을 인식 못하는 오류 (<code>RuntimeError: Could not infer dtype</code>) → <strong>해결: numpy 버전을 &lt;2.0으로 고정</strong></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ⑥ Full Training -->
+    <div class="phase-card ph-train" id="ph6">
+      <div class="phase-header" onclick="toggle('ph6')">
+        <div class="phase-num">⑥</div>
+        <div class="phase-title-block">
+          <h2>최종 모델 훈련 (exp016) — 3M 스텝 Full Training</h2>
+          <span class="week-tag">Week 6</span>
+        </div>
+        <span class="toggle-icon">▼</span>
+      </div>
+      <div class="phase-body">
+        <div class="two-col">
+          <div class="sub-section did">
+            <h4>훈련 설정</h4>
+            <ul>
+              <li>Trial #42 최적 계수 적용</li>
+              <li>총 <strong>3,000,000 스텝</strong> | n_envs = 4</li>
+              <li>Cosine LR: 3×10⁻⁴ → 1×10⁻⁵</li>
+              <li>eval_freq = 50,000 | seed = 42</li>
+              <li>best_model 자동 저장 (Sharpe 기준)</li>
+            </ul>
+          </div>
+          <div class="sub-section result">
+            <h4>수렴 패턴</h4>
+            <ul>
+              <li>step 50K: Sharpe <strong>31.9</strong> (초기 수렴)</li>
+              <li>step 350K~1.3M: 31.9 → 35.4 (단조 증가)</li>
+              <li>step 1.3M~3.0M: ≈ 35.39 (완전 수렴)</li>
+              <li>best model @ step 2.1M: Sharpe <span class="highlight">35.424</span></li>
+            </ul>
+          </div>
+        </div>
+        <div class="sub-section fix">
+          <h4>✅ 결론</h4>
+          <p>1.3M 스텝에서 이미 수렴 완료. 나머지 1.7M 스텝은 수렴 안정성 확인 구간. Optuna 1M 수치(42.997)보다 낮은 이유: Optuna는 5 에피소드 평균(랜덤 시작 포함)이라 낙관적 추정 가능 — exp016의 35.424가 더 신뢰성 높은 수치.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ⑦ Test Set -->
+    <div class="phase-card ph-test" id="ph7">
+      <div class="phase-header" onclick="toggle('ph7')">
+        <div class="phase-num">⑦</div>
+        <div class="phase-title-block">
+          <h2>봉인 해제 — Test Set 최종 평가 (2024~2026)</h2>
+          <span class="week-tag">Week 7</span>
+        </div>
+        <span class="toggle-icon">▼</span>
+      </div>
+      <div class="phase-body">
+        <div class="sub-section result">
+          <h4>PPO 최종 성과</h4>
+          <table class="result-table" style="margin-top:0">
+            <tr><th></th><th>Val Set (2023)</th><th>Test Set (2024~2026)</th></tr>
+            <tr>
+              <td><strong>Sharpe</strong></td>
+              <td><span class="highlight blue">35.424</span></td>
+              <td><span class="highlight">43.040</span></td>
+            </tr>
+            <tr><td>MDD</td><td>2.46%</td><td>3.12%</td></tr>
+            <tr><td>완성 사이클</td><td>938개</td><td>9,520개</td></tr>
+            <tr><td>사이클 승률</td><td>—</td><td>96.9%</td></tr>
+            <tr><td>사이클 평균 PnL</td><td>—</td><td>+0.182%</td></tr>
+          </table>
+          <p style="margin-top:12px;">Test Sharpe > Val Sharpe → <strong>과적합 없음 확인</strong></p>
+        </div>
+        <div class="sub-section fix">
+          <h4>✅ 베이스라인 비교 (Test Set)</h4>
+          <table class="result-table" style="margin-top:0">
+            <tr><th>전략</th><th>Sharpe</th><th>MDD</th></tr>
+            <tr><td>Buy &amp; Hold</td><td>0.681</td><td>50.08%</td></tr>
+            <tr><td>Fixed Grid 1%</td><td>0.724</td><td>29.87%</td></tr>
+            <tr><td>Fixed Grid 5%</td><td>1.472</td><td>3.16%</td></tr>
+            <tr><td>ATR Grid k=2.0</td><td>0.436</td><td>29.85%</td></tr>
+            <tr class="ppo-row"><td>PPO (exp016)</td><td>43.040</td><td>3.12%</td></tr>
+          </table>
+          <p style="margin-top:12px; font-weight:700;">PPO vs 최강 베이스라인: 43.04 / 1.47 = <span class="highlight">29.2×</span> 우위</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 최종 결론 -->
+    <div class="conclusion-banner">
+      <h2>🏁 핵심 연구 결과</h2>
+      <div class="rq-row">
+        <span class="rq-label">RQ 1</span>
+        <p>PPO가 동적 그리드에서 고정 베이스라인을 능가하는가?<br>
+          → <strong>YES</strong> — Test Set에서 29.2× 우위 (Sharpe 43.04 vs 1.47)</p>
+      </div>
+      <div class="rq-row">
+        <span class="rq-label">RQ 2</span>
+        <p>변동성 레짐에 따라 다른 그리드 간격을 선택하는가?<br>
+          → <strong>YES</strong> — Mann-Whitney U 검정: p &lt; 10⁻¹⁹ (통계적으로 유의미)</p>
+      </div>
+      <div class="rq-row">
+        <span class="rq-label">과적합</span>
+        <p>Test Sharpe (43.04) > Val Sharpe (35.42) — 과적합 없음 확인<br>
+          Gort et al.(2022) 방법론 준수: 단 한 번의 Test 평가</p>
+      </div>
+    </div>
+
+  </div><!-- /timeline -->
+
+  <!-- ══════════════════════════════════════════
+       오른쪽: 차트 + 요약
+  ══════════════════════════════════════════ -->
+  <div class="right-panel">
+
+    <div class="chart-card">
+      <h3>📈 Sharpe 성장 추이</h3>
+      <canvas id="sharpeChart" height="280"></canvas>
+    </div>
+
+    <div class="chart-card">
+      <h3>🔬 실험 스택</h3>
+      <canvas id="expChart" height="200"></canvas>
+    </div>
+
+    <div class="summary-card">
+      <h3>📌 핵심 수치 요약</h3>
+      <div class="summary-row">
+        <span class="badge">데이터</span>
+        <span>BTC/USDT 1h봉 54,933개<br>Train 3년 / Val 1년 / Test 2.3년</span>
+      </div>
+      <div class="summary-row">
+        <span class="badge">탐색</span>
+        <span>파라미터 탐색 9개 실험<br>Bayesian 50 trials (4.3시간)</span>
+      </div>
+      <div class="summary-row">
+        <span class="badge green">훈련</span>
+        <span>3,000,000 스텝<br>수렴: step 1.3M</span>
+      </div>
+      <div class="summary-row">
+        <span class="badge red">결과</span>
+        <span>Val Sharpe 35.42 | MDD 2.46%<br>Test Sharpe 43.04 | MDD 3.12%<br>vs 최강 베이스라인 <strong>29.2×</strong></span>
+      </div>
+    </div>
+
+  </div>
+
+</div><!-- /layout -->
+
+<script>
+  // ── 카드 토글 ──────────────────────────────────────────────
+  function toggle(id) {
+    const card = document.getElementById(id);
+    card.classList.toggle('collapsed');
+  }
+
+  // ── Sharpe 성장 차트 ───────────────────────────────────────
+  const shCtx = document.getElementById('sharpeChart').getContext('2d');
+  new Chart(shCtx, {
+    type: 'bar',
+    data: {
+      labels: ['exp007\n(no VecNorm)', 'exp008\n(ent=0.05)', 'exp013b\n(baseline)',
+               'Optuna #42\n(1M step)', 'exp016 Val\n(3M step)', 'exp016\nTest Set'],
+      datasets: [{
+        label: 'Sharpe Ratio',
+        data: [14.39, 16.38, 17.58, 42.997, 35.424, 43.040],
+        backgroundColor: [
+          '#90CAF9','#64B5F6','#42A5F5',
+          '#FF8F00','#1565C0','#C62828'
+        ],
+        borderRadius: 6,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` Sharpe: ${ctx.parsed.y.toFixed(3)}`
+          }
+        },
+        annotation: {}
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          max: 50,
+          grid: { color: '#ECEFF1' },
+          ticks: { font: { size: 11 } }
+        },
+        x: {
+          grid: { display: false },
+          ticks: { font: { size: 10 }, maxRotation: 0 }
+        }
+      }
+    }
+  });
+
+  // ── 실험 도넛 차트 ─────────────────────────────────────────
+  const expCtx = document.getElementById('expChart').getContext('2d');
+  new Chart(expCtx, {
+    type: 'doughnut',
+    data: {
+      labels: ['초기 탐색 (exp001~006)', '파라미터 탐색 (exp007~015)', 'Bayesian 50 trials', '최종 훈련 (exp016)'],
+      datasets: [{
+        data: [6, 9, 50, 1],
+        backgroundColor: ['#E57373','#4DB6AC','#9575CD','#1565C0'],
+        borderWidth: 2,
+        borderColor: 'white',
+      }]
+    },
+    options: {
+      responsive: true,
+      cutout: '60%',
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { font: { size: 10 }, padding: 10, boxWidth: 12 }
+        },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.label}: ${ctx.parsed}회`
+          }
+        }
+      }
+    }
+  });
+</script>
+
+</body>
+</html>
