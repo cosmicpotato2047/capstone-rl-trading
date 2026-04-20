@@ -1,0 +1,50 @@
+# live_trading/config.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# 공식 모드 설정
+# ─────────────────────────────────────────────────────────────────────────────
+formula:
+  mode: fixed          # fixed | rl
+                       # RL 재설계 완료 후 rl로 전환, rl_model_path 설정
+
+  # ── 고정 계수 (Bayesian 최적, experiments/optuna_coef_v1/best_coefs.yaml) ──
+  # 출처: Optuna 50 trials, Trial #42, Val Sharpe 42.997
+  A_b: 0.285           # buy_hi  기저 — 탐색 중간값, 신뢰도 높음
+  B_b: 1.748           # buy_hi  범위
+  C_b: 5.223           # buy_lo  기저 — 깊은 저점 대기
+  D_b: 18.683          # buy_lo  범위 — 최대 23.9×ATR
+  A_s: 0.101           # sell_market 기저 ← Bayesian 탐색 하한(0.1)에 도달
+                       #   경제적 의미: ATR=0.5%에서 gap≈수수료 손익분기
+                       #   진짜 최적은 0.1 이하 가능성 있음 (Round 2 미실시)
+                       #   RL 재설계에서는 범위 하한을 0.05로 확장 예정
+  B_s: 0.890           # sell_market 범위 (A_s 오염으로 단독 신뢰도 낮음)
+  C_s: 6.913           # sell_cost  기저 — 큰 랠리 전용
+  D_s: 5.457           # sell_cost  범위
+
+  # ── 고정 action 값 (PPO exp016 포화 수렴값) ──────────────────────────────
+  aggressiveness: 0.0  # RL 전환 시 model.predict(state)[0] 로 대체
+  profit_target:  0.0  # RL 전환 시 model.predict(state)[1] 로 대체
+
+  # ── RL 모델 경로 (mode: rl 일 때 사용) ──────────────────────────────────
+  rl_model_path: null  # 예: ../experiments/expXXX/best_model.zip
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 거래 설정
+# ─────────────────────────────────────────────────────────────────────────────
+trading:
+  symbol: BTC/USDT
+  timeframe: 1h
+  atr_window: 168          # ATR 계산 window (환경과 동일)
+  initial_cash: 100        # 시작 자본 (USDT) — 실거래 전 조정
+  n_splits: 4              # 사이클 분할 수
+  n_buy_orders: 2          # 매수 지정가 주문 개수
+  n_sell_orders: 2         # 매도 지정가 주문 개수
+  fee_rate: 0.0005         # Binance maker 0.05%
+  max_drawdown_stop: 0.15  # 누적 MDD 15% 초과 시 봇 중단 (전량 청산 후 종료)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 거래소 설정
+# ─────────────────────────────────────────────────────────────────────────────
+exchange:
+  testnet: true            # false 로 변경하면 실거래
+  api_key_env:    BINANCE_API_KEY
+  api_secret_env: BINANCE_API_SECRET
