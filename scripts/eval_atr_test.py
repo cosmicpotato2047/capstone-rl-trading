@@ -66,7 +66,7 @@ def run_atr_fixed(df: pd.DataFrame, cfg: dict) -> dict:
                             else holdings / n_splits)
                 sell_qty = min(sell_qty, holdings)
                 if sell_qty > 0.0:
-                    proceeds = sell_qty * nh
+                    proceeds = sell_qty * sell_level   # 지정가에 체결
                     fee      = proceeds * fee_rate
                     cash    += proceeds - fee
                     holdings -= sell_qty
@@ -107,10 +107,10 @@ def run_atr_fixed(df: pd.DataFrame, cfg: dict) -> dict:
                 if cycle_budget_rem >= per_order_size:
                     spend    = per_order_size
                     fee      = spend * fee_rate
-                    buy_qty  = (spend - fee) / nl   # next_low에 체결
+                    buy_qty  = (spend - fee) / bp   # 지정가에 체결
                     prev     = holdings
                     holdings += buy_qty
-                    avg_price = (avg_price * prev + nl * buy_qty) / holdings
+                    avg_price = (avg_price * prev + bp * buy_qty) / holdings
                     cash     -= spend
                     cycle_budget_rem -= spend
                     n_trades += 1

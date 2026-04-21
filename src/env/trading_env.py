@@ -41,11 +41,11 @@ Action (4차원 연속, [0, 1]⁴) — exp024 재설계:
     sell_market = price     × (1 + sell_market_gap)
     sell_cost   = avg_price × (1 + sell_cost_gap)    # 원가 수익 보호 (평단가 기준)
 
-체결: 다음 봉 high/low 기준, 조건 충족 시 그 시점 시장가(next_high / next_low)로 체결
-    next_high >= sell_market  →  next_high 가격으로 체결
-    next_high >= sell_cost    →  next_high 가격으로 체결
-    next_low  <= buy_hi       →  next_low  가격으로 체결
-    next_low  <= buy_lo       →  next_low  가격으로 체결
+체결: 다음 봉 high/low로 트리거 확인, 지정가(limit price)에 체결
+    next_high >= sell_market  →  sell_market 가격으로 체결
+    next_high >= sell_cost    →  sell_cost   가격으로 체결
+    next_low  <= buy_hi       →  buy_hi      가격으로 체결
+    next_low  <= buy_lo       →  buy_lo      가격으로 체결
 
 주문 크기:
     매수: n_buy_orders개 가격 레벨 (buy_hi ~ buy_lo 선형 보간)
@@ -381,8 +381,8 @@ class BTCGridTradingEnv(gym.Env):
                         if self.holdings <= threshold_btc
                         else self.holdings / self.n_splits)
             if sell_qty > 0.0:
-                # 조건 충족 시 그 시점 시장가(next_high)로 체결
-                bonus = self._execute_sell(next_high, sell_qty, next_price)
+                # 지정가(sell_market)에 체결
+                bonus = self._execute_sell(sell_market, sell_qty, next_price)
                 cycle_bonus += bonus
                 n_trades += 1
 
@@ -392,8 +392,8 @@ class BTCGridTradingEnv(gym.Env):
                         if self.holdings <= threshold_btc
                         else self.holdings / self.n_splits)
             if sell_qty > 0.0:
-                # 조건 충족 시 그 시점 시장가(next_high)로 체결
-                bonus = self._execute_sell(next_high, sell_qty, next_price)
+                # 지정가(sell_cost)에 체결
+                bonus = self._execute_sell(sell_cost, sell_qty, next_price)
                 cycle_bonus += bonus
                 n_trades += 1
 
@@ -411,7 +411,7 @@ class BTCGridTradingEnv(gym.Env):
 
         for bp in buy_prices:
             if next_low <= bp:
-                success = self._execute_buy(next_low)
+                success = self._execute_buy(bp)   # 지정가에 체결
                 if success:
                     n_trades += 1
 
