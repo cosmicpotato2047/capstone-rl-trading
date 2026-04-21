@@ -1467,3 +1467,88 @@ sell_market_gap = atr_ratio * (0.05 + 1.95 * action[1])
 Optuna 하이퍼파라미터 튜닝 (ent_coef, lr, n_steps 등) — regime 적응 강화
 
 ---
+
+## 2026-04-21 — Phase 2-B: Optuna 튜닝 + exp018 완료 + ★ Phase 2 완료
+
+### Optuna 하이퍼파라미터 탐색 (39 trials)
+
+**탐색 공간:** ent_coef, learning_rate, n_steps, gamma, gae_lambda, clip_range  
+**탐색 제외:** 공식 계수 (A_s/B_s 등) — RL action 역할 충돌 방지  
+**기준선:** exp017 Val Sharpe 38.186
+
+**최적 파라미터 (Trial #18, Sharpe 38.491):**
+
+| 파라미터 | 기존 | Optuna 최적 | 변화 해석 |
+|---|---|---|---|
+| learning_rate | 0.0003 | **0.00047** | 약간 높게 |
+| n_steps | 2048 | **2048** | 동일 |
+| gamma | 0.99 | **0.974** | 단기 보상 중시 (사이클 짧음) |
+| gae_lambda | 0.95 | **0.940** | 약간 낮게 |
+| clip_range | 0.2 | **0.155** | 보수적 업데이트 |
+| ent_coef | 0.05 | **0.0164** | 탐색 줄이고 수렴 집중 |
+
+**인사이트:** gamma 0.99→0.974 — 그리드 사이클이 짧아 먼 미래보다 당장 다음 사이클이 중요. n_steps=4096 조합은 일관되게 하위권.
+
+### exp018 최종 학습 결과
+
+**설정:** Optuna best params + 1M steps (500k×2)
+
+| 체크포인트 | Sharpe | Return | MDD |
+|---|---|---|---|
+| step 550k (best) | **38.330** | 132.62% | 1.25% |
+| step 1M (final) | 35.579 | 132.16% | 1.35% |
+
+**베이스라인 대비:**
+
+| 전략 | Sharpe | Return | MDD |
+|---|---|---|---|
+| Buy & Hold | 2.377 | 150.18% | 21.74% |
+| Fixed Grid 1% | 2.198 | 42.04% | 10.90% |
+| **PPO exp018 (best)** | **38.330** | **132.62%** | **1.25%** |
+
+PPO Sharpe 38.330 = 최고 베이스라인의 **16배**. MDD 1.25% vs 21.74%.
+
+### ★ Phase 2 완료: 레짐 적응 통계 검증
+
+**분석 도구:** `scripts/analyze_regime.py`  
+**레짐 정의:** trend_1w z-score 기준 (bull >+0.5, bear <-0.5, sideways 그 외)  
+**레짐 분포:** bear 39.2%, bull 38.4%, sideways 22.4%
+
+**profit_target 레짐별 분포:**
+
+| 레짐 | mean | 해석 |
+|---|---|---|
+| bull | **0.0065** | 상승장 → 더 높은 목표가 (오래 보유) |
+| sideways | 0.0030 | 횡보 → 중간 |
+| bear | **0.0010** | 하락장 → 빠르게 매도 |
+
+**통계 검증:**
+- Kruskal-Wallis: H=165.9, **p≈0.000** → 레짐별 차이 유의
+- Bull vs Bear Mann-Whitney: **p≈0.000** → 명확히 다른 행동
+
+**aggressiveness도 유의:** Kruskal-Wallis H=19.3, p=0.0001
+
+### Phase 2 완료 기준 체크
+
+| 기준 | 결과 | 판정 |
+|---|---|---|
+| Val Sharpe > 35 | **38.330** | PASS |
+| profit_target이 레짐별 통계적으로 다름 | **p≈0.000** | PASS |
+
+**→ Phase 2 완료. 다음 단계: Phase 3 BTC 라이브 트레이딩**
+
+### 생성 파일
+
+- `experiments/exp018_final/best_model.zip` — Val Sharpe 38.330 (step 550k)
+- `experiments/exp018_final/final_model.zip` — Val Sharpe 35.579 (step 1M)
+- `experiments/exp018_final/regime_analysis.csv` — (state, action) 수집 데이터
+- `experiments/exp018_optuna/best_params.yaml` — Optuna 최적 파라미터
+- `scripts/analyze_regime.py` — 레짐 분석 스크립트
+
+### 다음 단계
+
+**Phase 3 진입 조건 충족.** ROADMAP.md 기준:
+- 결과 좋음 (Val Sharpe 38.330 > 35, regime 적응 확인) → **RL 모델로 라이브 트레이딩**
+- Testnet 2주 → 오류 없이 동작 확인 후 실거래 소액($100)
+
+---
