@@ -1882,8 +1882,50 @@ RL이 추가로 학습할 수 있는 신호가 BTC에서는 거의 없다.
 
 ### 다음 단계
 
-1. **BTC Paper Trading 설계**: ATR과 RL 두 시스템 동시 실시간 가상 실행 비교
+1. **BTC Paper Trading 설계**: ATR 시스템으로 진행 (RL ≈ ATR이므로 단순한 ATR 선택)
 2. **다자산 확장**: SOXL/AAPL(주식) → "주식에서 RL이 ATR을 이기는가?" 검증
 3. **논문 핵심 질문 확정**: "ATR 비례 그리드 vs RL — 자산군별 우위 조건은?"
+
+---
+
+## 2026-04-22 — exp022 레짐 분석 + BTC 챕터 완성
+
+### 레짐 분석 결과 (Val 2021~2023H1, 21,827 스텝)
+
+레짐 분포: bull 39%, bear 38.7%, sideways 22.2%
+
+| 변수 | bull | bear | sideways | K-W p값 |
+|------|------|------|----------|---------|
+| aggressiveness | 0.0000 | 0.0010 | 0.0000 | **0.0000** |
+| profit_target  | 0.0001 | 0.0003 | 0.0005 | 0.0112 |
+
+### 해석
+
+**RL이 0으로 완전 수렴했다.** aggressiveness와 profit_target 모두 median=0.0000, mean≈0.
+
+Kruskal-Wallis p<0.05이지만 실질적 차이는 없음:
+- bull vs bear aggressiveness: 0.0000 vs 0.0010 (경제적으로 무의미)
+- profit_target 전 레짐: 0.0001~0.0005 (사실상 동일)
+
+RL이 경험적으로 발견한 것: "항상 최소 gap (aggressiveness≈0)으로 매수 + 최소 gap (profit_target≈0)으로 빠르게 매도"가 BTC에서 최적.
+
+이는 exp020(budget_fraction 포화), exp021(entry_gate 포화)과 동일한 패턴 — **BTC 그리드 트레이딩에서 RL은 항상 extreme 값으로 수렴한다.**
+
+### BTC 챕터 최종 결론
+
+| 시스템 | Val Sharpe | Test Sharpe | Test MDD | 레짐 적응 |
+|--------|-----------|-------------|----------|---------|
+| ATR 고정 (exp023) | 59.003 | 53.027 | 2.08% | 없음 (고정) |
+| RL exp022 | 55.777 | 52.802 | 2.15% | 없음 (0 수렴) |
+
+**"BTC에서 RL은 ATR과 동등하지만, 레짐 적응 능력을 보이지 않는다."**
+
+근본 원인: ATR/price 비례 구조가 변동성 레짐을 이미 내재적으로 처리 → RL이 추가로 학습할 신호 없음.
+
+이 결론이 다자산 실험의 동기: 주식/외환처럼 변동성 외에 추가 신호(실적, 금리, 섹터 레짐)가 있는 자산에서 RL이 다를 수 있는가?
+
+### 생성된 파일
+- `experiments/exp022_rl_coef/regime_analysis.csv`
+- `scripts/eval_atr_test.py` (ATR 고정 독립 평가기)
 
 ---
