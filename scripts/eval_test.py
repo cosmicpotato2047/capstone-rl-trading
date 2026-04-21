@@ -31,12 +31,12 @@ from stable_baselines3 import PPO
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Test set 최종 평가")
     parser.add_argument(
-        "--config", default="config/exp016_final_config.yaml",
-        help="실험 설정 파일 (기본: config/exp016_final_config.yaml)"
+        "--config", default="config/experiment_config.yaml",
+        help="실험 설정 파일 (기본: config/experiment_config.yaml)"
     )
     parser.add_argument(
-        "--model", default="experiments/exp016_final/best_model",
-        help="모델 경로 (.zip 제외, 기본: experiments/exp016_final/best_model)"
+        "--model", default="experiments/exp020_budget_fraction/best_model",
+        help="모델 경로 (.zip 제외, 기본: experiments/exp020_budget_fraction/best_model)"
     )
     parser.add_argument(
         "--n-episodes", type=int, default=1,
@@ -88,9 +88,7 @@ def main() -> None:
     config = load_config(args.config)
 
     print("\n[1] 데이터 로드 중...")
-    df_train = pd.read_parquet("data/processed/btc_train.parquet")
     df_test  = pd.read_parquet("data/processed/btc_test.parquet")
-    print(f"  Train : {len(df_train):,}행 (VecNormalize 통계 없음 → 미사용)")
     print(f"  Test  : {len(df_test):,}행  ({df_test.index[0]} ~ {df_test.index[-1]})")
 
     # ── 2. 모델 로드 ───────────────────────────────────────────
@@ -137,7 +135,7 @@ def main() -> None:
           f"({'[우위]' if ppo_sharpe > best_bl_sharpe else '[미달]'})")
 
     # ── 6. 결과 저장 ───────────────────────────────────────────
-    out_dir = Path("experiments/exp016_final")
+    out_dir = Path(args.model).parent
     result = {
         "dataset": "test",
         "period": f"{df_test.index[0]} ~ {df_test.index[-1]}",
