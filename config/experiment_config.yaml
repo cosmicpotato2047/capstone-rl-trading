@@ -56,25 +56,23 @@ environment:
   n_buy_orders: 2               # buy_hi, buy_lo
 
   # 예산 분할 — 사이클 시작 시 현금을 n_splits 슬롯으로 나눔
-  n_splits: 4
+  n_splits: 3              # exp023 최적화 결과 (이전: 4)
 
   # sell_market 임계값 기준: "price" | "avg_price"
   threshold_basis: "avg_price"
 
-  # ── 공식 계수 (Phase 2 재설계) ──────────────────────────
-  # buy side: Bayesian Trial #42 참고값 (신뢰 가능)
-  # sell side: 재설계값 — A_s/B_s는 Bayesian 튜닝 대상 제외
-  #   ※ Bayesian 튜닝 대상: n_splits, n_buy_orders 만 허용
-  #      gap 계수(A_s, B_s 등)는 RL action과 역할 충돌 → 금지
+  # ── 공식 계수 (exp023 ATR 전용 Bayesian 최적화 결과) ──────
+  # exp023_atr_optuna Trial #45 (Val Sharpe 60.723)
+  # 탐색 대상: A_b, C_b, A_s, C_s, n_splits (B_b/D_b/B_s/D_s는 RL 전용)
   formula_coefs:
-    A_b: 0.285
-    B_b: 1.748
-    C_b: 5.223
-    D_b: 18.683
-    A_s: 0.05    # 재설계: 0.5 → 0.05 (Bayesian 탐색 하한 이하 허용)
-    B_s: 1.95    # 재설계: sell_market 범위 [0.05×ATR, 2.0×ATR]
-    C_s: 2.5
-    D_s: 7.5
+    A_b: 0.1061   # buy_hi = price × (1 - A_b × ATR)  이전: 0.285
+    B_b: 1.748    # RL 전용 (ATR 고정 시스템에서 미사용)
+    C_b: 13.9205  # buy_lo = price × (1 - C_b × ATR)  이전: 5.223
+    D_b: 18.683   # RL 전용 (ATR 고정 시스템에서 미사용)
+    A_s: 0.0796   # sell_market_gap = A_s × ATR        이전: 0.05
+    B_s: 1.95     # RL 전용 (ATR 고정 시스템에서 미사용)
+    C_s: 4.3085   # sell_cost_gap = C_s × ATR          이전: 2.5  ★핵심 개선
+    D_s: 7.5      # RL 전용 (ATR 고정 시스템에서 미사용)
 
   # budget_fraction 최솟값 (action[0]=0일 때 투입 비율 하한)
   entry_gate_threshold: 0.5         # action[0] ≥ 0.5 → 진입 허가
