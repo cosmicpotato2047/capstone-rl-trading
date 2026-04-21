@@ -42,26 +42,53 @@ def parse_args():
 
 
 def collect_actions(model, df, cfg, n_steps=None):
-    """Val set 전체를 deterministic policy로 실행, (state, action) 수집."""
+    """Val set 전체를 deterministic policy로 실행, (state, action) 수집.
+
+    exp021 (entry_gate) 구조:
+        action[0] = entry_gate raw ∈ [0,1],  임계값 0.5
+        action[1] = profit_target ∈ [0,1]
+
+    exp020 (budget_fraction) 구조 (하위 호환):
+        action[0] = budget_fraction raw → budget_min + raw × (1-budget_min)
+    """
     env = TradingEnv(df, cfg)
     obs, _ = env.reset()
 
     records = []
     n_steps = n_steps or len(df)
 
+    # 실험 구조 자동 감지
+    has_entry_gate = cfg["environment"].get("entry_gate_threshold") is not None
+    budget_min = cfg["environment"].get("budget_fraction_min", None)
+
     for _ in range(n_steps):
         action, _ = model.predict(obs, deterministic=True)
-        aggressiveness = float(np.clip(action[0], 0, 1))
-        profit_target  = float(np.clip(action[1], 0, 1))
+        action0   = float(np.clip(action[0], 0, 1))
+        profit_target = float(np.clip(action[1], 0, 1))
 
         # trend_1w는 obs[6] (7D state 기준)
         trend_1w_zscore = float(obs[6])
 
-        records.append({
-            "aggressiveness": aggressiveness,
-            "profit_target":  profit_target,
-            "trend_1w":       trend_1w_zscore,
-        })
+        if has_entry_gate:
+            records.append({
+                "entry_gate_raw":  action0,
+                "entry_gate_open": action0 >= 0.5,
+                "profit_target":   profit_target,
+                "trend_1w":        trend_1w_zscore,
+            })
+        elif budget_min is not None:
+            budget_fraction = budget_min + action0 * (1.0 - budget_min)
+            records.append({
+                "budget_fraction": budget_fraction,
+                "profit_target":   profit_target,
+                "trend_1w":        trend_1w_zscore,
+            })
+        else:
+            records.append({
+                "aggressiveness": action0,
+                "profit_target":  profit_target,
+                "trend_1w":       trend_1w_zscore,
+            })
 
         obs, _, terminated, truncated, _ = env.step(action)
         if terminated or truncated:
@@ -119,7 +146,19 @@ def main():
         print(f"  {r:>8s}: {cnt:5d} ({cnt/len(df)*100:.1f}%)")
 
     print_regime_stats(df, "profit_target")
-    print_regime_stats(df, "aggressiveness")
+    # action[0] 컬럼 자동 선택
+    if "entry_gate_raw" in df.columns:
+        print_regime_stats(df, "entry_gate_raw")
+        # entry_gate_open 비율 (레짐별 진입 허가율)
+        print("\n── entry_gate_open 비율 (레짐별) ──────────────")
+        for regime in ["bull", "bear", "sideways"]:
+            g = df.loc[df["regime"] == regime, "entry_gate_open"]
+            pct = g.mean() * 100
+            print(f"  {regime:>8s}  n={len(g):5d}  open_rate={pct:.1f}%")
+    elif "budget_fraction" in df.columns:
+        print_regime_stats(df, "budget_fraction")
+    else:
+        print_regime_stats(df, "aggressiveness")
 
     # 결과 저장
     out_path = Path(args.model_path).parent / "regime_analysis.csv"

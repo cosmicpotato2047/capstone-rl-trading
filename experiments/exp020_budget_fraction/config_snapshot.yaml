@@ -77,7 +77,7 @@ environment:
     D_s: 7.5
 
   # budget_fraction 최솟값 (action[0]=0일 때 투입 비율 하한)
-  entry_gate_threshold: 0.5         # action[0] ≥ 0.5 → 진입 허가
+  budget_fraction_min: 0.1          # 10% ~ 100% 범위
 
   # 랜덤 시작점 (멀티 환경 학습용)
   random_start: true
@@ -87,13 +87,12 @@ environment:
   # 종료: holdings > 0 → holdings == 0 (전량 매도)
 
 # ────────────────────────────────────────
-# Action 공간 (2차원 연속) — exp021 재설계
+# Action 공간 (2차원 연속) — exp019 재설계
 # ────────────────────────────────────────
-# [0] entry_gate ∈ [0, 1]
-#   임계값 0.5: raw ≥ 0.5 → 진입 허가, raw < 0.5 → 진입 차단
-#   holdings==0 (새 사이클 시작) 일 때만 적용
-#   진행 중인 사이클(holdings > 0)에는 영향 없음
-#   → 레짐 적응 핵심: 하락장 진입 차단 → 손실 회피
+# [0] budget_fraction ∈ [0, 1]
+#   actual_fraction = 0.1 + raw × 0.9  → [10%, 100%]
+#   사이클 시작 시 가용 현금의 몇 %를 투입할지 RL이 결정
+#   → 레짐 적응 핵심: 상승장 많이, 하락장 적게 (포지션 사이징)
 #
 # [1] profit_target ∈ [0, 1]
 #   sell_market_gap = atr_ratio × (A_s + profit_target × B_s)
@@ -119,7 +118,7 @@ agent:
   ent_coef: 0.0010              # Optuna 최적값 — 탐색 극소화
   vf_coef: 0.5
   max_grad_norm: 0.5
-  total_timesteps: 1_000_000
+  total_timesteps: 1000000
   n_envs: 4                     # 병렬 환경 수
 
 # ────────────────────────────────────────
@@ -158,5 +157,5 @@ training:
   eval_freq: 50000
   n_eval_episodes: 3
   max_episode_steps: 2000       # ~83일 단위 에피소드 (다양한 regime 노출)
-  experiment_name: "exp021_entry_gate"
-  log_dir: "experiments/exp021_entry_gate"
+  experiment_name: "exp020_budget_fraction"
+  log_dir: "experiments/exp020_budget_fraction"

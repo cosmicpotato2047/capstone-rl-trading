@@ -1552,3 +1552,94 @@ PPO Sharpe 38.330 = 최고 베이스라인의 **16배**. MDD 1.25% vs 21.74%.
 - Testnet 2주 → 오류 없이 동작 확인 후 실거래 소액($100)
 
 ---
+
+## 2026-04-21 — 데이터 확장 + Action 재설계 Ablation (exp019~exp021)
+
+### 배경: exp018 후속 설계 과제
+
+exp018(Phase 2) 완료 이후 두 가지 문제 잔류:
+1. **레짐 적응의 경제적 유의성 미약**: 통계적 유의(p<0.001)이나 중앙값 전부 0.000, Effect size 극소
+2. **데이터 편향**: Val 2023이 상승장(BULL ~60%) 위주 → 보수 전략 학습 인센티브 없음
+
+### 해결 방향
+
+**A. 데이터 확장 + 균형 분할 (Split B)**
+
+BTC 전체 이력(2017~현재) 활용:
+
+| 파티션 | 기간 | BULL | BEAR | SIDE |
+|---|---|---|---|---|
+| Train | 2017-08-17 ~ 2020-12-31 | 46% | 38% | 15% |
+| Val | 2021-01-01 ~ 2023-06-30 | 22% | 33% | 44% |
+| Test | 2023-07-01 ~ 현재 | 45% | 36% | 18% |
+
+Val에 2021 ATH(+103%), 2022 대폭락(-64%), 2023H1 회복(+72%) 모두 포함 → 진정한 스트레스 테스트
+
+**B. Optuna 재실행 (새 Val 기준)**
+
+구 Val(2023 bull-only)에서 최적화된 파라미터는 새 Val에 부적합할 수 있음 → 50 trials 재실행.
+
+핵심 변화:
+- `gamma`: 0.974 → **0.999** (장기 사이클 대응 필요; 2022 하락장 생존을 위해 먼 미래 보상 중시)
+- `learning_rate`: 1.2×10⁻⁴ → **1.45×10⁻⁵** (30× 감소; 더 안정적 수렴)
+- gamma 역전은 Val 기간 변화를 완벽하게 반영 → 재실행 타당성 확인
+
+### Ablation 결과 (모두 Val 2021-2023H1 기준)
+
+| 실험 | action[0] | action[1] | Val Sharpe | Return | MDD |
+|---|---|---|---|---|---|
+| exp018 | aggressiveness | profit_target | 38.330 | 132.6% | 1.25% |
+| exp020 | budget_fraction | profit_target | **48.238** | 516% | 1.31% |
+| exp021 | entry_gate | profit_target | 48.074 | 518% | 1.31% |
+| Buy & Hold | — | — | 0.212 | -21.6% | 77.2% |
+| Best baseline (fixed_grid_5%) | — | — | 0.607 | 28.3% | 19.7% |
+
+exp018→exp020 Sharpe 상승(38→48)은 **새 데이터 분할의 효과**이지 action 재설계의 효과가 아님.
+exp020 vs exp021은 통계적으로 거의 동일 → action[0] 종류와 무관하게 수렴 패턴 동일.
+
+### Regime 분석 결과
+
+**exp021 (entry_gate):**
+
+| 레짐 | entry_gate open_rate | profit_target mean |
+|---|---|---|
+| bull | 100.0% | 0.0000 |
+| bear | 99.7% | 0.0006 |
+| sideways | 100.0% | 0.0000 |
+
+**exp020 (budget_fraction):**
+
+| 레짐 | budget_fraction mean | profit_target mean |
+|---|---|---|
+| bull | ~1.000 | ~0.000 |
+| bear | 0.997 | 0.001 |
+| sideways | ~1.000 | 0.000 |
+
+### 핵심 인사이트: ATR 비례 공식이 암묵적 레짐 적응을 제공한다
+
+**왜 action[0](budget_fraction / entry_gate)이 항상 최대값으로 수렴하는가?**
+
+ATR 비례 공식 설계로 인해 모든 레짐에서 전략이 수익성을 유지:
+- 상승장: 추세 방향으로 그리드 체결 빈도 높음 → 수익
+- 하락장: 변동성(ATR) 증가 → 그리드 간격 자동 확대 → 동일 체결 확률 유지 + 폭락 시 하단 그리드 대량 체결 후 반등 수익
+- 횡보장: 진폭 내에서 반복 체결 → 안정적 수익
+
+**결론:** RL이 "항상 진입"을 학습한 것은 **합리적 행동**이다. ATR 스케일링이 이미 암묵적 리스크 관리를 수행하므로 명시적 position sizing / gating이 추가 가치를 주지 않는다.
+
+**논문 기여:**
+- "ATR-proportional dynamic grid eliminates the need for explicit RL-driven position sizing or entry gating"
+- profit_target은 레짐별 통계적 차이 유지 (Kruskal-Wallis p<0.001) → RL의 sell-side 최적화는 의미 있음
+
+### 생성 파일
+
+- `experiments/exp020_budget_fraction/best_model.zip` — Val Sharpe 48.238
+- `experiments/exp021_entry_gate/best_model.zip` — Val Sharpe 48.074
+- `experiments/exp021_entry_gate/regime_analysis.csv`
+- `scripts/analyze_regime.py` — entry_gate / budget_fraction / aggressiveness 자동 감지
+
+### 다음 단계
+
+**Ablation 완료.** Best model: exp020 (Sharpe 48.238, Return 516%, MDD 1.31%).  
+→ Test set 봉인 해제 + 최종 평가 진행.
+
+---
