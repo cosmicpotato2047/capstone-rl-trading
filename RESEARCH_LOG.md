@@ -1401,3 +1401,69 @@ sell_market_gap = atr_ratio * (0.05 + 1.95 * action[1])
 5. 정식 학습 + Optuna
 
 ---
+
+## 2026-04-21 — Phase 2-A: exp017 학습 완료 + 행동 분석
+
+### 환경 재설계 변경 사항
+
+| 항목 | Phase 1 | Phase 2 |
+|------|---------|---------|
+| State 차원 | 5D | **7D** (trend_1d, trend_1w 추가) |
+| sell_market 하한 | A_s=0.5×ATR | **A_s=0.05×ATR** (Bayesian 하한 이하 확장) |
+| sell_market 상한 | 2.0×ATR | 2.0×ATR (유지) |
+| buy 계수 | 기본값 | **Bayesian Trial #42 참고값 고정** |
+| A_s/B_s Bayesian 대상 | O (문제 원인) | **X (RL 역할 보호)** |
+
+### exp017 성능 (Val set, 2023)
+
+| 지표 | Phase 1 (exp016) | Phase 2 (exp017) |
+|------|-----------------|-----------------|
+| Val Sharpe | 35.424 | **38.186** |
+| MDD | 2.46% | **1.24%** |
+| Return | - | 132.17% |
+| 사이클 수 | ~9,520 | ~994 (에피소드 3회 평균) |
+| 사이클 평균 PnL | 0.182% | 0.081% |
+| 사이클 평균 시간 | 1.20h | 1.2h |
+
+### action 분포 분석 (deterministic, Val 2000 스텝)
+
+**aggressiveness: 완전 포화 (항상 0.000)**
+- Phase 1과 동일하게 보이지만 성격이 다름
+- A_b=0.285 (Bayesian 최적)에서 aggressiveness=0 = 가장 빠른 매수 진입
+- 그리드 전략에서 빠른 매수 → 더 많은 사이클 → 더 많은 수익
+- **구조적 충돌이 아니라 학습된 합리적 전략으로 판단**
+
+**profit_target: 부분 regime 적응 확인**
+
+| trend_1w 구간 | 레짐 | pt_mean | pt_std |
+|--------------|------|---------|--------|
+| < -1 | 하락 | 0.019 | 0.113 |
+| -1 ~ +1 | 횡보 | 0.047 | 0.168 |
+| > +1 | 상승 | 0.049 | 0.206 |
+
+- 하락장: sell gap 좁게 (빨리 팔기) → 올바른 방향
+- 상승장: sell gap 소폭 넓게 (더 들고 가기) → 올바른 방향
+- Phase 1(항상 0)에서 벗어난 점은 개선. 단, 차이가 아직 작음 (0.019 vs 0.049)
+
+### 평가
+
+**개선됨:**
+- Val Sharpe 35.4 → 38.2 (+2.8)
+- profit_target이 state에 따라 달라짐 (Phase 1 포화 해소)
+- trend 피처가 sell 전략에 반영되고 있음
+
+**미진함:**
+- aggressiveness 0 고정 — buy 전략의 regime 적응 없음
+- profit_target 차이 작음 — regime별 행동 차이가 뚜렷하지 않음
+
+### 생성 파일
+
+- `experiments/exp017_phase2_7d/best_model.zip` — Val Sharpe 38.186
+- `experiments/exp017_phase2_7d/final_model.zip`
+- `experiments/exp017_phase2_7d/config_snapshot.yaml`
+
+### 다음 단계
+
+Optuna 하이퍼파라미터 튜닝 (ent_coef, lr, n_steps 등) — regime 적응 강화
+
+---
