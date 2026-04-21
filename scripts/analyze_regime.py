@@ -1,19 +1,23 @@
 """
 scripts/analyze_regime.py
 
-exp018 best model의 레짐별 행동 분석.
+RL best model의 레짐별 행동 분석.
 
 레짐 정의: trend_1w (168h pct_change z-score) 기준
   bull  : trend_1w > +0.5
   bear  : trend_1w < -0.5
   sideways: 그 외
 
-분석 대상: profit_target, aggressiveness 분포를 레짐별로 비교
+exp024 (4D 절대 gap):
+    분석 대상: buy_hi_coef, buy_lo_extra, sell_m_coef, sell_c_coef
+exp022 이전 (2D ATR 비례):
+    분석 대상: aggressiveness, profit_target
+
 통계 검증: Kruskal-Wallis test (비모수, 3그룹)
 
 사용법:
     python scripts/analyze_regime.py
-    python scripts/analyze_regime.py --model-path experiments/exp018_final/best_model.zip
+    python scripts/analyze_regime.py --model-path experiments/exp024_rl_abs/best_model.zip
 """
 
 import argparse
@@ -35,7 +39,7 @@ from stable_baselines3 import PPO
 def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--model-path", type=str,
-                   default="experiments/exp018_final/best_model.zip")
+                   default="experiments/exp024_rl_abs/best_model.zip")
     p.add_argument("--threshold", type=float, default=0.5,
                    help="trend_1w z-score 레짐 구분 임계값")
     return p.parse_args()
@@ -44,12 +48,15 @@ def parse_args():
 def collect_actions(model, df, cfg, n_steps=None):
     """Val set 전체를 deterministic policy로 실행, (state, action) 수집.
 
-    exp021 (entry_gate) 구조:
-        action[0] = entry_gate raw ∈ [0,1],  임계값 0.5
-        action[1] = profit_target ∈ [0,1]
+    exp024 (4D 절대 gap):
+        action[0] = buy_hi_coef  ∈ [0,1]
+        action[1] = buy_lo_extra ∈ [0,1]
+        action[2] = sell_m_coef  ∈ [0,1]
+        action[3] = sell_c_coef  ∈ [0,1]
 
-    exp020 (budget_fraction) 구조 (하위 호환):
-        action[0] = budget_fraction raw → budget_min + raw × (1-budget_min)
+    exp022 이전 (2D ATR 비례, 하위 호환):
+        action[0] = aggressiveness ∈ [0,1]
+        action[1] = profit_target  ∈ [0,1]
     """
     env = TradingEnv(df, cfg)
     obs, _ = env.reset()
@@ -57,36 +64,24 @@ def collect_actions(model, df, cfg, n_steps=None):
     records = []
     n_steps = n_steps or len(df)
 
-    # 실험 구조 자동 감지
-    has_entry_gate = cfg["environment"].get("entry_gate_threshold") is not None
-    budget_min = cfg["environment"].get("budget_fraction_min", None)
+    is_4d = env.action_space.shape[0] == 4
 
     for _ in range(n_steps):
         action, _ = model.predict(obs, deterministic=True)
-        action0   = float(np.clip(action[0], 0, 1))
-        profit_target = float(np.clip(action[1], 0, 1))
-
-        # trend_1w는 obs[6] (7D state 기준)
         trend_1w_zscore = float(obs[6])
 
-        if has_entry_gate:
+        if is_4d:
             records.append({
-                "entry_gate_raw":  action0,
-                "entry_gate_open": action0 >= 0.5,
-                "profit_target":   profit_target,
-                "trend_1w":        trend_1w_zscore,
-            })
-        elif budget_min is not None:
-            budget_fraction = budget_min + action0 * (1.0 - budget_min)
-            records.append({
-                "budget_fraction": budget_fraction,
-                "profit_target":   profit_target,
-                "trend_1w":        trend_1w_zscore,
+                "buy_hi_coef":  float(np.clip(action[0], 0, 1)),
+                "buy_lo_extra": float(np.clip(action[1], 0, 1)),
+                "sell_m_coef":  float(np.clip(action[2], 0, 1)),
+                "sell_c_coef":  float(np.clip(action[3], 0, 1)),
+                "trend_1w":     trend_1w_zscore,
             })
         else:
             records.append({
-                "aggressiveness": action0,
-                "profit_target":  profit_target,
+                "aggressiveness": float(np.clip(action[0], 0, 1)),
+                "profit_target":  float(np.clip(action[1], 0, 1)),
                 "trend_1w":       trend_1w_zscore,
             })
 
@@ -145,19 +140,12 @@ def main():
     for r, cnt in df["regime"].value_counts().items():
         print(f"  {r:>8s}: {cnt:5d} ({cnt/len(df)*100:.1f}%)")
 
-    print_regime_stats(df, "profit_target")
-    # action[0] 컬럼 자동 선택
-    if "entry_gate_raw" in df.columns:
-        print_regime_stats(df, "entry_gate_raw")
-        # entry_gate_open 비율 (레짐별 진입 허가율)
-        print("\n── entry_gate_open 비율 (레짐별) ──────────────")
-        for regime in ["bull", "bear", "sideways"]:
-            g = df.loc[df["regime"] == regime, "entry_gate_open"]
-            pct = g.mean() * 100
-            print(f"  {regime:>8s}  n={len(g):5d}  open_rate={pct:.1f}%")
-    elif "budget_fraction" in df.columns:
-        print_regime_stats(df, "budget_fraction")
+    # exp024 (4D) vs exp022 이전 (2D) 자동 분기
+    if "buy_hi_coef" in df.columns:
+        for col in ["buy_hi_coef", "buy_lo_extra", "sell_m_coef", "sell_c_coef"]:
+            print_regime_stats(df, col)
     else:
+        print_regime_stats(df, "profit_target")
         print_regime_stats(df, "aggressiveness")
 
     # 결과 저장
@@ -165,27 +153,31 @@ def main():
     df.to_csv(out_path, index=False)
     print(f"\n원본 데이터 저장: {out_path}")
 
-    # Phase 2 완료 기준 판단
+    # Regime adaptation 판단
     from scipy.stats import kruskal
-    pt_groups = [df.loc[df["regime"]==r, "profit_target"].values
-                 for r in ["bull","bear","sideways"]]
-    _, p_pt = kruskal(*pt_groups)
 
-    bv_pt = df.groupby("regime")["profit_target"].mean()
-    print(f"\n{'='*50}")
-    print(f"Phase 2 완료 기준 판단")
-    print(f"{'='*50}")
-    print(f"  profit_target Kruskal-Wallis p = {p_pt:.4f}")
-    print(f"  regime별 profit_target 평균:")
-    for r in ["bull","bear","sideways"]:
-        print(f"    {r:>8s}: {bv_pt.get(r, float('nan')):.4f}")
-
-    if p_pt < 0.05:
-        print(f"\n  → Regime adaptation confirmed (p&lt;0.05)")
-        print(f"  → Phase 2 완료 기준 충족 여부: Val Sharpe 확인 필요")
+    if "buy_hi_coef" in df.columns:
+        key_col = "sell_m_coef"   # 수익 결정의 핵심 차원
     else:
-        print(f"\n  → No significant regime difference")
-        print(f"  → 고정 공식 라이브 트레이딩으로 전환 검토 필요")
+        key_col = "profit_target"
+
+    key_groups = [df.loc[df["regime"]==r, key_col].values
+                  for r in ["bull","bear","sideways"]]
+    _, p_key = kruskal(*key_groups)
+
+    bv_key = df.groupby("regime")[key_col].mean()
+    print(f"\n{'='*50}")
+    print(f"Regime adaptation 판단 ({key_col})")
+    print(f"{'='*50}")
+    print(f"  {key_col} Kruskal-Wallis p = {p_key:.4f}")
+    print(f"  regime별 {key_col} 평균:")
+    for r in ["bull","bear","sideways"]:
+        print(f"    {r:>8s}: {bv_key.get(r, float('nan')):.4f}")
+
+    if p_key < 0.05:
+        print(f"\n  → Regime adaptation confirmed (p<0.05)")
+    else:
+        print(f"\n  → No significant regime difference — RL treats all regimes equally")
 
 
 if __name__ == "__main__":

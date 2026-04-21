@@ -152,5 +152,5 @@ training:
   eval_freq: 50000
   n_eval_episodes: 3
   max_episode_steps: 2000       # ~83일 단위 에피소드 (다양한 regime 노출)
-  experiment_name: "exp022_rl_coef"
-  log_dir: "experiments/exp022_rl_coef"
+  experiment_name: "exp024_rl_abs"
+  log_dir: "experiments/exp024_rl_abs"

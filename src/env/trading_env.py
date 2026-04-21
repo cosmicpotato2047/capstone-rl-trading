@@ -13,31 +13,28 @@ State (7차원, rolling z-score 정규화):
     trend 피처 추가 이유:
         방향성 피처 없이는 RL이 상승/하락/횡보 regime을 구분할 수 없어 [0,0] 포화 수렴.
 
-Action (2차원 연속, [0, 1]²) — exp022 재설계:
-    [0] aggressiveness → buy gap 계수를 RL이 동적 결정
-                         buy_hi_gap = atr_ratio × (0.05 + aggressiveness × 0.55)  [0.05, 0.60]
-                         buy_lo_gap = atr_ratio × (1.0  + aggressiveness × 14.0)  [1.0,  15.0]
-    [1] profit_target  → sell gap 계수를 RL이 동적 결정
-                         sell_market_gap = atr_ratio × (0.01 + profit_target × 0.29)  [0.01, 0.30]
-                         sell_cost_gap   = atr_ratio × (0.5  + profit_target × 5.5)   [0.5,  6.0]
+Action (4차원 연속, [0, 1]⁴) — exp024 재설계:
+    ATR을 공식에서 제거. RL이 절대 비율 gap을 직접 결정.
+    state[4] volatility(ATR/price)는 유지 — RL이 필요하면 간접 활용 가능.
 
-    ATR 고정 최적값(exp023)이 RL 범위 안에 위치:
-        A_b=0.106  → aggressiveness ≈ 0.10
-        C_b=13.921 → aggressiveness ≈ 0.92
-        A_s=0.080  → profit_target  ≈ 0.24
-        C_s=4.309  → profit_target  ≈ 0.69
+    [0] buy_hi_coef   → buy_hi_gap = action[0] × 0.10          [0, 10%]
+    [1] buy_lo_extra  → buy_lo_gap = buy_hi_gap + action[1] × 0.20  [buy_hi_gap, buy_hi_gap+20%]
+                        (항상 buy_lo < buy_hi 보장)
+    [2] sell_m_coef   → sell_market_gap = action[2] × 0.10     [0, 10%]  현재가 기준
+    [3] sell_c_coef   → sell_cost_gap   = action[3] × 0.20     [0, 20%]  평단가 기준 (독립)
 
-    RL이 배워야 하는 것:
-        state(trend_1w, volatility)를 보고 매 스텝 최적 계수 조합을 선택
-        ATR 고정은 동일 계수를 항상 사용 — RL은 레짐별로 다른 계수 가능
+    ATR 고정 최적값(exp023)의 대응 절대값 (BTC ATR/price ≈ 0.2%~2%):
+        A_b=0.106 → buy_hi_gap ≈ 0.02%~0.21% → action[0] ≈ 0.002~0.021 (범위 내)
+        C_b=13.92 → buy_lo_gap ≈ 2.8%~27.8%  → action[1] 범위 내
+        A_s=0.080 → sell_m_gap ≈ 0.02%~0.16% → action[2] ≈ 0.002~0.016 (범위 내)
+        C_s=4.309 → sell_c_gap ≈ 0.86%~8.6%  → action[3] ≈ 0.043~0.43 (범위 내)
 
-주문 (매 스텝 4개 지정가 갱신 — ATR 비례 스케일링):
-    atr_ratio   = ATR(168) / price
+주문 (매 스텝 4개 지정가 갱신 — ATR 없음, 절대 비율):
+    buy_hi_gap      = action[0] × 0.10
+    buy_lo_gap      = buy_hi_gap + action[1] × 0.20
 
-    buy_hi_gap      = atr_ratio × (0.05 + aggressiveness × 0.55)
-    buy_lo_gap      = atr_ratio × (1.0  + aggressiveness × 14.0)
-    sell_market_gap = atr_ratio × (0.01 + profit_target  × 0.29)
-    sell_cost_gap   = atr_ratio × (0.5  + profit_target  × 5.5)
+    sell_market_gap = action[2] × 0.10
+    sell_cost_gap   = action[3] × 0.20
 
     buy_hi      = price     × (1 - buy_hi_gap)
     buy_lo      = price     × (1 - buy_lo_gap)
@@ -136,7 +133,7 @@ class BTCGridTradingEnv(gym.Env):
         self.action_space = spaces.Box(
             low=np.float32(0.0),
             high=np.float32(1.0),
-            shape=(2,),
+            shape=(4,),
             dtype=np.float32,
         )
 
@@ -206,14 +203,15 @@ class BTCGridTradingEnv(gym.Env):
             f"Invalid action: {action}"
 
         row = self.df.iloc[self.current_step]
-        price     = float(row["close"])
-        atr_ratio = float(row["volatility_raw"])   # ATR(168) / price
+        price = float(row["close"])
 
         # ── 1. 액션 → 4개 지정가 계산 ────────────────────────
-        aggressiveness = float(action[0])
-        profit_target  = float(action[1])
+        buy_hi_coef  = float(action[0])
+        buy_lo_extra = float(action[1])
+        sell_m_coef  = float(action[2])
+        sell_c_coef  = float(action[3])
         buy_hi, buy_lo, sell_market, sell_cost = self._compute_order_prices(
-            aggressiveness, profit_target, price, atr_ratio
+            buy_hi_coef, buy_lo_extra, sell_m_coef, sell_c_coef, price
         )
 
         # ── 2. 다음 봉 체결 판단 ──────────────────────────────
@@ -255,8 +253,10 @@ class BTCGridTradingEnv(gym.Env):
             "cash": self.cash,
             "holdings": self.holdings,
             "n_trades": self.n_trades,
-            "aggressiveness": aggressiveness,
-            "profit_target": profit_target,
+            "buy_hi_coef": buy_hi_coef,
+            "buy_lo_extra": buy_lo_extra,
+            "sell_m_coef": sell_m_coef,
+            "sell_c_coef": sell_c_coef,
             "buy_hi": buy_hi,
             "buy_lo": buy_lo,
             "sell_market": sell_market,
@@ -293,33 +293,29 @@ class BTCGridTradingEnv(gym.Env):
 
     def _compute_order_prices(
         self,
-        aggressiveness: float,
-        profit_target: float,
+        buy_hi_coef: float,
+        buy_lo_extra: float,
+        sell_m_coef: float,
+        sell_c_coef: float,
         price: float,
-        atr_ratio: float,
     ) -> tuple[float, float, float, float]:
-        """aggressiveness + profit_target + ATR → 4개 지정가 반환.
-
-        exp022 설계: RL이 계수를 동적으로 결정.
-        ATR 고정(exp023) 최적값이 범위 중간에 위치:
-            A_b=0.106 → agg≈0.10, C_b=13.921 → agg≈0.92
-            A_s=0.080 → pt≈0.24,  C_s=4.309  → pt≈0.69
+        """4D action → 4개 지정가 반환 (exp024: ATR 없음, 절대 비율).
 
         Args:
-            aggressiveness: action[0] ∈ [0,1] — buy gap 계수 선택
-            profit_target:  action[1] ∈ [0,1] — sell gap 계수 선택
-            price:     현재 봉 close
-            atr_ratio: ATR(168) / price (volatility_raw 컬럼)
+            buy_hi_coef:  action[0] ∈ [0,1] → buy_hi_gap = coef × 0.10   [0%, 10%]
+            buy_lo_extra: action[1] ∈ [0,1] → buy_lo_gap = buy_hi_gap + extra × 0.20
+                          (항상 buy_lo < buy_hi 보장)
+            sell_m_coef:  action[2] ∈ [0,1] → sell_market_gap = coef × 0.10  [0%, 10%]
+            sell_c_coef:  action[3] ∈ [0,1] → sell_cost_gap   = coef × 0.20  [0%, 20%]
+            price:        현재 봉 close
 
         Returns:
             (buy_hi, buy_lo, sell_market, sell_cost)
         """
-        # buy: RL이 계수 결정 (범위: [0.05, 0.60] × ATR, [1.0, 15.0] × ATR)
-        buy_hi_gap      = atr_ratio * (0.05 + aggressiveness * 0.55)
-        buy_lo_gap      = atr_ratio * (1.0  + aggressiveness * 14.0)
-        # sell: RL이 계수 결정 (범위: [0.01, 0.30] × ATR, [0.5, 6.0] × ATR)
-        sell_market_gap = atr_ratio * (0.01 + profit_target  * 0.29)
-        sell_cost_gap   = atr_ratio * (0.5  + profit_target  * 5.5)
+        buy_hi_gap      = buy_hi_coef  * 0.10
+        buy_lo_gap      = buy_hi_gap   + buy_lo_extra * 0.20
+        sell_market_gap = sell_m_coef  * 0.10
+        sell_cost_gap   = sell_c_coef  * 0.20
 
         buy_hi      = price * (1.0 - buy_hi_gap)
         buy_lo      = price * (1.0 - buy_lo_gap)

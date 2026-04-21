@@ -3,12 +3,12 @@ scripts/tune_ppo_optuna.py
 
 PPO 하이퍼파라미터 Optuna 탐색.
 
-탐색 대상: ent_coef, learning_rate, n_steps, gamma, gae_lambda, clip_range
-탐색 제외: 공식 계수 (A_s/B_s 등) — RL action 역할 충돌 방지
+탐색 대상: ent_coef, learning_rate, n_steps, gamma, gae_lambda, clip_range, n_splits
+탐색 제외: 공식 계수 (exp024: ATR 없음, 절대 비율 gap)
 
 사용법:
     python scripts/tune_ppo_optuna.py
-    python scripts/tune_ppo_optuna.py --trials 30 --exp-name exp018_optuna
+    python scripts/tune_ppo_optuna.py --trials 50 --exp-name exp024_optuna
 """
 
 import argparse
@@ -34,8 +34,8 @@ optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 def parse_args():
     p = argparse.ArgumentParser()
-    p.add_argument("--trials",   type=int, default=30)
-    p.add_argument("--exp-name", type=str, default="exp018_optuna")
+    p.add_argument("--trials",   type=int, default=50)
+    p.add_argument("--exp-name", type=str, default="exp024_optuna")
     p.add_argument("--timesteps", type=int, default=500000,
                    help="trial당 학습 스텝 (기본 500k — 빠른 탐색)")
     return p.parse_args()
@@ -51,14 +51,16 @@ def objective(trial: optuna.Trial, df_train, df_val, base_cfg: dict, timesteps: 
     gamma         = trial.suggest_float("gamma",         0.95,  0.999)
     gae_lambda    = trial.suggest_float("gae_lambda",    0.9,   0.99)
     clip_range    = trial.suggest_float("clip_range",    0.1,   0.4)
+    n_splits      = trial.suggest_int(  "n_splits",      2,     8)
 
-    cfg["agent"]["ent_coef"]      = ent_coef
-    cfg["agent"]["learning_rate"] = learning_rate
-    cfg["agent"]["n_steps"]       = n_steps
-    cfg["agent"]["gamma"]         = gamma
-    cfg["agent"]["gae_lambda"]    = gae_lambda
-    cfg["agent"]["clip_range"]    = clip_range
+    cfg["agent"]["ent_coef"]        = ent_coef
+    cfg["agent"]["learning_rate"]   = learning_rate
+    cfg["agent"]["n_steps"]         = n_steps
+    cfg["agent"]["gamma"]           = gamma
+    cfg["agent"]["gae_lambda"]      = gae_lambda
+    cfg["agent"]["clip_range"]      = clip_range
     cfg["agent"]["total_timesteps"] = timesteps
+    cfg["environment"]["n_splits"]  = n_splits
 
     # trial별 log_dir (덮어쓰기 방지)
     cfg["training"]["log_dir"] = f"experiments/_optuna_trial_{trial.number}"
@@ -75,7 +77,7 @@ def objective(trial: optuna.Trial, df_train, df_val, base_cfg: dict, timesteps: 
 
     print(f"  [trial {trial.number:3d}] Sharpe={sharpe:+.3f} | "
           f"ent={ent_coef:.4f} lr={learning_rate:.2e} "
-          f"n_steps={n_steps} gamma={gamma:.3f}")
+          f"n_steps={n_steps} gamma={gamma:.3f} n_splits={n_splits}")
     return sharpe
 
 
@@ -92,7 +94,7 @@ def main():
     print(f"Optuna PPO 하이퍼파라미터 탐색")
     print(f"  trials={args.trials}  timesteps/trial={args.timesteps:,}")
     print(f"  결과 저장: {log_dir}")
-    print(f"  baseline (exp017): Val Sharpe 38.186\n")
+    print(f"  baseline (ATR exp023): Val Sharpe 59.003\n")
 
     study = optuna.create_study(
         direction="maximize",
@@ -119,7 +121,7 @@ def main():
         "best_trial":  best.number,
         "best_sharpe": best.value,
         "best_params": best.params,
-        "baseline_sharpe": 38.186,
+        "baseline_sharpe": 59.003,
     }
     with open(log_dir / "best_params.yaml", "w") as f:
         yaml.dump(result, f, default_flow_style=False)
