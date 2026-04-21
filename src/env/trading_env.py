@@ -13,34 +13,31 @@ State (7차원, rolling z-score 정규화):
     trend 피처 추가 이유:
         방향성 피처 없이는 RL이 상승/하락/횡보 regime을 구분할 수 없어 [0,0] 포화 수렴.
 
-Action (2차원 연속, [0, 1]²):
-    [0] entry_gate  → 새 사이클 진입 허가/차단 결정
-                      raw ∈ [0,1], 임계값 0.5
-                      ≥ 0.5: 사이클 진입 허가 (새 매수 주문 허용)
-                      < 0.5: 사이클 진입 차단 (holdings==0일 때 매수 비활성화)
-                      이미 진행 중인 사이클(holdings > 0)에는 영향 없음
-                      레짐 적응 핵심: 하락장에서 진입 차단 → 손실 회피
-    [1] profit_target → sell_market_gap, sell_cost_gap 결정 (기존 유지)
+Action (2차원 연속, [0, 1]²) — exp022 재설계:
+    [0] aggressiveness → buy gap 계수를 RL이 동적 결정
+                         buy_hi_gap = atr_ratio × (0.05 + aggressiveness × 0.55)  [0.05, 0.60]
+                         buy_lo_gap = atr_ratio × (1.0  + aggressiveness × 14.0)  [1.0,  15.0]
+    [1] profit_target  → sell gap 계수를 RL이 동적 결정
+                         sell_market_gap = atr_ratio × (0.01 + profit_target × 0.29)  [0.01, 0.30]
+                         sell_cost_gap   = atr_ratio × (0.5  + profit_target × 5.5)   [0.5,  6.0]
 
-    aggressiveness(buy gap)은 exp018에서 항상 0에 수렴 → 0.0으로 고정
-    buy_hi_gap = atr_ratio × A_b  (Bayesian 최적값, aggressiveness=0 고정)
+    ATR 고정 최적값(exp023)이 RL 범위 안에 위치:
+        A_b=0.106  → aggressiveness ≈ 0.10
+        C_b=13.921 → aggressiveness ≈ 0.92
+        A_s=0.080  → profit_target  ≈ 0.24
+        C_s=4.309  → profit_target  ≈ 0.69
+
+    RL이 배워야 하는 것:
+        state(trend_1w, volatility)를 보고 매 스텝 최적 계수 조합을 선택
+        ATR 고정은 동일 계수를 항상 사용 — RL은 레짐별로 다른 계수 가능
 
 주문 (매 스텝 4개 지정가 갱신 — ATR 비례 스케일링):
     atr_ratio   = ATR(168) / price
 
-    buy_hi_gap      = atr_ratio × A_b                           # 고정 (aggressiveness=0)
-    buy_lo_gap      = atr_ratio × C_b                           # 고정 (aggressiveness=0)
-    sell_market_gap = atr_ratio × (A_s + profit_target  × B_s)  # [0.05×ATR, 2.0×ATR]
-    sell_cost_gap   = atr_ratio × (C_s + profit_target  × D_s)  # [2.5×ATR,  10.0×ATR]
-
-    sell_market 범위:
-        - A_s=0.05 (Bayesian 탐색 하한 이하 확장), B_s=1.95
-        - A_s, B_s는 Bayesian 튜닝 대상에서 제외 (RL action 역할과 충돌 방지)
-
-    buy side 계수 (Bayesian Trial #42 참고값 — 탐색 중간값, 신뢰 가능):
-        A_b=0.285, B_b=1.748, C_b=5.223, D_b=18.683
-    sell side 계수 (재설계 기본값):
-        A_s=0.05,  B_s=1.95,  C_s=2.5,   D_s=7.5
+    buy_hi_gap      = atr_ratio × (0.05 + aggressiveness × 0.55)
+    buy_lo_gap      = atr_ratio × (1.0  + aggressiveness × 14.0)
+    sell_market_gap = atr_ratio × (0.01 + profit_target  × 0.29)
+    sell_cost_gap   = atr_ratio × (0.5  + profit_target  × 5.5)
 
     buy_hi      = price     × (1 - buy_hi_gap)
     buy_lo      = price     × (1 - buy_lo_gap)
@@ -132,17 +129,10 @@ class BTCGridTradingEnv(gym.Env):
             "max_episode_steps", None
         )
 
-        # ── Entry gate 설정 ────────────────────────────────────
-        # action[0] ∈ [0,1], 임계값 0.5
-        # True:  진입 허가 (매수 주문 활성화)
-        # False: 진입 차단 (holdings==0일 때 매수 비활성화)
-        # 진행 중인 사이클(holdings > 0)에는 영향 없음
-        self.pending_entry_gate: bool = True   # 기본값: 진입 허가
-
         # ── Gymnasium 공간 정의 ────────────────────────────────
-        # Action: [entry_gate, profit_target] ∈ [0, 1]²
-        # entry_gate < 0.5 → 사이클 진입 차단 (holdings==0일 때)
-        # entry_gate ≥ 0.5 → 사이클 진입 허가
+        # Action: [aggressiveness, profit_target] ∈ [0, 1]²
+        # aggressiveness → buy gap 계수 범위 선택
+        # profit_target  → sell gap 계수 범위 선택
         self.action_space = spaces.Box(
             low=np.float32(0.0),
             high=np.float32(1.0),
@@ -203,9 +193,6 @@ class BTCGridTradingEnv(gym.Env):
         # 직전 사이클 청산 시 평단가 (미보유 구간 divergence 계산용)
         self.last_avg_price: float = 0.0
 
-        # entry_gate: 기본값 True (진입 허가)
-        self.pending_entry_gate: bool = True
-
         # 통계 (디버깅/분석용)
         self.n_trades: int = 0
         self.completed_cycles: list = []
@@ -223,12 +210,10 @@ class BTCGridTradingEnv(gym.Env):
         atr_ratio = float(row["volatility_raw"])   # ATR(168) / price
 
         # ── 1. 액션 → 4개 지정가 계산 ────────────────────────
-        # action[0]: entry_gate raw → 0.5 임계값으로 진입 여부 결정
-        # holdings > 0 (진행 중 사이클)에는 영향 없음
-        self.pending_entry_gate = float(action[0]) >= 0.5
-        profit_target = float(action[1])
+        aggressiveness = float(action[0])
+        profit_target  = float(action[1])
         buy_hi, buy_lo, sell_market, sell_cost = self._compute_order_prices(
-            profit_target, price, atr_ratio
+            aggressiveness, profit_target, price, atr_ratio
         )
 
         # ── 2. 다음 봉 체결 판단 ──────────────────────────────
@@ -270,7 +255,8 @@ class BTCGridTradingEnv(gym.Env):
             "cash": self.cash,
             "holdings": self.holdings,
             "n_trades": self.n_trades,
-            "entry_gate": self.pending_entry_gate,
+            "aggressiveness": aggressiveness,
+            "profit_target": profit_target,
             "buy_hi": buy_hi,
             "buy_lo": buy_lo,
             "sell_market": sell_market,
@@ -298,7 +284,6 @@ class BTCGridTradingEnv(gym.Env):
         self.cycle_budget_remaining: float = 0.0
         # 직전 사이클 청산 시 평단가 (미보유 구간 divergence 계산용)
         self.last_avg_price: float = 0.0
-        self.pending_entry_gate: bool = True
         self.n_trades: int = 0
         self.completed_cycles: list = []
 
@@ -308,27 +293,33 @@ class BTCGridTradingEnv(gym.Env):
 
     def _compute_order_prices(
         self,
+        aggressiveness: float,
         profit_target: float,
         price: float,
         atr_ratio: float,
     ) -> tuple[float, float, float, float]:
-        """profit_target + ATR → 4개 지정가 반환.
+        """aggressiveness + profit_target + ATR → 4개 지정가 반환.
 
-        aggressiveness는 exp018 분석에서 항상 0에 수렴 → 0.0 고정.
-        buy gap은 Bayesian 최적값(A_b, C_b)만 사용.
+        exp022 설계: RL이 계수를 동적으로 결정.
+        ATR 고정(exp023) 최적값이 범위 중간에 위치:
+            A_b=0.106 → agg≈0.10, C_b=13.921 → agg≈0.92
+            A_s=0.080 → pt≈0.24,  C_s=4.309  → pt≈0.69
 
         Args:
-            profit_target: action[1] ∈ [0,1]
-            atr_ratio:     ATR(168) / price (volatility_raw 컬럼)
+            aggressiveness: action[0] ∈ [0,1] — buy gap 계수 선택
+            profit_target:  action[1] ∈ [0,1] — sell gap 계수 선택
+            price:     현재 봉 close
+            atr_ratio: ATR(168) / price (volatility_raw 컬럼)
 
         Returns:
             (buy_hi, buy_lo, sell_market, sell_cost)
         """
-        # buy: aggressiveness=0 고정 → A_b, C_b만 사용
-        buy_hi_gap      = atr_ratio * self.A_b
-        buy_lo_gap      = atr_ratio * self.C_b
-        sell_market_gap = atr_ratio * (self.A_s + profit_target * self.B_s)
-        sell_cost_gap   = atr_ratio * (self.C_s + profit_target * self.D_s)
+        # buy: RL이 계수 결정 (범위: [0.05, 0.60] × ATR, [1.0, 15.0] × ATR)
+        buy_hi_gap      = atr_ratio * (0.05 + aggressiveness * 0.55)
+        buy_lo_gap      = atr_ratio * (1.0  + aggressiveness * 14.0)
+        # sell: RL이 계수 결정 (범위: [0.01, 0.30] × ATR, [0.5, 6.0] × ATR)
+        sell_market_gap = atr_ratio * (0.01 + profit_target  * 0.29)
+        sell_cost_gap   = atr_ratio * (0.5  + profit_target  * 5.5)
 
         buy_hi      = price * (1.0 - buy_hi_gap)
         buy_lo      = price * (1.0 - buy_lo_gap)
@@ -412,27 +403,21 @@ class BTCGridTradingEnv(gym.Env):
 
         # ── 2. BUY 처리 ─────────────────────────────────────────
 
-        # Entry gate 체크: holdings==0 (새 사이클 시작 예정) 이고 gate가 닫혀 있으면
-        # 매수 전체 비활성화. 진행 중인 사이클(holdings > 0)에는 영향 없음.
-        gate_open = self.holdings > 0.0 or self.pending_entry_gate
+        # buy_hi ~ buy_lo 사이를 n_buy_orders개 가격으로 선형 보간
+        # n_buy_orders=2 → [buy_hi, buy_lo] (하위 호환)
+        if self.n_buy_orders == 1:
+            buy_prices = [buy_hi]
+        else:
+            buy_prices = [
+                buy_hi + i / (self.n_buy_orders - 1) * (buy_lo - buy_hi)
+                for i in range(self.n_buy_orders)
+            ]
 
-        if gate_open:
-            # buy_hi ~ buy_lo 사이를 n_buy_orders개 가격으로 선형 보간
-            # n_buy_orders=2 → [buy_hi, buy_lo] (하위 호환)
-            # n_buy_orders=N → N개 레벨에 cycle_slot_size/N씩 균등 배분
-            if self.n_buy_orders == 1:
-                buy_prices = [buy_hi]
-            else:
-                buy_prices = [
-                    buy_hi + i / (self.n_buy_orders - 1) * (buy_lo - buy_hi)
-                    for i in range(self.n_buy_orders)
-                ]
-
-            for bp in buy_prices:
-                if next_low <= bp:
-                    success = self._execute_buy(next_low)
-                    if success:
-                        n_trades += 1
+        for bp in buy_prices:
+            if next_low <= bp:
+                success = self._execute_buy(next_low)
+                if success:
+                    n_trades += 1
 
         return n_trades, cycle_bonus
 

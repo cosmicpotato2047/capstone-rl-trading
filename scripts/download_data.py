@@ -3,11 +3,13 @@ BTC/USDT 1시간봉 데이터 다운로드 (Binance, ccxt)
 
 사용법:
     python scripts/download_data.py
+    python scripts/download_data.py --since 2017-08-17  # 전체 이력
 
 출력:
     data/raw/btc_usdt_1h.csv
 """
 
+import argparse
 import time
 from pathlib import Path
 
@@ -16,11 +18,18 @@ import pandas as pd
 
 from src.utils.config import load_config
 
+
+def parse_args():
+    p = argparse.ArgumentParser()
+    p.add_argument("--since", type=str, default=None,
+                   help="다운로드 시작일 (YYYY-MM-DD). 미지정 시 config train_start 사용")
+    return p.parse_args()
+
+
 # ── 설정 ──────────────────────────────────────────────────────
 cfg = load_config()
 SYMBOL     = cfg["data"]["symbol"]       # "BTC/USDT"
 TIMEFRAME  = cfg["data"]["interval"]     # "1h"
-SINCE      = cfg["data"]["train_start"]  # "2020-01-01"
 OUTPUT     = Path("data/raw/btc_usdt_1h.csv")
 LIMIT      = 1000                        # Binance 최대 요청 캔들 수
 SLEEP_SEC  = 0.2                         # 요청 간격 (rate limit 방지)
@@ -33,6 +42,7 @@ def fetch_all_candles(exchange: ccxt.Exchange, since_str: str) -> list:
     request_count = 0
 
     print(f"다운로드 시작: {SYMBOL} {TIMEFRAME} / {since_str} ~ 현재")
+    print(f"예상 캔들 수: ~{int((pd.Timestamp.utcnow() - pd.Timestamp(since_str, tz='UTC')).days * 24):,}개")
 
     while True:
         candles = exchange.fetch_ohlcv(
@@ -77,8 +87,10 @@ def save_csv(candles: list) -> pd.DataFrame:
 
 
 def main():
+    args     = parse_args()
+    since    = args.since or cfg["data"]["train_start"]
     exchange = ccxt.binance({"enableRateLimit": True})
-    candles  = fetch_all_candles(exchange, SINCE)
+    candles  = fetch_all_candles(exchange, since)
     df       = save_csv(candles)
 
     print(f"\n완료: {len(df):,}개 캔들 저장 → {OUTPUT}")

@@ -1,0 +1,9 @@
+best_baseline: fixed_grid_5pct
+best_bl_sharpe: 1.5503
+dataset: test
+period: 2023-07-01 00:00:00+00:00 ~ 2026-04-21 04:00:00+00:00
+ppo_mdd_pct: 2.15
+ppo_n_cycles: 20915
+ppo_n_trades: 46280
+ppo_return_pct: 7075412470667.41
+ppo_sharpe: 52.8025
