@@ -1,24 +1,20 @@
 """
 scripts/tune_atr_optuna.py
 
-ATR 고정 공식 계수 Bayesian 최적화.
-PPO 학습 없이 고정 정책([1.0, 0.0])으로 Val 전체를 평가하므로 trial당 수초.
+ATR 고정 공식 계수 Bayesian 최적화 (exp025).
+eval_atr_test.py의 run_atr_fixed()를 직접 사용 — env를 거치지 않아 formula_coefs가
+실제로 반영됨. trial당 약 2~5초.
 
 탐색 대상:
-    A_b   : buy_hi_gap  = atr × A_b               현재 0.285
-    C_b   : buy_lo_gap  = atr × C_b               현재 5.223
-    A_s   : sell_market_gap = atr × A_s           현재 0.05  (미최적화 가능성)
-    C_s   : sell_cost_gap   = atr × C_s           현재 2.5   (한 번도 최적화 안 됨)
-    n_splits : 현금 분할 수                        현재 4     (CLAUDE.md에 튜닝 예정)
-
-고정 정책:
-    action = [1.0, 0.0]
-    → entry_gate = 1.0 (항상 진입 허가)
-    → profit_target = 0.0 (A_s, C_s만 작동)
+    A_b      : buy_hi = price × (1 - A_b × ATR)
+    C_b      : buy_lo = price × (1 - C_b × ATR)
+    A_s      : sell_market = price     × (1 + A_s × ATR)
+    C_s      : sell_cost   = avg_price × (1 + C_s × ATR)
+    n_splits : 현금 분할 수 (per_order_size, threshold_btc, 분할매도 공통)
 
 사용법:
     python scripts/tune_atr_optuna.py
-    python scripts/tune_atr_optuna.py --trials 100 --exp-name exp023_atr_optuna
+    python scripts/tune_atr_optuna.py --trials 100 --exp-name exp025_atr_reopt
 """
 
 import argparse
@@ -26,7 +22,6 @@ import sys
 from copy import deepcopy
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import optuna
 import yaml
@@ -35,44 +30,20 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from src.utils.config import load_config
-from src.env.trading_env import BTCGridTradingEnv
-from src.evaluation.metrics import compute_all
+from scripts.eval_atr_test import run_atr_fixed
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
-
-FIXED_ACTION = np.array([1.0, 0.0], dtype=np.float32)
-
-
-def evaluate_fixed(df: pd.DataFrame, cfg: dict) -> float:
-    """고정 정책 [1.0, 0.0]으로 Val 전체 실행 → Sharpe 반환."""
-    eval_cfg = deepcopy(cfg)
-    eval_cfg["environment"]["random_start"] = False
-
-    env = BTCGridTradingEnv(df, eval_cfg)
-    obs, _ = env.reset()
-    equity_list = [cfg["environment"]["initial_cash"]]
-    done = False
-
-    while not done:
-        obs, _, terminated, truncated, _ = env.step(FIXED_ACTION)
-        done = terminated or truncated
-        price = float(env.df.loc[env.current_step - 1, "close"])
-        equity_list.append(env.cash + env.holdings * price)
-
-    equity = pd.Series(equity_list, dtype=float)
-    m = compute_all(equity, cfg["environment"]["initial_cash"],
-                    env.n_trades, env.completed_cycles)
-    return float(m["sharpe_ratio"])
 
 
 def objective(trial: optuna.Trial, df_val: pd.DataFrame, base_cfg: dict) -> float:
     cfg = deepcopy(base_cfg)
 
-    # ── 탐색 공간 ──────────────────────────────────────────────
-    A_b      = trial.suggest_float("A_b",      0.05,  1.0)
-    C_b      = trial.suggest_float("C_b",      1.0,  15.0)
-    A_s      = trial.suggest_float("A_s",      0.01,  0.20)
-    C_s      = trial.suggest_float("C_s",      0.5,   6.0)
+    # A_b, A_s 하한 0.05: 1h봉에서 intra-candle 동시 체결 exploit 방지
+    # ATR/price ≈ 0.5~2% 기준, 0.05 × ATR = 0.025~0.1% → 현실적 limit 간격
+    A_b      = trial.suggest_float("A_b",      0.05,  2.0)
+    C_b      = trial.suggest_float("C_b",      1.0,  20.0)
+    A_s      = trial.suggest_float("A_s",      0.05,  1.0)
+    C_s      = trial.suggest_float("C_s",      0.5,  10.0)
     n_splits = trial.suggest_int(  "n_splits", 2,     8)
 
     cfg["environment"]["formula_coefs"]["A_b"] = A_b
@@ -82,7 +53,8 @@ def objective(trial: optuna.Trial, df_val: pd.DataFrame, base_cfg: dict) -> floa
     cfg["environment"]["n_splits"]             = n_splits
 
     try:
-        sharpe = evaluate_fixed(df_val, cfg)
+        m = run_atr_fixed(df_val, cfg)
+        sharpe = float(m["sharpe_ratio"])
     except Exception as e:
         print(f"  [trial {trial.number}] 오류: {e}")
         return float("-inf")
@@ -94,8 +66,8 @@ def objective(trial: optuna.Trial, df_val: pd.DataFrame, base_cfg: dict) -> floa
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--trials",   type=int, default=50)
-    p.add_argument("--exp-name", type=str, default="exp023_atr_optuna")
+    p.add_argument("--trials",   type=int, default=100)
+    p.add_argument("--exp-name", type=str, default="exp025_atr_reopt")
     args = p.parse_args()
 
     cfg    = load_config()
@@ -104,26 +76,30 @@ def main():
     log_dir = Path("experiments") / args.exp_name
     log_dir.mkdir(parents=True, exist_ok=True)
 
-    # 현재 계수로 baseline Sharpe 계산
-    baseline_sharpe = evaluate_fixed(df_val, cfg)
-    print(f"ATR 공식 계수 Bayesian 최적화 (고정 정책)")
+    # 현재 config 계수(exp023 결과)로 baseline
+    baseline = run_atr_fixed(df_val, cfg)
+    baseline_sharpe = float(baseline["sharpe_ratio"])
+
+    coefs = cfg["environment"]["formula_coefs"]
+    print(f"ATR 공식 계수 재최적화 (eval_atr_test 직접 시뮬레이션)")
     print(f"  trials={args.trials}  Val: {len(df_val):,}봉")
-    print(f"  현재 계수: A_b=0.285 C_b=5.223 A_s=0.05 C_s=2.5 n_splits=4")
+    print(f"  현재 계수: A_b={coefs['A_b']} C_b={coefs['C_b']} "
+          f"A_s={coefs['A_s']} C_s={coefs['C_s']} n_splits={cfg['environment']['n_splits']}")
     print(f"  현재 Val Sharpe: {baseline_sharpe:.3f}\n")
 
     study = optuna.create_study(
         direction="maximize",
-        study_name="atr_coef_v1",
+        study_name="atr_reopt_v1",
         storage=f"sqlite:///{log_dir}/optuna.db",
         load_if_exists=True,
         sampler=optuna.samplers.TPESampler(seed=42),
     )
 
-    # 현재 계수를 첫 번째 trial로 시드
+    # exp023 결과를 시드로 추가 (탐색 시작점)
     study.enqueue_trial({
-        "A_b": 0.285, "C_b": 5.223,
-        "A_s": 0.05,  "C_s": 2.5,
-        "n_splits": 4,
+        "A_b": coefs["A_b"], "C_b": coefs["C_b"],
+        "A_s": coefs["A_s"], "C_s": coefs["C_s"],
+        "n_splits": cfg["environment"]["n_splits"],
     })
 
     study.optimize(
@@ -131,7 +107,6 @@ def main():
         n_trials=args.trials,
     )
 
-    # ── 결과 ───────────────────────────────────────────────────
     best = study.best_trial
     print(f"\n{'='*60}")
     print(f"최적 Trial #{best.number}  Val Sharpe={best.value:.3f}  "
@@ -141,11 +116,11 @@ def main():
         print(f"  {k}: {v:.4f}" if isinstance(v, float) else f"  {k}: {v}")
 
     result = {
-        "best_trial":       best.number,
-        "best_sharpe":      round(best.value, 4),
-        "baseline_sharpe":  round(baseline_sharpe, 4),
-        "improvement":      round(best.value - baseline_sharpe, 4),
-        "best_params":      best.params,
+        "best_trial":      best.number,
+        "best_sharpe":     round(best.value, 4),
+        "baseline_sharpe": round(baseline_sharpe, 4),
+        "improvement":     round(best.value - baseline_sharpe, 4),
+        "best_params":     best.params,
     }
     out_path = log_dir / "best_params.yaml"
     with open(out_path, "w", encoding="utf-8") as f:
@@ -157,12 +132,16 @@ def main():
         key=lambda t: t.value, reverse=True
     )[:5]
     for t in top5:
-        p = t.params
+        pp = t.params
         print(f"  #{t.number:3d} Sharpe={t.value:.3f} | "
-              f"A_b={p['A_b']:.3f} C_b={p['C_b']:.3f} "
-              f"A_s={p['A_s']:.3f} C_s={p['C_s']:.3f} n_splits={p['n_splits']}")
+              f"A_b={pp['A_b']:.3f} C_b={pp['C_b']:.3f} "
+              f"A_s={pp['A_s']:.3f} C_s={pp['C_s']:.3f} n_splits={pp['n_splits']}")
 
     print(f"\n결과 저장: {out_path}")
+    print(f"config 반영 명령:")
+    bp = best.params
+    print(f"  A_b={bp['A_b']:.4f}  C_b={bp['C_b']:.4f}  "
+          f"A_s={bp['A_s']:.4f}  C_s={bp['C_s']:.4f}  n_splits={bp['n_splits']}")
 
 
 if __name__ == "__main__":

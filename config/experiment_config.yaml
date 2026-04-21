@@ -56,22 +56,22 @@ environment:
   n_buy_orders: 2               # buy_hi, buy_lo
 
   # 예산 분할 — 사이클 시작 시 현금을 n_splits 슬롯으로 나눔
-  n_splits: 3              # exp023 최적화 결과 (이전: 4)
+  n_splits: 2              # exp025_v2 재최적화 (이전: 3)
 
   # sell_market 임계값 기준: "price" | "avg_price"
   threshold_basis: "avg_price"
 
-  # ── 공식 계수 (exp023 ATR 전용 Bayesian 최적화 결과) ──────
-  # exp023_atr_optuna Trial #45 (Val Sharpe 60.723)
-  # 탐색 대상: A_b, C_b, A_s, C_s, n_splits (B_b/D_b/B_s/D_s는 RL 전용)
+  # ── 공식 계수 (exp025_v2 ATR 재최적화 결과) ──────────────
+  # exp025_atr_reopt_v2 Trial #92 (Val Sharpe 63.670)
+  # A_b/A_s 하한 0.05 적용 (intra-candle exploit 방지)
   formula_coefs:
-    A_b: 0.1061   # buy_hi = price × (1 - A_b × ATR)  이전: 0.285
+    A_b: 0.0507   # buy_hi = price × (1 - A_b × ATR)  exp025_v2 (이전: 0.1061)
     B_b: 1.748    # RL 전용 (ATR 고정 시스템에서 미사용)
-    C_b: 13.9205  # buy_lo = price × (1 - C_b × ATR)  이전: 5.223
+    C_b: 14.8944  # buy_lo = price × (1 - C_b × ATR)  exp025_v2 (이전: 13.9205)
     D_b: 18.683   # RL 전용 (ATR 고정 시스템에서 미사용)
-    A_s: 0.0796   # sell_market_gap = A_s × ATR        이전: 0.05
+    A_s: 0.0763   # sell_market_gap = A_s × ATR        exp025_v2 (이전: 0.0796)
     B_s: 1.95     # RL 전용 (ATR 고정 시스템에서 미사용)
-    C_s: 4.3085   # sell_cost_gap = C_s × ATR          이전: 2.5  ★핵심 개선
+    C_s: 7.5334   # sell_cost_gap = C_s × ATR          exp025_v2 (이전: 4.3085)
     D_s: 7.5      # RL 전용 (ATR 고정 시스템에서 미사용)
 
   # budget_fraction 최솟값 (action[0]=0일 때 투입 비율 하한)
