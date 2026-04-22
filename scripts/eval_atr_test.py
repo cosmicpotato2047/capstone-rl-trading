@@ -144,29 +144,52 @@ def main():
     df_val  = pd.read_parquet("data/processed/btc_val.parquet")
     df_test = pd.read_parquet("data/processed/btc_test.parquet")
 
-    print("=" * 50)
-    print("ATR 고정 시스템 (exp023 계수) 평가")
-    print("=" * 50)
     coefs = cfg["environment"]["formula_coefs"]
-    print(f"A_b={coefs['A_b']:.4f}  C_b={coefs['C_b']:.4f}")
-    print(f"A_s={coefs['A_s']:.4f}  C_s={coefs['C_s']:.4f}")
-    print(f"n_splits={cfg['environment']['n_splits']}")
-    print()
+    tw    = coefs.get("trend_window", None)
+    k     = float(coefs.get("k", 0.0))
 
-    mv = run_atr_fixed(df_val, cfg)
-    print("[Val]")
-    print(f"  Return : {mv['total_return_pct']:.2f}%")
-    print(f"  Sharpe : {mv['sharpe_ratio']:.3f}")
-    print(f"  MDD    : {mv['max_drawdown_pct']:.2f}%")
-    print(f"  Trades : {mv['n_trades']}")
-    print()
+    # ── exp026 ATR (direction 없음, k=0) ─────────────────────────
+    # exp026 원래 계수로 복원해서 비교 기준선 계산
+    from copy import deepcopy
+    cfg_026 = deepcopy(cfg)
+    cfg_026["environment"]["formula_coefs"].update({
+        "A_b": 1.9211, "C_b": 5.7188, "A_s": 0.6875, "C_s": 9.6726,
+    })
+    cfg_026["environment"]["n_splits"] = 7
 
-    mt = run_atr_fixed(df_test, cfg)
-    print("[Test]")
-    print(f"  Return : {mt['total_return_pct']:.2f}%")
-    print(f"  Sharpe : {mt['sharpe_ratio']:.3f}")
-    print(f"  MDD    : {mt['max_drawdown_pct']:.2f}%")
-    print(f"  Trades : {mt['n_trades']}")
+    print("=" * 60)
+    print("exp026 ATR (direction 없음, n_splits=7)")
+    print("=" * 60)
+    mv26 = run_atr_fixed(df_val,  cfg_026, trend_window=None, k=0.0)
+    mt26 = run_atr_fixed(df_test, cfg_026, trend_window=None, k=0.0)
+    print(f"  {'':12s}  {'Val':>10s}  {'Test':>10s}")
+    print(f"  {'Return':12s}  {mv26['total_return_pct']:>9.2f}%  {mt26['total_return_pct']:>9.2f}%")
+    print(f"  {'Sharpe':12s}  {mv26['sharpe_ratio']:>10.3f}  {mt26['sharpe_ratio']:>10.3f}")
+    print(f"  {'MDD':12s}  {mv26['max_drawdown_pct']:>9.2f}%  {mt26['max_drawdown_pct']:>9.2f}%")
+    print(f"  {'Trades':12s}  {mv26['n_trades']:>10d}  {mt26['n_trades']:>10d}")
+
+    # ── exp027 ATR+direction ──────────────────────────────────────
+    print()
+    print("=" * 60)
+    print(f"exp027 ATR+direction (tw={tw}h, k={k:.4f}, n_splits={cfg['environment']['n_splits']})")
+    print("=" * 60)
+    mv27 = run_atr_fixed(df_val,  cfg, trend_window=tw, k=k)
+    mt27 = run_atr_fixed(df_test, cfg, trend_window=tw, k=k)
+    print(f"  {'':12s}  {'Val':>10s}  {'Test':>10s}")
+    print(f"  {'Return':12s}  {mv27['total_return_pct']:>9.2f}%  {mt27['total_return_pct']:>9.2f}%")
+    print(f"  {'Sharpe':12s}  {mv27['sharpe_ratio']:>10.3f}  {mt27['sharpe_ratio']:>10.3f}")
+    print(f"  {'MDD':12s}  {mv27['max_drawdown_pct']:>9.2f}%  {mt27['max_drawdown_pct']:>9.2f}%")
+    print(f"  {'Trades':12s}  {mv27['n_trades']:>10d}  {mt27['n_trades']:>10d}")
+
+    # ── 개선 요약 ─────────────────────────────────────────────────
+    print()
+    print("=" * 60)
+    print("개선 요약 (exp027 - exp026)")
+    print("=" * 60)
+    print(f"  Val  Sharpe: {mv26['sharpe_ratio']:.3f} → {mv27['sharpe_ratio']:.3f}  "
+          f"({mv27['sharpe_ratio']-mv26['sharpe_ratio']:+.3f})")
+    print(f"  Test Sharpe: {mt26['sharpe_ratio']:.3f} → {mt27['sharpe_ratio']:.3f}  "
+          f"({mt27['sharpe_ratio']-mt26['sharpe_ratio']:+.3f})")
 
 
 if __name__ == "__main__":

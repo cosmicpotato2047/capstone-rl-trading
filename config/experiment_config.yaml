@@ -62,25 +62,25 @@ environment:
   n_buy_orders: 2               # buy_hi, buy_lo
 
   # 예산 분할 — 사이클 시작 시 현금을 n_splits 슬롯으로 나눔
-  n_splits: 7              # exp026 RL Optuna 최적값 (ATR은 별도 n_splits=3 사용)
+  n_splits: 5              # exp027 ATR+direction 최적값
 
   # sell_market 임계값 기준: "price" | "avg_price"
   threshold_basis: "avg_price"
 
-  # ── 공식 계수 (exp026 ATR 최적화 결과 — 지정가 체결 기준) ──
-  # exp026_atr_limitfill Trial #102 (Val Sharpe 1.955, Return 34.42%, MDD 6.17%)
+  # ── 공식 계수 (exp027 ATR+direction 최적화 결과) ──
+  # exp027_atr_direction Trial #177 (Val Sharpe 2.348, 기준 1.701 대비 +38%)
+  # direction multiplier: buy_mult = 1 + k×max(0,-trend), sell_mult = 1 + k×max(0,trend)
   formula_coefs:
-    A_b: 1.9211   # buy_hi = price × (1 - A_b × ATR)
-    B_b: 1.748    # RL 전용 (ATR 고정 시스템에서 미사용)
-    C_b: 5.7188   # buy_lo = price × (1 - C_b × ATR)
-    D_b: 18.683   # RL 전용 (ATR 고정 시스템에서 미사용)
-    A_s: 0.6875   # sell_market_gap = A_s × ATR
-    B_s: 1.95     # RL 전용 (ATR 고정 시스템에서 미사용)
-    C_s: 9.6726   # sell_cost_gap = C_s × ATR
-    D_s: 7.5      # RL 전용 (ATR 고정 시스템에서 미사용)
-
-  # budget_fraction 최솟값 (action[0]=0일 때 투입 비율 하한)
-  # exp022: entry_gate 제거, aggressiveness + profit_target 방식으로 복귀
+    A_b: 1.7419   # buy_hi = price × (1 - A_b × ATR × buy_mult)
+    B_b: 1.748    # RL 전용
+    C_b: 5.2920   # buy_lo = price × (1 - C_b × ATR × buy_mult)
+    D_b: 18.683   # RL 전용
+    A_s: 0.2031   # sell_market_gap = A_s × ATR × sell_mult
+    B_s: 1.95     # RL 전용
+    C_s: 9.0478   # sell_cost_gap = C_s × ATR × sell_mult
+    D_s: 7.5      # RL 전용
+    trend_window: 336   # direction signal 윈도우 (시간)
+    k: 3.5836           # direction 강도 계수
 
   # 랜덤 시작점 (멀티 환경 학습용)
   random_start: true
@@ -157,5 +157,5 @@ training:
   eval_freq: 50000
   n_eval_episodes: 3
   max_episode_steps: 2000       # ~83일 단위 에피소드 (다양한 regime 노출)
-  experiment_name: "exp026_rl_final"
-  log_dir: "experiments/exp026_rl_final"
+  experiment_name: "exp027_rl"
+  log_dir: "experiments/exp027_rl"
