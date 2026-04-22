@@ -82,6 +82,9 @@ environment:
     trend_window: 336   # direction signal 윈도우 (시간)
     k: 3.5836           # direction 강도 계수
 
+  # 비대칭 reward: 손실을 beta배 강하게 패널티 (1.0 = symmetric)
+  reward_loss_beta: 2.0
+
   # 랜덤 시작점 (멀티 환경 학습용)
   random_start: true
 

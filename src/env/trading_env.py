@@ -62,7 +62,10 @@ Action (4차원 연속, [0, 1]⁴) — exp024 재설계:
           holdings > threshold_btc → holdings / n_splits (매수와 대칭 균등 분할)
 
 Reward:
-    매 스텝: (equity_t - equity_{t-1}) / start_capital
+    매 스텝: step_return = (equity_t - equity_{t-1}) / start_capital
+             reward = step_return × beta
+             beta = reward_loss_beta (기본 2.0) if step_return < 0 else 1.0
+             → 손실을 이익보다 beta배 강하게 패널티. 자본 보전 유도.
              수수료는 _execute_buy/_execute_sell에서 cash에 반영되므로 별도 차감 없음.
     사이클 종료 시: 보너스 없음 (통계 기록만 — completed_cycles)
 """
@@ -104,6 +107,9 @@ class BTCGridTradingEnv(gym.Env):
         self.warmup: int           = self.cfg_ind["atr_period"]  # 168봉
         self.trend_short: int      = self.cfg_ind.get("trend_short", 72)
         self.trend_long: int       = self.cfg_ind.get("trend_long",  720)
+        self.reward_loss_beta: float = float(
+            self.cfg_env.get("reward_loss_beta", 1.0)
+        )
 
         # ── MDP 공식 계수 (Bayesian 튜닝 가능, 기본값 = 설계 기본값) ──
         # buy_hi_gap  = atr_ratio × (A_b + aggressiveness × B_b)
@@ -246,7 +252,9 @@ class BTCGridTradingEnv(gym.Env):
         # → equity 변화분 자체가 수수료를 포함하므로 별도 패널티 불필요.
         # (- fee_rate * n_trades 항은 단위 불일치로 수수료를 8배 중복 계산함)
         equity_after = self._equity(next_price)
-        step_reward = (equity_after - equity_before) / self.start_capital
+        step_return  = (equity_after - equity_before) / self.start_capital
+        beta         = self.reward_loss_beta if step_return < 0 else 1.0
+        step_reward  = step_return * beta
 
         self.n_trades += n_trades_this_step
         self.current_step = next_step
