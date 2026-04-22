@@ -1,8 +1,14 @@
 """
 scripts/eval_atr_test.py
 
-ATR 고정 시스템(exp023 계수)을 Val/Test 세트에서 직접 평가.
+ATR 고정 시스템을 Val/Test 세트에서 직접 평가.
 trading_env.py의 _process_fills / _execute_buy / _execute_sell 로직을 정확히 재현.
+
+direction multiplier (선택):
+    trend_window : 사용할 trend 컬럼 윈도우 (시간 단위, e.g. 720)
+    k            : direction 강도 계수 (0이면 기존 ATR과 동일)
+    - 하락(trend < 0): buy gap *= (1 + k × |trend|)  → 더 깊은 낙폭 요구
+    - 상승(trend > 0): sell gap *= (1 + k × trend)   → 더 높은 수익 요구
 """
 import sys
 from pathlib import Path
@@ -14,7 +20,9 @@ from src.utils.config import load_config
 from src.evaluation.metrics import compute_all
 
 
-def run_atr_fixed(df: pd.DataFrame, cfg: dict) -> dict:
+def run_atr_fixed(df: pd.DataFrame, cfg: dict,
+                  trend_window: int | None = None,
+                  k: float = 0.0) -> dict:
     coefs     = cfg["environment"]["formula_coefs"]
     A_b, C_b  = coefs["A_b"], coefs["C_b"]
     A_s, C_s  = coefs["A_s"], coefs["C_s"]
@@ -46,12 +54,21 @@ def run_atr_fixed(df: pd.DataFrame, cfg: dict) -> dict:
         nl    = float(df.at[i + 1, "low"])
         nc    = float(df.at[i + 1, "close"])
 
+        # ── direction multiplier ──────────────────────────────────
+        if trend_window is not None and k > 0.0:
+            col = f"trend_{trend_window}h_raw"
+            trend_val = float(df.at[i, col])
+            buy_mult  = 1.0 + k * max(0.0, -trend_val)  # 하락일수록 buy gap ↑
+            sell_mult = 1.0 + k * max(0.0,  trend_val)  # 상승일수록 sell gap ↑
+        else:
+            buy_mult = sell_mult = 1.0
+
         # ── 주문 가격 계산 (formula_coefs 직접 사용) ──────────────
-        sell_m = price     * (1 + atr_r * A_s)
+        sell_m = price     * (1 + atr_r * A_s * sell_mult)
         ref    = avg_price if avg_price > 0.0 else price
-        sell_c = ref       * (1 + atr_r * C_s)
-        buy_hi = price     * (1 - atr_r * A_b)
-        buy_lo = price     * (1 - atr_r * C_b)
+        sell_c = ref       * (1 + atr_r * C_s * sell_mult)
+        buy_hi = price     * (1 - atr_r * A_b * buy_mult)
+        buy_lo = price     * (1 - atr_r * C_b * buy_mult)
 
         # ── threshold_btc: 전량/분할 청산 기준 ───────────────────
         ref_price     = avg_price if avg_price > 0.0 else price
@@ -137,7 +154,7 @@ def main():
     print()
 
     mv = run_atr_fixed(df_val, cfg)
-    print("[Val 2021~2023H1]")
+    print("[Val]")
     print(f"  Return : {mv['total_return_pct']:.2f}%")
     print(f"  Sharpe : {mv['sharpe_ratio']:.3f}")
     print(f"  MDD    : {mv['max_drawdown_pct']:.2f}%")
@@ -145,7 +162,7 @@ def main():
     print()
 
     mt = run_atr_fixed(df_test, cfg)
-    print("[Test 2023H2~2026]")
+    print("[Test]")
     print(f"  Return : {mt['total_return_pct']:.2f}%")
     print(f"  Sharpe : {mt['sharpe_ratio']:.3f}")
     print(f"  MDD    : {mt['max_drawdown_pct']:.2f}%")

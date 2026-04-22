@@ -7,11 +7,13 @@ State (7차원, rolling z-score 정규화):
     [2] holdings_value_ratio = (holdings × price) / start_capital  (미보유 시 0)
     [3] cash_ratio           = cash / start_capital
     [4] volatility           = ATR(168) / price
-    [5] trend_1d             = pct_change(24)  — 24h 단기 방향성
-    [6] trend_1w             = pct_change(168) — 168h 주간 방향성
+    [5] trend_short          = pct_change(indicators.trend_short)  — 단기 모멘텀 (기본 72h)
+    [6] trend_long           = pct_change(indicators.trend_long)   — 중기 레짐   (기본 720h)
 
     trend 피처 추가 이유:
         방향성 피처 없이는 RL이 상승/하락/횡보 regime을 구분할 수 없어 [0,0] 포화 수렴.
+        trend_short(72h): ATR 윈도우(168h)보다 짧아 빠른 방향 전환 감지.
+        trend_long(720h): 30일 중기 레짐 판단 (ATR과 겹치지 않는 정보).
 
 Action (4차원 연속, [0, 1]⁴) — exp024 재설계:
     ATR을 공식에서 제거. RL이 절대 비율 gap을 직접 결정.
@@ -100,6 +102,8 @@ class BTCGridTradingEnv(gym.Env):
         # 미지정 시 기존 동작("price") 유지 → 하위 호환
         self.threshold_basis: str  = self.cfg_env.get("threshold_basis", "price")
         self.warmup: int           = self.cfg_ind["atr_period"]  # 168봉
+        self.trend_short: int      = self.cfg_ind.get("trend_short", 72)
+        self.trend_long: int       = self.cfg_ind.get("trend_long",  720)
 
         # ── MDP 공식 계수 (Bayesian 튜닝 가능, 기본값 = 설계 기본값) ──
         # buy_hi_gap  = atr_ratio × (A_b + aggressiveness × B_b)
@@ -550,11 +554,11 @@ class BTCGridTradingEnv(gym.Env):
         # [4] 시장 변동성: ATR(168) / price, rolling z-score 적용
         zscore_volatility = float(row["zscore_volatility"])
 
-        # [5] 단기 방향성: 24h 수익률 rolling z-score
-        zscore_trend_1d = float(row["zscore_trend_1d"])
+        # [5] 단기 방향성: trend_short(72h) 수익률 rolling z-score
+        zscore_trend_short = float(row[f"zscore_trend_{self.trend_short}h"])
 
-        # [6] 주간 방향성: 168h 수익률 rolling z-score
-        zscore_trend_1w = float(row["zscore_trend_1w"])
+        # [6] 중기 레짐: trend_long(720h) 수익률 rolling z-score
+        zscore_trend_long = float(row[f"zscore_trend_{self.trend_long}h"])
 
         obs = np.array([
             zscore_log_price,
@@ -562,8 +566,8 @@ class BTCGridTradingEnv(gym.Env):
             holdings_value_ratio,
             cash_ratio,
             zscore_volatility,
-            zscore_trend_1d,
-            zscore_trend_1w,
+            zscore_trend_short,
+            zscore_trend_long,
         ], dtype=np.float32)
 
         return np.clip(obs, -5.0, 5.0)

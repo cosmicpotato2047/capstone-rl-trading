@@ -2031,3 +2031,68 @@ BTC ATR/RL 모두 계수 튜닝까지 완료 후 test set 최초 평가.
 **최종 결론:** BTC에서 ATR 고정 규칙이 RL 대비 Val/Test 모두에서 우위. RL의 레짐 적응은 통계적으로 유의미하지만 수익 알파로 전환되지 않음.
 
 ---
+
+## 2026-04-22 — exp027: ATR + Direction Rule 설계 및 최적화
+
+### 연구 방향 재정립
+
+exp026 결과(ATR Sharpe 1.978 vs RL Sharpe 0.896 on Val)를 바탕으로 연구 목표를 재조정.
+- 기존 질문: "RL이 베이스라인을 넘는가"
+- 새 질문: "ATR + direction rule이 ATR을 넘는가, 그리고 RL이 그 이상을 학습하는가"
+
+**핵심 통찰:**
+ATR은 변동성(크기)에만 반응하고 방향성(bull/bear)을 구분하지 못한다. 이론적 개선:
+- 하락(trend < 0): buy gap 확대 → 낙폭이 더 깊어야 매수
+- 상승(trend > 0): sell gap 확대 → 더 높이 올라야 매도
+
+### direction multiplier 공식
+
+```python
+buy_mult  = 1.0 + k × max(0, -trend_raw)  # 하락일수록 buy gap ↑
+sell_mult = 1.0 + k × max(0,  trend_raw)  # 상승일수록 sell gap ↑
+
+buy_hi = price × (1 - A_b × ATR × buy_mult)
+sell_m = price × (1 + A_s × ATR × sell_mult)
+```
+
+### trend 피처 재설계
+
+기존 trend_1d(24h) / trend_1w(168h) → 5개 윈도우로 확장:
+- 이유: 24h는 너무 노이즈; 168h는 ATR window와 겹침
+- 신규: [72, 168, 336, 720, 1440]h 모두 전처리에서 계산, Optuna가 최적 선택
+
+warmup 증가: 168+168=336봉 → 1440+168=1608봉 (훈련 데이터 약 67일 감소, 허용 범위)
+
+### exp027 Optuna 결과 (150 trials, Val Sharpe 최대화)
+
+**최적 Trial #177: Val Sharpe = 2.348 (기존 ATR 1.701 대비 +0.647)**
+
+| 파라미터 | exp026 ATR | exp027 ATR+direction |
+|---------|-----------|---------------------|
+| A_b | 1.9211 | 1.7419 |
+| C_b | 5.7188 | 5.2920 |
+| A_s | 0.6875 | 0.2031 |
+| C_s | 9.6726 | 9.0478 |
+| n_splits | 7 | 5 |
+| trend_window | — | **336h (14일)** |
+| k | — | **3.584** |
+
+**핵심 발견:**
+- trend_window=336h (14일)가 Optuna가 선택한 최적 윈도우 (상위 5 trials 모두 336h)
+- k≈3.5~4.0: direction 신호가 ATR gap에 강하게 반영됨
+- A_s: 0.6875 → 0.2031 급감 — sell gap 계수 자체를 낮추고 direction multiplier로 보완
+- Val Sharpe 1.701 → 2.348: +38% 개선 확인
+
+**상위 5 trials 모두 tw=336 수렴 → 14일 트렌드가 최적 레짐 신호**
+
+### 수정된 파일
+- `scripts/preprocess_data.py` — 5개 trend window 컬럼 추가
+- `scripts/eval_atr_test.py` — direction multiplier (trend_window, k) 파라미터 추가
+- `scripts/tune_atr_optuna.py` — trend_window(categorical) + k(float) 탐색 추가
+- `src/env/trading_env.py` — state[5]/[6]을 config 기반 72h/720h로 교체
+- `config/experiment_config.yaml` — trend_windows, trend_short, trend_long 추가
+
+### 다음 단계
+1. exp027 best params → config 반영
+2. Test set 평가 (ATR vs ATR+direction)
+3. RL 재학습 (새 trend 피처 + asymmetric reward 고려)

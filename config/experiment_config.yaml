@@ -31,6 +31,12 @@ indicators:
   # rolling z-score 정규화 window (모든 state 변수 공통)
   zscore_window: 168
 
+  # trend 방향성 피처 윈도우 (시간 단위)
+  # 5개 전부 전처리에서 계산, ATR direction rule + RL state에서 선택 사용
+  trend_windows: [72, 168, 336, 720, 1440]   # 3일 / 7일 / 14일 / 30일 / 60일
+  trend_short: 72               # RL state[5] 사용 윈도우 (단기 모멘텀)
+  trend_long: 720               # RL state[6] 사용 윈도우 (중기 레짐)
+
 # ────────────────────────────────────────
 # State 변수 (7차원) — Phase 2 재설계
 # ────────────────────────────────────────

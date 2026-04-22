@@ -31,9 +31,10 @@ VAL_START  = cfg["data"]["val_start"]   # "2023-01-01"
 VAL_END    = cfg["data"]["val_end"]     # "2023-12-31"
 TEST_START = cfg["data"]["test_start"]  # "2024-01-01"
 
-LOOKBACK   = cfg["indicators"]["price_lookback"]   # 168
-ATR_PERIOD = cfg["indicators"]["atr_period"]       # 168
-ZSCORE_WIN = cfg["indicators"]["zscore_window"]    # 168
+LOOKBACK      = cfg["indicators"]["price_lookback"]   # 168
+ATR_PERIOD    = cfg["indicators"]["atr_period"]       # 168
+ZSCORE_WIN    = cfg["indicators"]["zscore_window"]    # 168
+TREND_WINDOWS = cfg["indicators"]["trend_windows"]    # [72, 168, 336, 720, 1440]
 
 
 # ── 지표 계산 함수 ─────────────────────────────────────────────
@@ -84,29 +85,30 @@ def main():
     atr        = compute_atr(df, ATR_PERIOD)
     log_price  = compute_log_price(df["close"], LOOKBACK)
     volatility = atr / df["close"]
-    trend_1d   = compute_trend(df["close"], window=24)   # 24h 수익률
-    trend_1w   = compute_trend(df["close"], window=168)  # 168h 수익률
 
     # 3. Rolling z-score 정규화
     df["log_price"]         = log_price
     df["volatility_raw"]    = volatility
-    df["trend_1d_raw"]      = trend_1d
-    df["trend_1w_raw"]      = trend_1w
     df["zscore_log_price"]  = rolling_zscore(log_price,  ZSCORE_WIN)
     df["zscore_volatility"] = rolling_zscore(volatility, ZSCORE_WIN)
-    df["zscore_trend_1d"]   = rolling_zscore(trend_1d,   ZSCORE_WIN)
-    df["zscore_trend_1w"]   = rolling_zscore(trend_1w,   ZSCORE_WIN)
 
-    # 4. NaN 제거 (warmup: trend_1w가 168봉, z-score가 추가 168봉 → 336봉 이후 유효)
+    for w in TREND_WINDOWS:
+        trend = compute_trend(df["close"], window=w)
+        df[f"trend_{w}h_raw"]   = trend
+        df[f"zscore_trend_{w}h"] = rolling_zscore(trend, ZSCORE_WIN)
+
+    # 4. NaN 제거 (warmup: 최대 trend window=1440봉 + z-score 168봉 → 1608봉 이후 유효)
     before = len(df)
     df = df.dropna()
     print(f"  NaN 제거: {before - len(df)}행 제거 → {len(df):,}행 남음")
 
-    # 5. 컬럼 정리 (환경에서 필요한 컬럼만 유지)
+    # 5. 컬럼 정리 (환경 + ATR direction rule에서 필요한 컬럼만 유지)
+    trend_cols = [f"trend_{w}h_raw" for w in TREND_WINDOWS] + \
+                 [f"zscore_trend_{w}h" for w in TREND_WINDOWS]
     keep_cols = ["open", "high", "low", "close", "volume",
                  "log_price", "volatility_raw",
                  "zscore_log_price", "zscore_volatility",
-                 "zscore_trend_1d",  "zscore_trend_1w"]
+                 *trend_cols]
     df = df[keep_cols]
 
     # 6. 분할
@@ -131,9 +133,10 @@ def main():
     print("  btc_test.parquet  ← 학습 완료 전 열람 금지")
 
     # 8. 간단 통계 출력
+    trend_stat_cols = [f"zscore_trend_{w}h" for w in TREND_WINDOWS]
     print(f"\nTrain 기초 통계:")
     print(train[["close", "zscore_log_price", "zscore_volatility",
-                 "zscore_trend_1d", "zscore_trend_1w"]].describe().round(4))
+                 *trend_stat_cols]].describe().round(4))
 
 
 if __name__ == "__main__":
