@@ -83,7 +83,7 @@ environment:
     k: 3.5836           # direction 강도 계수
 
   # 비대칭 reward: 손실을 beta배 강하게 패널티 (1.0 = symmetric)
-  reward_loss_beta: 2.0
+  reward_loss_beta: 1.5
 
   # 랜덤 시작점 (멀티 환경 학습용)
   random_start: true
@@ -160,5 +160,6 @@ training:
   eval_freq: 50000
   n_eval_episodes: 3
   max_episode_steps: 2000       # ~83일 단위 에피소드 (다양한 regime 노출)
-  experiment_name: "exp027_rl"
-  log_dir: "experiments/exp027_rl"
+  early_stopping_patience: 6    # Val Sharpe 6회(=300k step) 연속 미개선 시 조기 종료
+  experiment_name: "exp028_rl_stable"
+  log_dir: "experiments/exp028_rl_stable"

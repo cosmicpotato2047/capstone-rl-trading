@@ -116,6 +116,8 @@ class ValMetricsCallback(BaseCallback):
     최고 Sharpe 모델을 best_model_path에 자동 저장한다.
     VecNormalize 사용 시 통계도 함께 저장한다.
     MLflow가 활성화된 경우 지표를 함께 기록한다.
+
+    patience > 0 이면 Val Sharpe가 patience 회 연속 개선되지 않을 때 학습 조기 종료.
     """
 
     def __init__(
@@ -125,6 +127,7 @@ class ValMetricsCallback(BaseCallback):
         eval_freq: int,
         best_model_path: str,
         train_env,          # DummyVecEnv 또는 VecNormalize — eval 시 obs_rms 복사용
+        patience: int = 0,  # 0 = early stopping 비활성
         verbose: int = 1,
     ):
         super().__init__(verbose)
@@ -136,6 +139,8 @@ class ValMetricsCallback(BaseCallback):
         self.best_sharpe     = -np.inf
         self.initial_cash    = config["environment"]["initial_cash"]
         self.n_eval_episodes = config.get("training", {}).get("n_eval_episodes", 5)
+        self.patience        = patience
+        self._no_improve     = 0   # 연속 미개선 횟수
 
     def _on_step(self) -> bool:
         if self.num_timesteps % self.eval_freq != 0:
@@ -179,6 +184,7 @@ class ValMetricsCallback(BaseCallback):
         # 최고 Sharpe 모델 저장
         if sharpe > self.best_sharpe:
             self.best_sharpe = sharpe
+            self._no_improve = 0
             Path(self.best_model_path).parent.mkdir(parents=True, exist_ok=True)
             self.model.save(self.best_model_path)
 
@@ -188,6 +194,15 @@ class ValMetricsCallback(BaseCallback):
 
             if self.verbose >= 1:
                 print(f"  [best] Sharpe {sharpe:.3f} → {self.best_model_path}")
+        else:
+            self._no_improve += 1
+            if self.patience > 0 and self._no_improve >= self.patience:
+                if self.verbose >= 1:
+                    print(
+                        f"  [early stop] {self.patience}회 연속 미개선 "
+                        f"(best={self.best_sharpe:.3f}) → 학습 종료"
+                    )
+                return False   # False 반환 시 SB3가 학습 중단
 
         return True
 
@@ -450,6 +465,7 @@ class PPOAgent:
         total_timesteps = total_timesteps or self.total_timesteps
         best_model_path = best_model_path or os.path.join(self.log_dir, "best_model")
 
+        patience = self.config.get("training", {}).get("early_stopping_patience", 0)
         callbacks = []
         if self.df_val is not None:
             callbacks.append(
@@ -459,6 +475,7 @@ class PPOAgent:
                     eval_freq=self.eval_freq,
                     best_model_path=best_model_path,
                     train_env=self.train_env,
+                    patience=patience,
                     verbose=1,
                 )
             )
