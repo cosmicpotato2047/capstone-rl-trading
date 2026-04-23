@@ -2171,3 +2171,108 @@ direction rule의 Val 과적합 문제를 RL의 state 기반 학습이 자연스
 ### 생성된 파일
 - `experiments/exp027_rl/best_model.zip` — Test Sharpe 1.955
 - `experiments/exp027_rl/final_model.zip` — 거래 0건 (사용 불가)
+
+---
+
+## 2026-04-24 — exp029: MDP 전면 재설계 + 3단계 Optuna + 최종 학습
+
+### 배경 및 동기
+
+exp027/028에서 두 가지 근본 문제 확인:
+1. **Action 공간 오설계**: 매 스텝 action 결정 → 사이클 내 action이 의미 없음 (처음 진입 시만 중요)
+2. **"거래 안 함" 수렴**: asymmetric beta=2.0으로 RL이 거래 회피 전략 학습
+
+→ exp029: 전면 재설계
+
+### 설계 변경 내역
+
+**Action (5D, [0,1]⁵) — 사이클 시작 시 1회 결정**
+```
+[0] n_splits_coef → n_splits = n_splits_min + round(a × (n_splits_max - n_splits_min))
+[1] gap_b1        → buy_market  = price         × (1 - atr_ratio × gap_b1 × coef_b1_max)
+[2] gap_b2        → buy_avg     = last_avg_price × (1 - atr_ratio × gap_b2 × coef_b2_max)
+[3] gap_s1        → sell_market = price         × (1 + atr_ratio × gap_s1 × coef_s1_max)
+[4] gap_s2        → sell_cost   = avg_price      × (1 + atr_ratio × gap_s2 × coef_s2_max)
+```
+- n_splits 범위: [5, 15]
+- buy_avg: last_avg_price == 0 (첫 사이클)이면 스킵
+
+**State (9D)**
+- 기존 7D + idle_norm (idle_steps / grace_period) + n_splits_norm
+
+**Reward (3성분)**
+- r_step: equity 변화 / start_capital (symmetric, beta 제거)
+- r_cycle: 사이클 수익률 × w_cycle (완료 보너스)
+- r_idle: -idle_rate × cash_ratio (grace_period 초과 시)
+
+**Val/Test 기간 재조정**
+- Val: 2021-01-01 ~ 2023-12-31 (기존 2022-12-31에서 확장)
+- Test: 2024-01-01~ (봉인)
+
+### 3단계 Optuna
+
+**1단계: PPO 하이퍼파라미터 (30 trials × 200k steps)**
+- 최적 Trial #0: Val Sharpe 1.786
+- 결과: lr=1.06e-4, n_steps=1024, gamma=0.988, gae_lambda=0.902, clip_range=0.367, ent_coef=0.008
+
+**2단계: 환경 파라미터 (50 trials × 200k steps)**
+- 최적 Trial #12: Val Sharpe 2.019
+- 결과:
+
+| 파라미터 | 기존 | 최적값 |
+|---|---|---|
+| coef_b1_max | 5.0 | 9.887 |
+| coef_b2_max | 15.0 | 9.505 |
+| coef_s1_max | 5.0 | 9.724 |
+| coef_s2_max | 15.0 | 23.944 |
+| w_cycle | 3.0 | 3.208 |
+| idle_rate | 2.0e-5 | 1.033e-5 |
+| grace_period | 24 | 43 |
+
+- **패턴**: s1_max, s2_max가 탐색 범위 상한에 붙음 → sell gap을 넓게 잡는 것이 유리
+
+### 최종 학습 결과 (exp029_rl_final, 1M 스텝 목표)
+
+```
+step=  50k: Sharpe=-6.222  Return=-34.4%  MDD=35.3%
+step= 100k: Sharpe=-5.869  Return=-30.9%  MDD=33.5%
+step= 150k: Sharpe=-2.803  Return= -9.8%  MDD=14.6%
+step= 200k: Sharpe=-4.763  Return=-23.7%  MDD=27.5%
+step= 250k: Sharpe=-2.546  Return=-11.9%  MDD=17.3%
+step= 300k: Sharpe=-0.666  Return= -0.4%  MDD= 7.3%
+step= 350k: Sharpe=-1.596  Return= -5.8%  MDD=12.2%
+step= 400k: Sharpe=-1.909  Return= -8.7%  MDD=15.5%
+step= 450k: Sharpe=+1.440  Return= +3.8%  MDD= 5.8%  ← BEST
+step= 500k: Sharpe=+1.369  Return= +4.9%  MDD= 5.2%
+step= 550k: Sharpe=+0.842  Return= +2.4%  MDD=10.0%
+step= 600k: Sharpe=+0.409  Return= +1.2%  MDD= 3.5%
+step= 650k: Sharpe=+1.311  Return= +1.5%  MDD= 2.8%
+step= 700k: Sharpe=+0.865  Return= +0.8%  MDD= 5.5%
+step= 750k: Sharpe=+0.122  Return= -0.9%  MDD= 9.4%  ← Early Stopping 발동
+```
+
+- **Early stopping**: patience=6, 750k에서 종료 (450k 이후 6회 연속 미개선)
+- **Best Val Sharpe: 1.440** (베이스라인 fixed_grid_5pct=1.051 초과 ✓)
+- **학습 불안정**: 450k peak 이후 oscillation — C단계 학습 안정화 필요
+
+### 베이스라인 비교 (Val 기준)
+
+| 시스템 | Val Return | Val Sharpe | Val MDD |
+|--------|-----------|-----------|---------|
+| buy_and_hold | 9.16% | 0.373 | 77.2% |
+| fixed_grid_5pct | 28.74% | 1.051 | 10.6% |
+| PPO exp029 best | — | **1.440** | 5.8% |
+
+### 핵심 발견
+1. **새 설계로 baseline 초과 달성** (1.440 > 1.051)
+2. **학습 불안정 지속**: 400k 구간에서 크게 음수로 후퇴 후 회복하는 패턴 반복
+3. **sell gap 최적값 상한 포화**: coef_s1_max=9.7, coef_s2_max=23.9 — 탐색 범위 확대 여지
+
+### 보류 작업
+- **C단계**: 학습 안정화 (learning rate schedule, n_steps 조정, 또는 reward 스케일 조정)
+- Test set 평가 (봉인 해제)
+
+### 생성된 파일
+- `experiments/exp029_rl_final/best_model.zip` — Val Sharpe 1.440 (450k step)
+- `experiments/exp029_env_optuna/best_params.yaml` — 환경 파라미터 최적값
+- `experiments/exp029_ppo_optuna/best_params.yaml` — PPO 파라미터 최적값

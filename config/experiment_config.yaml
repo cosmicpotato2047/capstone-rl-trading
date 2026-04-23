@@ -13,10 +13,10 @@ data:
   interval: "1h"                # 1시간봉
   train_start: "2017-08-17"     # Binance BTC/USDT 최초 상장일
   train_end:   "2020-12-31"     # BEAR 2018 + 혼재 2019 + BULL 2020 (BULL 46%, BEAR 38%, SIDE 15%)
-  val_start:   "2021-01-01"     # ATH→대폭락→회복 사이클 (BULL 22%, BEAR 33%, SIDE 44%)
-  val_end:     "2023-06-30"     # 2021 혼재 + 2022 BEAR(-64%) + 2023H1 회복
-  test_start:  "2023-07-01"     # 봉인 — 학습 완료 전 절대 열람 금지
-  test_end:    null             # null = 현재까지 (BULL 45%, BEAR 36%, SIDE 18%)
+  val_start:   "2021-01-01"     # ATH→대폭락→회복→2023 BULL (BULL ~30%, BEAR ~28%, SIDE ~42%)
+  val_end:     "2023-12-31"     # 2021 혼재 + 2022 BEAR(-64%) + 2023 회복 + 2023 H2 BULL(30k→44k)
+  test_start:  "2024-01-01"     # 봉인 — ETF 승인(2024-01-10) + 반감기(2024-04-20) 이후 구간
+  test_end:    null             # null = 현재까지
 
 # ────────────────────────────────────────
 # State 구성 지표
@@ -50,7 +50,7 @@ indicators:
 # → 모두 rolling z-score 정규화 후 observation space에 입력
 
 # ────────────────────────────────────────
-# 환경 (MDP)
+# 환경 (MDP) — exp029 재설계
 # ────────────────────────────────────────
 environment:
   initial_cash: 10000.0         # USD
@@ -58,52 +58,40 @@ environment:
   # 거래비용 — Binance 지정가 maker fee 기준
   transaction_cost: 0.0005      # 0.05% per trade
 
-  # 주문 개수
-  n_buy_orders: 2               # buy_hi, buy_lo
-
-  # 예산 분할 — 사이클 시작 시 현금을 n_splits 슬롯으로 나눔
-  n_splits: 5              # exp027 ATR+direction 최적값
-
-  # sell_market 임계값 기준: "price" | "avg_price"
-  threshold_basis: "avg_price"
-
-  # ── 공식 계수 (exp027 ATR+direction 최적화 결과) ──
-  # exp027_atr_direction Trial #177 (Val Sharpe 2.348, 기준 1.701 대비 +38%)
-  # direction multiplier: buy_mult = 1 + k×max(0,-trend), sell_mult = 1 + k×max(0,trend)
-  formula_coefs:
-    A_b: 1.7419   # buy_hi = price × (1 - A_b × ATR × buy_mult)
-    B_b: 1.748    # RL 전용
-    C_b: 5.2920   # buy_lo = price × (1 - C_b × ATR × buy_mult)
-    D_b: 18.683   # RL 전용
-    A_s: 0.2031   # sell_market_gap = A_s × ATR × sell_mult
-    B_s: 1.95     # RL 전용
-    C_s: 9.0478   # sell_cost_gap = C_s × ATR × sell_mult
-    D_s: 7.5      # RL 전용
-    trend_window: 336   # direction signal 윈도우 (시간)
-    k: 3.5836           # direction 강도 계수
-
-  # 비대칭 reward: 손실을 beta배 강하게 패널티 (1.0 = symmetric)
-  reward_loss_beta: 1.5
-
   # 랜덤 시작점 (멀티 환경 학습용)
   random_start: true
 
+  # ── n_splits 범위 (RL이 사이클마다 결정) ──
+  n_splits_min: 5               # 최소 분할 수
+  n_splits_max: 15              # 최대 분할 수
+
+  # ── ATR gap 최대 계수 (Optuna 탐색 대상) ──
+  # gap = atr_ratio × action × coef_max
+  coef_b1_max: 9.887            # buy_market  최대 배율 (Optuna exp029_env Trial #12)
+  coef_b2_max: 9.505            # buy_avg     최대 배율 (DCA, 더 넓은 범위)
+  coef_s1_max: 9.724            # sell_market 최대 배율
+  coef_s2_max: 23.944           # sell_cost   최대 배율
+
+  # ── Reward 파라미터 (Optuna 탐색 대상) ──
+  w_cycle: 3.208                # 사이클 완료 보너스 배율 (Optuna exp029_env Trial #12)
+  idle_rate: 1.033e-5           # idle 패널티 강도 (스텝당)
+  grace_period: 43              # idle 패널티 유예 시간 (h)
+
   # 사이클 정의
-  # 시작: holdings == 0 → 첫 체결
-  # 종료: holdings > 0 → holdings == 0 (전량 매도)
+  # 시작: holdings == 0 → 첫 체결 (액션 캡처)
+  # 종료: holdings → 0 (전량 매도)
+  # 청산: holdings 가치 < 1 split 가치 → sell_market 전량
 
 # ────────────────────────────────────────
-# Action 공간 (2차원 연속) — exp022 재설계
+# Action 공간 (5D, [0,1]⁵) — exp029 재설계
 # ────────────────────────────────────────
-# [0] aggressiveness ∈ [0, 1]  → buy gap 계수를 RL이 동적 결정
-#   buy_hi_gap = atr_ratio × (0.05 + agg × 0.55)   [0.05, 0.60] × ATR
-#   buy_lo_gap = atr_ratio × (1.0  + agg × 14.0)   [1.0,  15.0] × ATR
-#   ATR 최적 A_b=0.106 → agg≈0.10 / C_b=13.921 → agg≈0.92
-#
-# [1] profit_target ∈ [0, 1]  → sell gap 계수를 RL이 동적 결정
-#   sell_market_gap = atr_ratio × (0.01 + pt × 0.29)  [0.01, 0.30] × ATR
-#   sell_cost_gap   = atr_ratio × (0.5  + pt × 5.5)   [0.5,  6.0]  × ATR
-#   ATR 최적 A_s=0.080 → pt≈0.24 / C_s=4.309 → pt≈0.69
+# 사이클 시작 시 한 번 결정, 사이클 종료까지 유지
+# [0] n_splits_coef → n_splits = n_splits_min + round(a × (n_splits_max - n_splits_min))
+# [1] gap_b1        → buy_market  = price         × (1 - atr_ratio × gap_b1 × coef_b1_max)
+# [2] gap_b2        → buy_avg     = last_avg_price × (1 - atr_ratio × gap_b2 × coef_b2_max)
+#                     (last_avg_price == 0이면 첫 사이클 → buy_avg 생략)
+# [3] gap_s1        → sell_market = price         × (1 + atr_ratio × gap_s1 × coef_s1_max)
+# [4] gap_s2        → sell_cost   = avg_price     × (1 + atr_ratio × gap_s2 × coef_s2_max)
 
 # ────────────────────────────────────────
 # PPO 에이전트 (stable-baselines3)
@@ -111,14 +99,14 @@ environment:
 agent:
   algorithm: "PPO"
   policy: "MlpPolicy"
-  learning_rate: 0.00016751     # Optuna exp026 Trial #34 (Val Sharpe 1.192)
-  n_steps: 4096
+  learning_rate: 0.00010625     # Optuna exp029 Trial #0 (Val Sharpe 1.786)
+  n_steps: 1024
   batch_size: 64
   n_epochs: 10
-  gamma: 0.9875                 # Optuna exp026 최적값
-  gae_lambda: 0.9056            # Optuna exp026 최적값
-  clip_range: 0.1032            # Optuna exp026 최적값
-  ent_coef: 0.0182              # Optuna exp026 최적값
+  gamma: 0.9877                 # Optuna exp029 최적값
+  gae_lambda: 0.9018            # Optuna exp029 최적값
+  clip_range: 0.3673            # Optuna exp029 최적값
+  ent_coef: 0.0081              # Optuna exp029 최적값
   vf_coef: 0.5
   max_grad_norm: 0.5
   total_timesteps: 1_000_000
@@ -161,5 +149,5 @@ training:
   n_eval_episodes: 3
   max_episode_steps: 2000       # ~83일 단위 에피소드 (다양한 regime 노출)
   early_stopping_patience: 6    # Val Sharpe 6회(=300k step) 연속 미개선 시 조기 종료
-  experiment_name: "exp028_rl_stable"
-  log_dir: "experiments/exp028_rl_stable"
+  experiment_name: "exp029_rl_final"
+  log_dir: "experiments/exp029_rl_final"
