@@ -1,0 +1,124 @@
+# exp031 — BC Warm-Start (Action Bias Initialization)
+#
+# 목적: PPO policy network 의 action layer bias 를 ATR Baseline 행동
+#       (action=[0,0]) 에 매칭하도록 초기화. 학습 시작 시점에 ATR 정책과
+#       사실상 동등한 행동 → 학습 초반 random 정책 낭비 회피.
+#
+# 본 논문 §3.4 Method. exp030 의 학습 후반 붕괴 패턴 (700k 이후 Sharpe 1.974 → 1.209)
+# 을 출발선 안정화로 개선할 수 있는지 검증.
+#
+# vs exp030 (random init):
+#   - 학습 초반 (0~50k): 즉시 ATR 수준 (Val Sharpe ~1.5) 도달 기대
+#   - 후반: 안정성 개선 기대 (탐색이 ATR 출발선 근처에서만 일어남)
+#
+# 학술 근거 ([[offline_rl_warm_start]]):
+#   - Kumar et al. (2022): 단일 sub-optimal expert 데이터에는 BC 가 적절
+#   - 우리 ATR Baseline 은 state-independent (action=[0,0] 매 스텝, formula_coefs 만이 gap 결정)
+#   - → Action Bias Initialization 이 BC 의 정확한 단순화 (state-independent expert)
+
+# ────────────────────────────────────────
+# 데이터 (Env-v4 canonical)
+# ────────────────────────────────────────
+data:
+  symbol: "BTC/USDT"
+  interval: "1h"
+  train_start: "2017-08-17"
+  train_end:   "2020-12-31"
+  val_start:   "2021-01-01"
+  val_end:     "2023-12-31"
+  test_start:  "2024-01-01"
+  test_end:    null
+
+# ────────────────────────────────────────
+# State 구성 지표
+# ────────────────────────────────────────
+indicators:
+  price_lookback: 168
+  atr_period: 168
+  zscore_window: 168
+  trend_windows: [72, 168, 336, 720, 1440]
+  trend_short: 72
+  trend_long: 720
+
+# ────────────────────────────────────────
+# 환경 (Env-v4 canonical, exp030 동일)
+# ────────────────────────────────────────
+environment:
+  initial_cash: 10000.0
+  transaction_cost: 0.0005
+  random_start: true
+  n_buy_orders: 2
+  n_splits: 2
+  threshold_basis: "avg_price"
+  reward_loss_beta: 1.0         # symmetric (exp031 baseline)
+  formula_coefs:
+    A_b: 1.665
+    B_b: 1.748
+    C_b: 6.070
+    D_b: 18.683
+    A_s: 0.285
+    B_s: 1.95
+    C_s: 1.951
+    D_s: 7.5
+
+# ────────────────────────────────────────
+# PPO (exp030 안정화 패키지 + action_bias_init)
+# ────────────────────────────────────────
+agent:
+  algorithm: "PPO"
+  policy: "MlpPolicy"
+  learning_rate: 0.0003
+  lr_schedule: "linear"
+  lr_end: 0.00001
+  n_steps: 4096
+  batch_size: 256
+  n_epochs: 10
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_range: 0.2
+  ent_coef: 0.01
+  ent_coef_end: 0.001
+  ent_schedule: "linear"
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  target_kl: 0.02
+  total_timesteps: 1_000_000
+  n_envs: 4
+
+  # ★ Action Bias Init (exp031 핵심)
+  # raw_mean = -10 → tanh ≈ -1 → action ≈ 0 (ATR Baseline 행동 매칭)
+  action_bias_init: [-10.0, -10.0]
+
+# ────────────────────────────────────────
+# 베이스라인 비교
+# ────────────────────────────────────────
+baselines:
+  buy_and_hold: true
+  fixed_grid:
+    gaps: [0.01, 0.02, 0.05]
+  atr_grid:
+    k_values: [0.5, 1.0, 2.0]
+
+# ────────────────────────────────────────
+# 평가
+# ────────────────────────────────────────
+evaluation:
+  metrics:
+    - "total_return"
+    - "sharpe_ratio"
+    - "max_drawdown"
+    - "n_trades"
+    - "avg_cycle_pnl"
+    - "avg_cycle_hours"
+
+# ────────────────────────────────────────
+# 학습 설정
+# ────────────────────────────────────────
+training:
+  seed: 42
+  eval_freq: 50000
+  n_eval_episodes: 5
+  max_episode_steps: 2000
+  early_stopping_patience: 10
+  experiment_name: "exp031_bc_warmstart"
+  log_dir: "experiments/exp031_bc_warmstart"

@@ -37,6 +37,7 @@ from typing import Callable
 import numpy as np
 import pandas as pd
 
+import torch
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
@@ -488,6 +489,25 @@ class PPOAgent:
             seed           = self.seed,
             tensorboard_log = tb_log,
         )
+
+        # ── Action Bias Initialization (exp031 BC warm-start) ────
+        # 의도: PPO policy network 의 action layer bias 를 ATR Baseline 행동
+        #       (action=[0,0]) 에 매칭하도록 초기화. 학습 0 step 시점에 ATR
+        #       정책과 사실상 동등한 행동 출력 → 학습 초반 random 정책 낭비 회피.
+        # 메커니즘:
+        #   action_space [0, 1]^N
+        #   PPO Gaussian: raw_mean → tanh squash → [-1, 1] → rescale to [0, 1]
+        #   raw_mean = -10 → tanh(-10) ≈ -1 → action ≈ 0
+        # config["agent"]["action_bias_init"] = [-10.0, -10.0]  (예시: action=[0,0])
+        action_bias_init = agent_cfg.get("action_bias_init", None)
+        if action_bias_init is not None:
+            with torch.no_grad():
+                bias_tensor = torch.tensor(action_bias_init, dtype=torch.float32)
+                self.model.policy.action_net.bias.data = bias_tensor
+                # weight 작게 초기화 → state 의 영향 작게 (state-independent 시작점)
+                self.model.policy.action_net.weight.data.normal_(0.0, 0.01)
+            print(f"  action_bias_init applied: {action_bias_init} "
+                  f"(→ initial action ≈ {[round(0.5 * (1 + torch.tanh(torch.tensor(b)).item()), 4) for b in action_bias_init]})")
 
     # ── 학습 ──────────────────────────────────────────────────
 
