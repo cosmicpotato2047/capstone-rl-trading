@@ -2513,6 +2513,102 @@ RQ 문구 일괄 갱신:
 
 ---
 
+## 2026-05-14 — exp030 완료 (학습 안정화 패키지, Env-v4 첫 본 논문 실험)
+
+### Objective (RQ 매핑)
+
+- **목표**: Env-v4 canonical 환경에서 PPO 학습 안정화 패키지 효과 검증
+- **RQ 매핑**: §3.3 Method (학습 안정화 방법론). RQ 직접 답변 X — 본 논문 메인 (§5 exp032) 의 토대 마련.
+
+### Changes
+
+| 파일 | 변경 |
+|---|---|
+| `config/exp030_stabilization_config.yaml` | 신설 — LR linear 3e-4→1e-5, target_kl 0.02, ent annealing 0.01→0.001, clip 0.2, n_steps 4096, patience 10 |
+| (이전 commit f9cf726 포함) `src/agents/ppo_agent.py` | EntCoefAnnealCallback 신설, PPO 생성자 target_kl |
+| (이전 commit f9cf726 포함) `scripts/train_ppo.py` | MLflow 통합 ./mlruns 루트 |
+
+### Hyperparameter
+
+- Env-v4 ATR baseline (formula_coefs Trial #34): A_b=1.665, C_b=6.070, A_s=0.285, C_s=1.951, n_splits=2
+- Reward: symmetric (β=1.0) — exp030 baseline
+- PPO 안정화 패키지 적용 (위 config 참조)
+
+### Results
+
+**학습 곡선** (eval_freq=50k, 1M steps 완주, early stop 비발동):
+
+| Step | Val Sharpe | Return | MDD |
+|---|---|---|---|
+| 50k | 1.299 (best) | 4.52% | 2.61% |
+| 100k | 1.498 (best) | 5.08% | 2.49% |
+| 250k | 1.564 (best) | 4.58% | 2.61% |
+| 300k | 1.612 (best) | 4.92% | 2.48% |
+| 450k | 1.939 (best) | 6.19% | 2.84% |
+| **550k** | **1.974 (BEST)** | **7.24%** | **3.95%** |
+| 600k | 1.718 | 7.84% | 4.94% |
+| 700k | 1.243 | 6.69% | 8.11% |
+| 800k | 1.050 | 6.12% | 7.40% |
+| 1M (final) | 1.209 | 7.02% | 7.02% |
+
+| Metric | Best (550k) | Final (1M) |
+|---|---|---|
+| Val Sharpe | 1.974 | 1.209 |
+| Return | 7.24% | 7.02% |
+| MDD | 3.95% | 7.02% |
+| vs ATR Baseline (1.505) | **+31%** | -20% |
+
+### 성공 기준 점검
+
+| 기준 | 목표 | 결과 | 판정 |
+|---|---|---|---|
+| Val Sharpe ≥ 1.0 | floor | best 1.974 / final 1.209 | ✓ |
+| 후반 변동 ± 0.3 | 안정성 | 700k+ Sharpe 1.017~1.394 (변동 0.38) | △ 약간 초과 |
+| final ≥ best × 0.8 | 후반 붕괴 없음 | 1.209 / 1.974 = 0.61 (61%) | ✗ 39% 하락 |
+
+→ **부분 성공**: floor 통과, 안정화 패키지로 best step 100k→550k 늦춤, 그러나 700k 이후 붕괴 패턴 미해결.
+
+### Behavior Analysis
+
+- Best 시점 (550k) 의 정책이 best_model.zip 으로 보존됨
+- 사이클 통계: 평균 사이클 시간 8.2h, 사이클 평균 PnL 0.19%, 40.8 cycles per episode
+- 후반 붕괴 시 MDD 증가 (2.5% → 7%) — 과도한 risk-taking 패턴 추정
+- (상세 행동 분석은 exp031/exp032 에서)
+
+### Decision
+
+**다음 실험: exp031 (BC warm-start)**
+
+이유:
+- exp030 안정화 패키지 효과 부분 성공 (best 시점은 좋아짐, 후반 붕괴 미해결)
+- 후반 붕괴는 학습 초기 random 정책에서 출발한 noise 누적 가능성
+- BC warm-start 로 ATR 정책을 출발선으로 → 학습 안정성 향상 기대
+- 이미 ATR Baseline (Val Sharpe 1.505) 가 있으므로 demonstration dataset 생성 가능
+
+가설 H1~H4 점검:
+- **H1 (sym RL ≈ ATR) 약화**: Env-v4 에서 sym RL (best 1.974) 가 ATR (1.505) 초과 (+31%). 단 final 은 ATR 아래로 (1.209 < 1.505) — 학습 안정성 의존성 발견
+- H2 (asym RL > ATR): exp_rl_replicate (2.250) 가 sym (1.974) 보다 +14% 우위 → asym 효과 재확인
+
+### Figures
+
+- (해당 시) `reports/.../figures/exp030_*.png` — 학습 곡선, 후반 붕괴 시각화 등 — 본 논문 작성 시 추가
+
+### 보류 아이디어
+
+- **Early stopping patience 재조정**: 10 → 6~8 (후반 붕괴 자동 차단)
+- **best_model 사용 권장**: final 사용 시 학습 후반 붕괴 위험. 본 논문 평가는 best 기준.
+- **추가 안정화**: 후반 LR 더 빠르게 감소 (예: 200k 이후 1e-6) 또는 SAC 전환 고려 ([[ddpg_continuous_control]])
+
+### 산출물
+
+- `experiments/exp030_stabilization/best_model.zip` (Val Sharpe 1.974, step 550k)
+- `experiments/exp030_stabilization/final_model.zip` (Val Sharpe 1.209, step 1M)
+- `experiments/exp030_stabilization/config_snapshot.yaml`
+- `experiments/exp030_stabilization/mlruns/` → 통합 mlruns 로 이전 예정 (또는 별도 유지)
+- `mlruns/` (프로젝트 루트, 통합 mlflow tracking 시작)
+
+---
+
 ## 2026-05-14 (같은 날 3차 추가) — exp032 설계 강화: a/b/c 3단계 분리 + 3개 학습 노트 추가
 
 ### 결정 사항

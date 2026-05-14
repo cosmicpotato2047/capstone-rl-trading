@@ -207,9 +207,41 @@ Early stopping 발동 (100k peak 후 patience=6) → 400k 종료.
 
 ---
 
-## Phase 3 — Reward Design 본격 (예정, 2026-06~)
+## Phase 3 — 진행 중 (2026-05-14~)
 
 > **환경**: Env-v4 (canonical). 본 졸업 논문 메인 챕터.
+
+### exp030 — PPO 학습 안정화 패키지 (완료, 2026-05-14)
+
+**Hyperparameter**: LR linear 3e-4→1e-5, target_kl 0.02, ent annealing 0.01→0.001, clip 0.2, n_steps 4096, patience 10, reward sym (β=1.0).
+
+**1M steps 완주** (early stop 미발동):
+
+| Metric | Best (550k) | Final (1M) |
+|---|---|---|
+| Val Sharpe | **1.974** | 1.209 |
+| Return | +7.24% | +7.02% |
+| MDD | 3.95% | 7.02% |
+| vs ATR Baseline (1.505) | **+31%** | -20% |
+
+**성공 기준 점검**:
+- Val Sharpe ≥ 1.0 (floor): ✓
+- 후반 변동 ± 0.3: △ (0.38)
+- final ≥ best × 0.8: ✗ (61%)
+
+→ **부분 성공.** Best 시점에서는 ATR baseline 31% 초과. 안정화 패키지로 best step 100k→550k 늦춤. 다만 700k 이후 붕괴 패턴 미해결 — exp031 (BC warm-start) 의 동기.
+
+### 본 논문 메인 비교표 업데이트 (Env-v4)
+
+| 시스템 | Val Sharpe (best) | vs ATR | 비고 |
+|---|---|---|---|
+| **ATR Baseline** | **1.505** | — | Env-v4 Bayesian Trial #34 |
+| **RL sym (exp030 + 안정화)** | **1.974** | **+31%** | symmetric reward, 1M steps 완주 |
+| **RL asym β=2.0 (exp_rl_replicate)** | **2.250** | **+49%** | asymmetric reward, 100k peak |
+
+→ **두 가지 발견 확정**:
+1. **§5 Positive finding 유지** — Reward variant (sym → asym) 가 RL 알파에 의미 있는 차이 (+14% 추가 우위)
+2. **§4 Negative finding 약화** — Env-v4 에서 sym RL 도 best 시점에 ATR 초과 (학습 안정성 의존). exp020 Env-v2 "RL = Fixed [1.0, 0.0]" 가 Env-v4 에서는 정확히 성립 안 함.
 
 ### 진행 예정
 
