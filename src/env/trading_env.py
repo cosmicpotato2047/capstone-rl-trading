@@ -1,5 +1,7 @@
 """
-BTC 그리드 트레이딩 Gymnasium 환경
+BTC 그리드 트레이딩 Gymnasium 환경 (Env-v4: 2D ATR 비례 + 지정가 체결)
+
+본 환경은 졸업 논문의 canonical 환경. 환경 변천 history는 docs/ENV_HISTORY.md 참조.
 
 State (7차원, rolling z-score 정규화):
     [0] log_price            = log(price / price.rolling(168).mean())
@@ -10,40 +12,31 @@ State (7차원, rolling z-score 정규화):
     [5] trend_short          = pct_change(indicators.trend_short)  — 단기 모멘텀 (기본 72h)
     [6] trend_long           = pct_change(indicators.trend_long)   — 중기 레짐   (기본 720h)
 
-    trend 피처 추가 이유:
-        방향성 피처 없이는 RL이 상승/하락/횡보 regime을 구분할 수 없어 [0,0] 포화 수렴.
-        trend_short(72h): ATR 윈도우(168h)보다 짧아 빠른 방향 전환 감지.
-        trend_long(720h): 30일 중기 레짐 판단 (ATR과 겹치지 않는 정보).
+Action (2차원 연속, [0, 1]²) — ATR 비례 스케일링:
+    [0] aggressiveness  → buy gap 계수 결정 (buy_hi, buy_lo 동시 조정)
+    [1] profit_target   → sell gap 계수 결정 (sell_market, sell_cost 동시 조정)
 
-Action (4차원 연속, [0, 1]⁴) — exp024 재설계:
-    ATR을 공식에서 제거. RL이 절대 비율 gap을 직접 결정.
-    state[4] volatility(ATR/price)는 유지 — RL이 필요하면 간접 활용 가능.
+    Avellaneda-Stoikov 마켓 메이킹의 2 quote 구조 단순화.
+    State[4] volatility(ATR/price) 와 Action 공식이 모두 ATR 사용 → state-action 정합성.
 
-    [0] buy_hi_coef   → buy_hi_gap = action[0] × 0.10          [0, 10%]
-    [1] buy_lo_extra  → buy_lo_gap = buy_hi_gap + action[1] × 0.20  [buy_hi_gap, buy_hi_gap+20%]
-                        (항상 buy_lo < buy_hi 보장)
-    [2] sell_m_coef   → sell_market_gap = action[2] × 0.10     [0, 10%]  현재가 기준
-    [3] sell_c_coef   → sell_cost_gap   = action[3] × 0.20     [0, 20%]  평단가 기준 (독립)
+주문 (매 스텝 4개 지정가 갱신 — ATR 비례 스케일링):
+    atr_ratio = ATR(168) / price        # df["volatility_raw"] 컬럼
 
-    ATR 고정 최적값(exp023)의 대응 절대값 (BTC ATR/price ≈ 0.2%~2%):
-        A_b=0.106 → buy_hi_gap ≈ 0.02%~0.21% → action[0] ≈ 0.002~0.021 (범위 내)
-        C_b=13.92 → buy_lo_gap ≈ 2.8%~27.8%  → action[1] 범위 내
-        A_s=0.080 → sell_m_gap ≈ 0.02%~0.16% → action[2] ≈ 0.002~0.016 (범위 내)
-        C_s=4.309 → sell_c_gap ≈ 0.86%~8.6%  → action[3] ≈ 0.043~0.43 (범위 내)
-
-주문 (매 스텝 4개 지정가 갱신 — ATR 없음, 절대 비율):
-    buy_hi_gap      = action[0] × 0.10
-    buy_lo_gap      = buy_hi_gap + action[1] × 0.20
-
-    sell_market_gap = action[2] × 0.10
-    sell_cost_gap   = action[3] × 0.20
+    buy_hi_gap      = atr_ratio × (A_b + B_b × aggressiveness)
+    buy_lo_gap      = atr_ratio × (C_b + D_b × aggressiveness)
+    sell_market_gap = atr_ratio × (A_s + B_s × profit_target)
+    sell_cost_gap   = atr_ratio × (C_s + D_s × profit_target)
 
     buy_hi      = price     × (1 - buy_hi_gap)
     buy_lo      = price     × (1 - buy_lo_gap)
     sell_market = price     × (1 + sell_market_gap)
     sell_cost   = avg_price × (1 + sell_cost_gap)    # 원가 수익 보호 (평단가 기준)
 
-체결: 다음 봉 high/low로 트리거 확인, 지정가(limit price)에 체결
+    기본 계수 (config.environment.formula_coefs 에서 재정의 가능):
+        A_b=0.285, B_b=1.748, C_b=5.223, D_b=18.683  (Buy: exp023 Bayesian Trial #42)
+        A_s=0.05,  B_s=1.95,  C_s=2.5,   D_s=7.5     (Sell: Phase 2 재설계)
+
+체결 (지정가 — limit price):
     next_high >= sell_market  →  sell_market 가격으로 체결
     next_high >= sell_cost    →  sell_cost   가격으로 체결
     next_low  <= buy_hi       →  buy_hi      가격으로 체결
@@ -64,7 +57,7 @@ Action (4차원 연속, [0, 1]⁴) — exp024 재설계:
 Reward:
     매 스텝: step_return = (equity_t - equity_{t-1}) / start_capital
              reward = step_return × beta
-             beta = reward_loss_beta (기본 2.0) if step_return < 0 else 1.0
+             beta = reward_loss_beta (config; 1.0=symmetric, 2.0=asymmetric exp027_rl 방식) if step_return < 0 else 1.0
              → 손실을 이익보다 beta배 강하게 패널티. 자본 보전 유도.
              수수료는 _execute_buy/_execute_sell에서 cash에 반영되므로 별도 차감 없음.
     사이클 종료 시: 보너스 없음 (통계 기록만 — completed_cycles)
@@ -137,13 +130,13 @@ class BTCGridTradingEnv(gym.Env):
         )
 
         # ── Gymnasium 공간 정의 ────────────────────────────────
-        # Action: [aggressiveness, profit_target] ∈ [0, 1]²
-        # aggressiveness → buy gap 계수 범위 선택
-        # profit_target  → sell gap 계수 범위 선택
+        # Action: [aggressiveness, profit_target] ∈ [0, 1]² (Env-v4)
+        # aggressiveness → buy gap 계수 (buy_hi, buy_lo 동시 조정)
+        # profit_target  → sell gap 계수 (sell_market, sell_cost 동시 조정)
         self.action_space = spaces.Box(
             low=np.float32(0.0),
             high=np.float32(1.0),
-            shape=(4,),
+            shape=(2,),
             dtype=np.float32,
         )
 
@@ -216,12 +209,10 @@ class BTCGridTradingEnv(gym.Env):
         price = float(row["close"])
 
         # ── 1. 액션 → 4개 지정가 계산 ────────────────────────
-        buy_hi_coef  = float(action[0])
-        buy_lo_extra = float(action[1])
-        sell_m_coef  = float(action[2])
-        sell_c_coef  = float(action[3])
+        aggressiveness = float(action[0])
+        profit_target  = float(action[1])
         buy_hi, buy_lo, sell_market, sell_cost = self._compute_order_prices(
-            buy_hi_coef, buy_lo_extra, sell_m_coef, sell_c_coef, price
+            aggressiveness, profit_target, price
         )
 
         # ── 2. 다음 봉 체결 판단 ──────────────────────────────
@@ -265,10 +256,8 @@ class BTCGridTradingEnv(gym.Env):
             "cash": self.cash,
             "holdings": self.holdings,
             "n_trades": self.n_trades,
-            "buy_hi_coef": buy_hi_coef,
-            "buy_lo_extra": buy_lo_extra,
-            "sell_m_coef": sell_m_coef,
-            "sell_c_coef": sell_c_coef,
+            "aggressiveness": aggressiveness,
+            "profit_target":  profit_target,
             "buy_hi": buy_hi,
             "buy_lo": buy_lo,
             "sell_market": sell_market,
@@ -305,29 +294,34 @@ class BTCGridTradingEnv(gym.Env):
 
     def _compute_order_prices(
         self,
-        buy_hi_coef: float,
-        buy_lo_extra: float,
-        sell_m_coef: float,
-        sell_c_coef: float,
+        aggressiveness: float,
+        profit_target: float,
         price: float,
     ) -> tuple[float, float, float, float]:
-        """4D action → 4개 지정가 반환 (exp024: ATR 없음, 절대 비율).
+        """2D action → 4개 지정가 반환 (Env-v4: ATR 비례 스케일링).
+
+        atr_ratio = ATR(168) / price       (df["volatility_raw"] 컬럼)
+
+        buy_hi_gap      = atr_ratio × (A_b + B_b × aggressiveness)
+        buy_lo_gap      = atr_ratio × (C_b + D_b × aggressiveness)
+        sell_market_gap = atr_ratio × (A_s + B_s × profit_target)
+        sell_cost_gap   = atr_ratio × (C_s + D_s × profit_target)
 
         Args:
-            buy_hi_coef:  action[0] ∈ [0,1] → buy_hi_gap = coef × 0.10   [0%, 10%]
-            buy_lo_extra: action[1] ∈ [0,1] → buy_lo_gap = buy_hi_gap + extra × 0.20
-                          (항상 buy_lo < buy_hi 보장)
-            sell_m_coef:  action[2] ∈ [0,1] → sell_market_gap = coef × 0.10  [0%, 10%]
-            sell_c_coef:  action[3] ∈ [0,1] → sell_cost_gap   = coef × 0.20  [0%, 20%]
-            price:        현재 봉 close
+            aggressiveness: action[0] ∈ [0,1] → buy 측 gap 계수
+            profit_target:  action[1] ∈ [0,1] → sell 측 gap 계수
+            price:          현재 봉 close
 
         Returns:
             (buy_hi, buy_lo, sell_market, sell_cost)
         """
-        buy_hi_gap      = buy_hi_coef  * 0.10
-        buy_lo_gap      = buy_hi_gap   + buy_lo_extra * 0.20
-        sell_market_gap = sell_m_coef  * 0.10
-        sell_cost_gap   = sell_c_coef  * 0.20
+        row = self.df.iloc[self.current_step]
+        atr_ratio = float(row["volatility_raw"])
+
+        buy_hi_gap      = atr_ratio * (self.A_b + self.B_b * aggressiveness)
+        buy_lo_gap      = atr_ratio * (self.C_b + self.D_b * aggressiveness)
+        sell_market_gap = atr_ratio * (self.A_s + self.B_s * profit_target)
+        sell_cost_gap   = atr_ratio * (self.C_s + self.D_s * profit_target)
 
         buy_hi      = price * (1.0 - buy_hi_gap)
         buy_lo      = price * (1.0 - buy_lo_gap)

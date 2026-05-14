@@ -2578,3 +2578,100 @@ RQ 문구 일괄 갱신:
 3. **exp032a 실행** — variant별 reward hyperparameter 튜닝 (공정 비교 토대 마련)
 4. **exp032b 실행** — full 비교 + effect size 분석 (논문 §5 메인)
 5. **exp032c 실행** — 메커니즘 분석 (논문 §6)
+
+---
+
+## 2026-05-14 (같은 날 5차) — ★ 환경 코드 vs 문서 불일치 발견 + 옵션 A 환경 복원 결정
+
+### 발견
+
+exp030 시작 직전 코드/문서 점검 중 **4가지 불일치** 발견:
+
+| # | 항목 | 코드 진실 | 어제 작성한 문서 |
+|---|---|---|---|
+| 1 | Action 차원 | 4D `[buy_hi_coef, buy_lo_extra, sell_m_coef, sell_c_coef]` | 2D `[aggressiveness, profit_target]` |
+| 2 | Action 공식 | 절대 % gap (ATR 미사용) — `gap = action × 0.10` | ATR 비례 — `gap = atr_ratio × (A + B×action)` |
+| 3 | Data split | Train 2017-10~2020-12, Val 2021-2023, Test 2024~ | Train 2017-08~2022-12, Val 2023 |
+| 4 | formula_coefs 변수 (A_b, B_b, ...) | dead code (init만, _compute_order_prices 미사용) | "Bayesian 최적 계수 활용" |
+
+**원인 추적**:
+- commit `757c1ce` (exp024 env 재설계 — ATR 제거, 4D 절대 gap) 이 환경 구조를 통째로 바꿈
+- 이후 exp025~028 은 4D 절대 gap 환경에서 진행
+- 어제 (2026-05-13) PROJECT_GOAL/CLAUDE/FORMULAS 작성 시 RESEARCH_LOG 옛 기록 (exp020 시점) 만 보고 작성. 코드 실제 상태 미확인.
+
+### 환경 변천 정리 (commit log 기반)
+
+```
+Env-v1 (exp001~005): 절대 gap 고정 범위
+Env-v2 (exp006~023): 2D ATR 비례 + favorable bias 체결 (commit 352a98b 이후)
+  ↑ exp020 "RL=Fixed[1.0,0.0] Sharpe 45.39" 등 모든 Phase 1~2 결과의 환경
+Env-v3 (exp024~028): 4D 절대 gap + 지정가 체결 (commit 757c1ce 이후, e84862e 체결 수정)
+  ↑ exp026 ATR 0.935 / exp027_rl asym 1.955 등 Phase 2 후반 결과의 환경
+Env-v4 (canonical, exp030~ 예정): 2D ATR 비례 + 지정가 체결
+  ↑ 본 졸업 논문의 정식 환경 — 환경 복원 작업으로 만들어냄
+```
+
+### 옵션 비교 결과 (사용자 결정)
+
+세 옵션 사이에서 사용자와 합의:
+- (A) **2D ATR 비례 복원** + exp026/027_rl 재현 — 학술 정합성 강함, 재현 위험 있음, 1.5~2주 추가
+- (B) 4D 절대 gap 유지 + 문서 갱신만 — 빠름, 학술 정합성 약함 (ATR이 dead state)
+- (C) 하이브리드 (config 옵션) — 복잡
+
+**Occam (단순성) + 논리적 정합성 기준으로는 (A) 가 명확히 우세** (6:1):
+- Action space 차원 작음
+- Avellaneda-Stoikov 단순화로 학술 정당화 강함
+- State[4] (ATR/price) 와 Action 공식의 자연 연결 (state-action 정합성)
+- 평가 직관성 (2D scatter 등)
+- vs 4D 의 자유도는 본 RQ (reward design) 와 무관
+
+→ 사용자 결정: **옵션 A 진행**.
+
+### 결정 사항
+
+1. **본 졸업 논문 환경**: Env-v4 (2D ATR 비례 + 지정가 체결 + asymmetric reward 옵션)
+2. **데이터 분할**: (가) 유지 — Train 2017-10~2020-12 / Val 2021-2023 / Test 2024~ (CPCV 6-fold 에 적합)
+3. **이전 결과 인용**:
+   - Env-v2 결과 (exp006~023): 정성적 발견만 인용. Sharpe 수치는 체결가 favorable bias artifact 명시
+   - Env-v3 결과 (exp024~028): 직접 인용 불가. **재현 필요** (Env-v4 에서)
+4. **재현 대상**:
+   - exp026 ATR Baseline (Bayesian 계수, Val/Test 평가)
+   - exp027_rl asymmetric reward (β=2.0, 5 seeds, Test Sharpe 1.955 효과 재현)
+
+### 발견된 잠재 위험
+
+- **exp027_rl 재현 실패 가능성**: Env-v3 (4D 절대 gap) 에서 나온 Test Sharpe 1.955 가 Env-v4 (2D ATR 비례) 에서 재현되는지 불확실
+- 재현 실패 시 대응:
+  - 본 논문 RQ 가 열린 질문이라 무너지지 않음
+  - §5 strong positive → moderate / negative 확장 으로 톤 조정
+  - asymmetric reward 의 "환경 의존성" 발견 자체가 새 contribution
+
+### 신설 문서
+
+- `docs/ENV_HISTORY.md` — 환경 변천 single source of truth + 본 논문 정식 환경 정의 + 인용 가능성 매트릭스
+
+### 작업 계획 (24 step)
+
+본 RESEARCH_LOG 아래 + `docs/study/rl_finance/project_continuation_plan.md` 의 exp030 진입 전 prep 단계:
+
+- Step 1 (✓): ENV_HISTORY.md 신설
+- Step 2 (진행 중): RESEARCH_LOG 본 섹션 추가
+- Step 3: RESULTS_SUMMARY 환경 태그 컬럼
+- Step 4: feature 브랜치 `feature/exp030-prep-2d-atr-restore`
+- Step 5: preprocess_data.py volatility_raw 컬럼 점검
+- Step 6: trading_env.py — 4D → 2D + ATR 비례 공식 복원
+- Step 7: tests/test_trading_env.py 갱신 + 46개 통과
+- Step 8~10: ATR baseline 재현 (Bayesian 50 trials, Val 평가)
+- Step 11~13: exp027_rl 재현 (PPO 1M × 5 seeds, asym β=2.0)
+- Step 14: 재현 결과 분석
+- Step 15~17: 문서 정합화 (PROJECT_GOAL, CLAUDE, FORMULAS, RELATED_WORK, RESULTS_SUMMARY, 학습 노트)
+- Step 18: commit + main 머지 + push
+- Step 19~24: exp030 본격 (학습 안정화 + mlflow 통합)
+
+총 ~2주. 그 후 본 논문 메인 실험 시리즈 (exp031~035) 진행.
+
+### 메타 교훈
+
+- 문서를 작성하기 전에 **반드시 코드 진실 확인**. RESEARCH_LOG 의 옛 기록만 의지하면 안 됨.
+- 환경 변경 commit 발생 시 단일 source of truth (ENV_HISTORY) 갱신을 commit 의 일부로 강제.
+- 학습 노트의 "우리 시스템 묘사" 가 코드와 일치하는지 주기적 점검.

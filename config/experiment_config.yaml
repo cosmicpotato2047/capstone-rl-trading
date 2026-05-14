@@ -61,37 +61,42 @@ environment:
   # 랜덤 시작점 (멀티 환경 학습용)
   random_start: true
 
-  # ── n_splits 범위 (RL이 사이클마다 결정) ──
-  n_splits_min: 5               # 최소 분할 수
-  n_splits_max: 15              # 최대 분할 수
+  # ── 주문 구조 (Env-v4) ──
+  n_buy_orders: 2               # buy_hi + buy_lo 두 레벨
+  n_splits: 5                   # 사이클 시작 시 cash → n_splits 슬롯 균등 분할
+  threshold_basis: "avg_price"  # 매도 1슬롯 임계값 기준: "price" or "avg_price"
 
-  # ── ATR gap 최대 계수 (Optuna 탐색 대상) ──
-  # gap = atr_ratio × action × coef_max
-  coef_b1_max: 9.887            # buy_market  최대 배율 (Optuna exp029_env Trial #12)
-  coef_b2_max: 9.505            # buy_avg     최대 배율 (DCA, 더 넓은 범위)
-  coef_s1_max: 9.724            # sell_market 최대 배율
-  coef_s2_max: 23.944           # sell_cost   최대 배율
+  # ── Reward ──
+  reward_loss_beta: 1.0         # 1.0=symmetric (default), 2.0=asymmetric (exp027_rl 방식)
 
-  # ── Reward 파라미터 (Optuna 탐색 대상) ──
-  w_cycle: 3.208                # 사이클 완료 보너스 배율 (Optuna exp029_env Trial #12)
-  idle_rate: 1.033e-5           # idle 패널티 강도 (스텝당)
-  grace_period: 43              # idle 패널티 유예 시간 (h)
+  # ── MDP 공식 계수 (Env-v4: 2D action + ATR 비례) ──
+  # buy_hi_gap      = atr_ratio × (A_b + B_b × aggressiveness)
+  # buy_lo_gap      = atr_ratio × (C_b + D_b × aggressiveness)
+  # sell_market_gap = atr_ratio × (A_s + B_s × profit_target)
+  # sell_cost_gap   = atr_ratio × (C_s + D_s × profit_target)
+  # Buy 측: exp023 Bayesian Trial #42 참고값 (Env-v2 시절, Env-v4 재최적화 필요)
+  # Sell 측: Phase 2 재설계값 (Bayesian 대상 제외, RL action 충돌 방지)
+  formula_coefs:
+    A_b: 0.285
+    B_b: 1.748
+    C_b: 5.223
+    D_b: 18.683
+    A_s: 0.05
+    B_s: 1.95
+    C_s: 2.5
+    D_s: 7.5
 
   # 사이클 정의
-  # 시작: holdings == 0 → 첫 체결 (액션 캡처)
-  # 종료: holdings → 0 (전량 매도)
-  # 청산: holdings 가치 < 1 split 가치 → sell_market 전량
+  # 시작: holdings == 0 → 첫 체결
+  # 종료: holdings → 0 (전량 매도) — threshold_btc 이하 시 강제 전량 청산
 
 # ────────────────────────────────────────
-# Action 공간 (5D, [0,1]⁵) — exp029 재설계
+# Action 공간 (2D, [0,1]²) — Env-v4 canonical
 # ────────────────────────────────────────
-# 사이클 시작 시 한 번 결정, 사이클 종료까지 유지
-# [0] n_splits_coef → n_splits = n_splits_min + round(a × (n_splits_max - n_splits_min))
-# [1] gap_b1        → buy_market  = price         × (1 - atr_ratio × gap_b1 × coef_b1_max)
-# [2] gap_b2        → buy_avg     = last_avg_price × (1 - atr_ratio × gap_b2 × coef_b2_max)
-#                     (last_avg_price == 0이면 첫 사이클 → buy_avg 생략)
-# [3] gap_s1        → sell_market = price         × (1 + atr_ratio × gap_s1 × coef_s1_max)
-# [4] gap_s2        → sell_cost   = avg_price     × (1 + atr_ratio × gap_s2 × coef_s2_max)
+# 매 스텝 결정 (사이클 단위 아님)
+# [0] aggressiveness → buy_hi, buy_lo 동시 조정 (ATR 비례)
+# [1] profit_target  → sell_market, sell_cost 동시 조정 (ATR 비례)
+# Avellaneda-Stoikov 마켓 메이킹의 2 quote 단순화. ATR이 state + action 양쪽 사용.
 
 # ────────────────────────────────────────
 # PPO 에이전트 (stable-baselines3)

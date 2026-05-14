@@ -39,13 +39,22 @@ PRICE         = 1_000.0  # 기본 테스트 가격
 
 
 def _cfg(**env_overrides):
-    """테스트용 최소 config dict."""
+    """테스트용 최소 config dict.
+
+    formula_coefs 명시 — 테스트 주석의 buy_hi=995, sell_market=1005 등 수치는
+    A_b=0.5, A_s=0.5, C_b=2.5, C_s=2.5 (B,D 무시) + ATR_RATIO=0.01 가정.
+    코드 default (A_b=0.285 등, exp023 Bayesian) 와 다르므로 테스트용 계수 명시.
+    """
     cfg = {
         "environment": {
             "initial_cash":     INITIAL_CASH,
             "transaction_cost": FEE,
             "n_buy_orders":     N_BUY,
             "n_splits":         N_SPLITS,
+            "formula_coefs": {
+                "A_b": 0.5, "B_b": 1.5, "C_b": 2.5, "D_b": 7.5,
+                "A_s": 0.5, "B_s": 1.5, "C_s": 2.5, "D_s": 7.5,
+            },
         },
         "indicators": {"atr_period": WARMUP},
     }
@@ -83,6 +92,8 @@ def _df(n_rows=30, price=PRICE, high_offset=0.0, low_offset=0.0):
         "volatility_raw":    [ATR_RATIO] * n_rows,
         "zscore_log_price":  [0.0]   * n_rows,
         "zscore_volatility": [0.0]   * n_rows,
+        "zscore_trend_72h":  [0.0]   * n_rows,
+        "zscore_trend_720h": [0.0]   * n_rows,
     })
 
 
@@ -99,6 +110,8 @@ def _df_rows(prices, highs, lows, atr_ratio=ATR_RATIO):
         "volatility_raw":    [atr_ratio] * n,
         "zscore_log_price":  [0.0]   * n,
         "zscore_volatility": [0.0]   * n,
+        "zscore_trend_72h":  [0.0]   * n,
+        "zscore_trend_720h": [0.0]   * n,
     })
 
 
@@ -673,9 +686,33 @@ class TestReward:
 
 class TestEnvChecker:
     def test_env_checker_passes(self):
-        """gymnasium 공식 env_checker 통과."""
+        """gymnasium 공식 env_checker 통과.
+
+        실제 parquet 데이터를 못 찾으면 (e.g., worktree에서 실행 시)
+        synthetic _df()로 대체.
+        """
+        from pathlib import Path
         from src.utils.config import load_config
-        cfg = load_config("config/experiment_config.yaml")
-        df  = pd.read_parquet("data/processed/btc_val.parquet")
+
+        # 프로젝트 루트 / worktree 둘 다에서 작동하도록 경로 탐색
+        candidates = [
+            Path("data/processed/btc_val.parquet"),
+            Path(__file__).resolve().parent.parent / "data/processed/btc_val.parquet",
+            Path(__file__).resolve().parents[3] / "data/processed/btc_val.parquet",
+        ]
+        df = None
+        for path in candidates:
+            if path.exists():
+                df  = pd.read_parquet(path)
+                cfg = load_config(str(Path(__file__).resolve().parent.parent / "config/experiment_config.yaml")) \
+                    if (Path(__file__).resolve().parent.parent / "config/experiment_config.yaml").exists() \
+                    else load_config("config/experiment_config.yaml")
+                break
+
+        if df is None:
+            # Fallback: synthetic data
+            df  = _df(n_rows=300)
+            cfg = _cfg()
+
         env = BTCGridTradingEnv(df, cfg)
         check_env(env)   # 예외 없으면 통과

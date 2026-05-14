@@ -3,12 +3,27 @@
 > 본 문서는 **졸업 논문 작성 시 핵심 수치를 빠르게 찾기 위한 단일 참조표**.
 > 상세 의사결정과 시행착오는 [`../RESEARCH_LOG.md`](../RESEARCH_LOG.md) 참조.
 > RQ 및 가설은 [`PROJECT_GOAL.md`](PROJECT_GOAL.md) 참조.
+> **환경 변천 및 인용 가능성은 [`ENV_HISTORY.md`](ENV_HISTORY.md) 참조** (필수).
+
+## 환경 태그 (본 표의 각 결과는 어느 환경에서 나왔는지 표시)
+
+- **Env-v2** — 2D ATR 비례 + favorable bias 체결 (exp006~023)
+- **Env-v3** — 4D 절대 gap + 지정가 체결 (exp024~028)
+- **Env-v4** — 2D ATR 비례 + 지정가 체결 (canonical, exp030~)
+
+| 환경 | 본 논문 직접 인용 가능? |
+|---|---|
+| Env-v2 | ⚠️ 정성적 only (수치는 favorable bias artifact 명시) |
+| Env-v3 | ❌ 다른 환경 (Env-v4 에서 재현 필요) |
+| **Env-v4** | ✓ **본 논문 환경 (canonical)** |
 
 ---
 
 ## Phase 1 — 환경 설계 + RL 학습 (exp001~exp016, 2026-04)
 
-### 베이스라인 (Val 2023, 강세장)
+> **환경**: 대부분 Env-v2 (2D ATR 비례 + favorable bias 체결). 수치는 artifact 영향 있음.
+
+### 베이스라인 (Val 2023, 강세장) — Env-v2
 
 | 전략 | Sharpe | Return (%) | MDD (%) | Trades | Cycles |
 |------|--------|-----------|---------|--------|--------|
@@ -35,14 +50,14 @@
 | exp013b | n_splits=2 + threshold=avg_price | 17.579 | n_splits ablation 완료 |
 | exp016 | Bayesian 계수 (Trial #42) + 3M | **35.424** | Phase 1 best |
 
-### Phase 1 Test Set 평가 (exp016, 2024+, 19,901봉)
+### Phase 1 Test Set 평가 (exp016, 2024+, 19,901봉) — Env-v2 ⚠️
 
 | 모델 | **Sharpe** | Return (%) | MDD (%) | Trades | Cycles |
 |------|-----------|-----------|---------|--------|--------|
 | **PPO exp016 best** | **43.040** | (수조%, artifact) | 3.12 | 20,896 | 9,520 |
 | Best baseline (Fixed Grid 5%) | 1.472 | — | — | — | — |
 
-> ⚠️ **이 결과는 체결가 favorable bias artifact** (exp026에서 발견 + 수정). 본 논문 §4 Negative finding에서 "체결가 버그 사례" 로 활용.
+> ⚠️ **Env-v2 (체결가 favorable bias) artifact** (exp026에서 발견 + 수정). 본 논문 §4 Negative finding에서 "체결가 버그 사례" + 정성적 인용으로 활용. Sharpe 수치는 인용 불가.
 
 ### Phase 1 핵심 발견 — Policy Saturation
 
@@ -54,7 +69,12 @@
 
 ## Phase 2 — ATR vs RL + Asymmetric Reward (exp017~exp027, 2026-04)
 
-### Decisive Ablation: Fixed Policy 비교
+> **환경**:
+> - exp017~023 (전반): Env-v2 — 2D ATR 비례 + favorable bias
+> - exp024~028 (후반): Env-v3 — 4D 절대 gap + 지정가 체결
+> 둘 다 본 논문 환경 (Env-v4) 와 다름. Env-v3 결과는 재현 필요.
+
+### Decisive Ablation: Fixed Policy 비교 — Env-v2 ⚠️
 
 | | Val Sharpe | Test Sharpe |
 |---|---|---|
@@ -71,9 +91,9 @@
 - 기존: `next_low/next_high` 로 체결 → 매수는 봉의 최저, 매도는 봉의 최고 → **구조적 spread 수익 artifact**
 - 수정: 지정가 (limit price) 로 체결
 
-### Phase 2 결과 (체결가 수정 후)
+### Phase 2 결과 (체결가 수정 후) — Env-v3 (4D 절대 gap) ❌ 재현 필요
 
-#### Val 2021-2023H1 (확장 데이터)
+#### Val 2021-2023H1 (확장 데이터) — Env-v3
 
 | 시스템 | Val Sharpe | Val Return (%) | Val MDD (%) | Trades |
 |--------|-----------|---------------|-------------|--------|
@@ -82,7 +102,7 @@
 | ATR + direction (exp027) | 2.348 | 17.89 | 1.90 | — |
 | **RL exp027_rl (asym β=2.0)** | **2.444** | **18.25** | **1.28** | **214** |
 
-#### Test 2023H2-2026 (봉인 해제, Phase 2 시점)
+#### Test 2023H2-2026 (봉인 해제, Phase 2 시점) — Env-v3
 
 | 시스템 | **Test Sharpe** | Test Return (%) | Test MDD (%) | Trades |
 |--------|----------------|-----------------|--------------|--------|
@@ -96,6 +116,11 @@
 > **Asymmetric reward (β=2.0) 만으로 RL이 ATR을 Test Sharpe 기준 2.1배 초과 (1.955 vs 0.935), MDD는 1/6 (0.39% vs 2.43%), 거래 횟수는 1/7 (214 vs 1,591).**
 
 이 발견이 **본 졸업 논문의 메인 contribution (§5 Positive finding)** 의 사전 증거.
+
+⚠️ **단, 이 결과는 Env-v3 (4D 절대 gap) 환경.** 본 논문 환경 (Env-v4, 2D ATR 비례) 에서 재현 검증 필요 (작업 중 — Step 11~13). 재현 결과에 따라 §5 의 톤 결정:
+- 재현 성공 → strong positive
+- 부분 재현 (효과 약화) → moderate
+- 재현 실패 → asymmetric reward 의 환경 의존성 발견 자체가 §6 새 contribution
 
 ### Phase 2 시행착오 / 발견 timeline
 
@@ -111,9 +136,24 @@
 
 ---
 
-## Phase 3 — Reward Design 본격 (예정, 2026-05~)
+## Phase 2.5 — 환경 복원 (Env-v4 신설, 2026-05-14~) 진행 중
 
-본 졸업 논문의 메인 챕터들이 여기서 나옴.
+> **목적**: Env-v3 (4D 절대 gap) 의 학술 정합성 약점 해결. Env-v4 (2D ATR 비례 + 지정가 체결) 로 본 논문 정식 환경 확립. 그 위에서 Phase 2 사전 증거 재현.
+
+### 재현 대상
+
+| 원본 | Env | 본 논문 환경 (Env-v4) 재현 결과 | 상태 |
+|---|---|---|---|
+| exp026 ATR (Bayesian best) | Env-v3 Val 1.978 / Test 0.935 | (Step 8~10 완료 후 채움) | 대기 |
+| exp027_rl asymmetric β=2.0 | Env-v3 Val 2.444 / Test 1.955 | (Step 11~13 완료 후 채움) | 대기 |
+
+→ Step 14 (재현 분석) 에서 시나리오 A/B/C 판정.
+
+---
+
+## Phase 3 — Reward Design 본격 (예정, 2026-06~)
+
+> **환경**: Env-v4 (canonical). 본 졸업 논문 메인 챕터.
 
 ### 진행 예정
 
