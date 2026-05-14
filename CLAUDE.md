@@ -221,6 +221,54 @@ step_reward = (equity_t - equity_{t-1}) / start_capital  # symmetric
 
 기록 후 `docs: RESEARCH_LOG.md 업데이트` 로 main에 직접 커밋 및 push한다.
 
+#### 실험 (expXXX) 결과 기록 표준 템플릿
+
+exp030 이후 모든 실험은 다음 6-section 구조를 따른다 (논문 작성 시 검색/인용 일관성 확보):
+
+```markdown
+## YYYY-MM-DD — expXXX_name 완료
+
+### Objective (RQ 매핑)
+- 무엇을 검증하려고 했는가
+- 어떤 RQ/가설에 답하는가 (예: RQ-2 / H2a)
+
+### Changes
+| 파일 | 변경 |
+|---|---|
+| (경로) | (한 줄 요약) |
+
+### Hyperparameter
+- 기존 baseline 대비 어떤 hyperparameter 변경
+- exp별 config 파일 경로
+
+### Results
+| Metric | Value | 비고 |
+|---|---|---|
+| Val Sharpe (mean ± std) | X.XX ± Y.YY | n_seed=5 |
+| Cohen's d vs baseline | Z.ZZ | — |
+| MDD / Calmar / Trades | ... | |
+
+### Behavior Analysis (해당 시)
+- Regime별 행동 분포
+- (exp032c부터) Counterfactual / SHAP / Mediation 핵심 발견
+
+### Decision
+- 다음 실험으로 무엇? 왜?
+- 가설 H1~H4 중 어느 것이 (부분) 지지 / 부정 되었는가
+
+### Figures
+- `reports/.../figures/expXXX_*.png` 파일명만 기록
+
+### 보류 아이디어
+- (있으면, 미래 작업 후보)
+```
+
+→ 매 exp 기록이 동일 구조라 `docs/RESULTS_SUMMARY.md` 갱신 시 그대로 옮겨갈 수 있음.
+
+#### RESULTS_SUMMARY.md 동기 갱신
+
+각 exp 완료 시 RESEARCH_LOG 기록과 함께 `docs/RESULTS_SUMMARY.md` 의 해당 Phase 섹션도 갱신한다 (수치만 옮겨가는 짧은 작업).
+
 ### Commit Message Convention (Conventional Commits)
 ```
 feat:     새 기능 구현
