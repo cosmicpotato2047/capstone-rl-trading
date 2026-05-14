@@ -86,8 +86,10 @@ agent:
   n_envs: 4
 
   # ★ Action Bias Init (exp031 핵심)
-  # raw_mean = -10 → tanh ≈ -1 → action ≈ 0 (ATR Baseline 행동 매칭)
-  action_bias_init: [-10.0, -10.0]
+  # raw_mean = -3 → tanh(-3) ≈ -0.995 → action ≈ 0.0025 (ATR Baseline 행동 매칭)
+  # 주의: -10 등 너무 큰 값은 tanh saturation 으로 gradient vanishing.
+  #       [-3, -2] 권장: action ≈ 0 + 학습 진행 가능.
+  action_bias_init: [-3.0, -3.0]
 
 # ────────────────────────────────────────
 # 베이스라인 비교
