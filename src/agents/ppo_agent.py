@@ -85,6 +85,46 @@ def _build_lr_schedule(agent_cfg: dict) -> float | Callable[[float], float]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# ent_coef Annealing Callback (exp030 안정화)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class EntCoefAnnealCallback(BaseCallback):
+    """학습 진행에 따라 ent_coef 를 선형 anneal.
+
+    SB3 PPO 의 ent_coef 는 float 만 받음 (callable 불가). 따라서 callback 으로
+    매 step 후 self.model.ent_coef 를 직접 갱신한다.
+
+    Anneal 비활성화는 config 에서 ent_schedule="constant" (기본값) 로 설정.
+    """
+
+    def __init__(
+        self,
+        ent_start: float,
+        ent_end: float,
+        total_timesteps: int,
+        schedule: str = "linear",
+        verbose: int = 0,
+    ):
+        super().__init__(verbose)
+        self.ent_start = float(ent_start)
+        self.ent_end = float(ent_end)
+        self.total_timesteps = int(total_timesteps)
+        self.schedule = schedule
+
+    def _on_step(self) -> bool:
+        progress = min(1.0, self.num_timesteps / max(1, self.total_timesteps))
+        if self.schedule == "linear":
+            ent = self.ent_start + (self.ent_end - self.ent_start) * progress
+        elif self.schedule == "cosine":
+            cosine_factor = 0.5 * (1.0 + math.cos(math.pi * progress))
+            ent = self.ent_end + (self.ent_start - self.ent_end) * cosine_factor
+        else:
+            return True  # constant: 아무 것도 안 함
+        self.model.ent_coef = ent
+        return True
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # VecNormalize 헬퍼
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -428,6 +468,8 @@ class PPOAgent:
             tb_log = None
 
         # ── PPO 모델 ─────────────────────────────────────────────
+        # target_kl: KL early stop (exp030 안정화). None 이면 비활성.
+        target_kl = agent_cfg.get("target_kl", None)
         self.model = PPO(
             policy         = agent_cfg["policy"],
             env            = self.train_env,
@@ -441,6 +483,7 @@ class PPOAgent:
             ent_coef       = agent_cfg["ent_coef"],
             vf_coef        = agent_cfg["vf_coef"],
             max_grad_norm  = agent_cfg["max_grad_norm"],
+            target_kl      = target_kl,
             verbose        = 1,
             seed           = self.seed,
             tensorboard_log = tb_log,
@@ -480,7 +523,25 @@ class PPOAgent:
                 )
             )
 
-        agent_cfg  = self.config["agent"]
+        # ent_coef annealing callback (exp030 안정화)
+        agent_cfg = self.config["agent"]
+        ent_schedule = agent_cfg.get("ent_schedule", "constant")
+        if ent_schedule != "constant":
+            ent_start = float(agent_cfg["ent_coef"])
+            ent_end = float(agent_cfg.get("ent_coef_end", ent_start * 0.1))
+            callbacks.append(
+                EntCoefAnnealCallback(
+                    ent_start=ent_start,
+                    ent_end=ent_end,
+                    total_timesteps=int(total_timesteps),
+                    schedule=ent_schedule,
+                    verbose=1,
+                )
+            )
+            print(f"  ent_coef anneal: {ent_start:.4f} → {ent_end:.4f} ({ent_schedule})")
+        if agent_cfg.get("target_kl", None) is not None:
+            print(f"  target_kl: {agent_cfg['target_kl']} (KL early stop)")
+
         train_cfg  = self.config["training"]
         n_envs     = agent_cfg.get("n_envs", 1)
         max_ep     = train_cfg.get("max_episode_steps", None)

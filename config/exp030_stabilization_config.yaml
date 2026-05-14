@@ -1,0 +1,129 @@
+# exp030 — PPO 학습 안정화 패키지 (Env-v4)
+#
+# 목적: exp028/exp029 의 학습 oscillation 해결. Env-v4 canonical 환경 위에서
+#       baseline PPO 가 안정적으로 학습되는지 확인. 본 논문 §3.3 Method.
+#
+# 안정화 패키지:
+#   - LR linear schedule: 3e-4 → 1e-5
+#   - target_kl = 0.02 (KL early stop)
+#   - ent_coef linear anneal: 0.01 → 0.001
+#   - clip_range: 0.2 (표준)
+#   - n_steps: 4096
+#   - reward: symmetric (β=1.0, baseline)
+#
+# 성공 기준:
+#   - Val Sharpe ≥ 1.0 (ATR baseline Val 1.505 의 70%)
+#   - 학습 후반 (700k+) Sharpe 변동 ± 0.3 이내
+#   - final Sharpe ≥ best Sharpe × 0.8
+
+# ────────────────────────────────────────
+# 데이터 (Env-v4 canonical, experiment_config.yaml 동일)
+# ────────────────────────────────────────
+data:
+  symbol: "BTC/USDT"
+  interval: "1h"
+  train_start: "2017-08-17"
+  train_end:   "2020-12-31"
+  val_start:   "2021-01-01"
+  val_end:     "2023-12-31"
+  test_start:  "2024-01-01"
+  test_end:    null
+
+# ────────────────────────────────────────
+# State 구성 지표
+# ────────────────────────────────────────
+indicators:
+  price_lookback: 168
+  atr_period: 168
+  zscore_window: 168
+  trend_windows: [72, 168, 336, 720, 1440]
+  trend_short: 72
+  trend_long: 720
+
+# ────────────────────────────────────────
+# 환경 (Env-v4: 2D action + ATR 비례 + 지정가 체결)
+# ────────────────────────────────────────
+environment:
+  initial_cash: 10000.0
+  transaction_cost: 0.0005
+  random_start: true
+  n_buy_orders: 2
+  n_splits: 2                   # Env-v4 Bayesian best
+  threshold_basis: "avg_price"
+  reward_loss_beta: 1.0         # symmetric (exp030 baseline)
+  formula_coefs:
+    A_b: 1.665                  # Env-v4 Bayesian best (Trial #34)
+    B_b: 1.748
+    C_b: 6.070
+    D_b: 18.683
+    A_s: 0.285
+    B_s: 1.95
+    C_s: 1.951
+    D_s: 7.5
+
+# ────────────────────────────────────────
+# PPO (안정화 패키지)
+# ────────────────────────────────────────
+agent:
+  algorithm: "PPO"
+  policy: "MlpPolicy"
+
+  # LR linear schedule: 3e-4 → 1e-5
+  learning_rate: 0.0003
+  lr_schedule: "linear"
+  lr_end: 0.00001
+
+  n_steps: 4096                 # exp029 의 1024 보다 큼 (rollout 다양성 ↑)
+  batch_size: 256               # n_steps/16
+  n_epochs: 10
+  gamma: 0.99                   # 표준
+  gae_lambda: 0.95              # 표준
+  clip_range: 0.2               # 표준 (exp029 의 0.367 은 너무 큼)
+
+  # ent_coef linear anneal: 0.01 → 0.001
+  ent_coef: 0.01
+  ent_coef_end: 0.001
+  ent_schedule: "linear"
+
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+
+  # target_kl: KL early stop (안정화 핵심)
+  target_kl: 0.02
+
+  total_timesteps: 1_000_000
+  n_envs: 4
+
+# ────────────────────────────────────────
+# 베이스라인 비교
+# ────────────────────────────────────────
+baselines:
+  buy_and_hold: true
+  fixed_grid:
+    gaps: [0.01, 0.02, 0.05]
+  atr_grid:
+    k_values: [0.5, 1.0, 2.0]
+
+# ────────────────────────────────────────
+# 평가
+# ────────────────────────────────────────
+evaluation:
+  metrics:
+    - "total_return"
+    - "sharpe_ratio"
+    - "max_drawdown"
+    - "n_trades"
+    - "avg_cycle_pnl"
+    - "avg_cycle_hours"
+
+# ────────────────────────────────────────
+# 학습 설정
+# ────────────────────────────────────────
+training:
+  seed: 42
+  eval_freq: 50000
+  n_eval_episodes: 5            # exp030 은 5 seeds 평균 (안정성 측정)
+  max_episode_steps: 2000
+  early_stopping_patience: 10   # exp029 6 → 10 (안정화 후 충분히 학습)
+  experiment_name: "exp030_stabilization"
+  log_dir: "experiments/exp030_stabilization"

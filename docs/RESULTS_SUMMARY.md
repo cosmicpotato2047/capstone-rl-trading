@@ -136,18 +136,74 @@
 
 ---
 
-## Phase 2.5 — 환경 복원 (Env-v4 신설, 2026-05-14~) 진행 중
+## Phase 2.5 — 환경 복원 (Env-v4 canonical 확립, 2026-05-14 완료)
 
 > **목적**: Env-v3 (4D 절대 gap) 의 학술 정합성 약점 해결. Env-v4 (2D ATR 비례 + 지정가 체결) 로 본 논문 정식 환경 확립. 그 위에서 Phase 2 사전 증거 재현.
 
-### 재현 대상
+### Env-v4 ATR Baseline (Bayesian 50 trials, Val 2021-2023)
 
-| 원본 | Env | 본 논문 환경 (Env-v4) 재현 결과 | 상태 |
+**최적 계수** (Trial #34):
+- A_b=1.665, C_b=6.070, A_s=0.285, C_s=1.951, n_splits=2
+
+| Metric | Value |
+|---|---|
+| Return | +35.80% |
+| **Val Sharpe** | **1.505** |
+| MDD | 9.83% |
+| Trades | 2,121 |
+| Cycles | 1,009 |
+| Avg cycle PnL | +0.031% |
+| Avg cycle hours | 1.2 h |
+
+⚠️ exp023 Env-v2 계수 (A_b=0.285 등) 는 Env-v4 에서 **Sharpe -4.738** — 환경 의존성 강함. 환경 복원의 정당성 실증.
+
+### Env-v4 RL Asymmetric Reward (β=2.0) 재현
+
+**PPO 학습**: 1M steps, n_envs=4, exp026 Optuna PPO 설정 (lr 1.67e-4, n_steps 4096, clip 0.103).
+Early stopping 발동 (100k peak 후 patience=6) → 400k 종료.
+
+**학습 곡선** (eval_freq=50k):
+
+| Step | Val Sharpe | Return | MDD |
 |---|---|---|---|
-| exp026 ATR (Bayesian best) | Env-v3 Val 1.978 / Test 0.935 | (Step 8~10 완료 후 채움) | 대기 |
-| exp027_rl asymmetric β=2.0 | Env-v3 Val 2.444 / Test 1.955 | (Step 11~13 완료 후 채움) | 대기 |
+| 50k | 2.223 | +7.95% | 1.80% |
+| **100k** | **2.250 (best)** | +8.00% | 1.75% |
+| 150-400k | 1.728~2.131 (oscillation) | 5.5~6.7% | 1.8~1.9% |
 
-→ Step 14 (재현 분석) 에서 시나리오 A/B/C 판정.
+| Metric | Best (100k) | Final (400k) |
+|---|---|---|
+| Val Sharpe | **2.250** | 1.828 |
+| Return | +8.00% | +5.83% |
+| MDD | 1.75% | 1.92% |
+| Trades | — | 107 (final) |
+| Cycles | — | 51 (final) |
+
+### 재현 vs 원본 비교
+
+| Metric | 원본 (Env-v3) | 재현 (Env-v4, best) | Δ |
+|---|---|---|---|
+| Val Sharpe | 2.444 | 2.250 | -8% (재현 부분 성공) |
+| Val Return | 18.25% | 8.00% | -56% (보수적) |
+| MDD | 1.28% | 1.75% | +0.47p |
+| Trades | 214 | 107 | -50% (더 선택적) |
+
+→ **재현 부분 성공.** Sharpe 8% 감소했지만 본질적 효과 (asymmetric reward 가 ATR baseline 초과) 유지.
+
+### 본 논문 §5 메인 결과 (Env-v4 canonical)
+
+| 시스템 | Val Sharpe | vs ATR baseline |
+|---|---|---|
+| **ATR Baseline (Env-v4)** | **1.505** | — |
+| **RL with asymmetric β=2.0 (Env-v4 best)** | **2.250** | **+0.745 (+49%)** |
+| RL with asymmetric β=2.0 (Env-v4 final, early stop) | 1.828 | +0.323 (+21%) |
+
+→ **시나리오 A (낙관) 확정**: Reward design 이 RL 알파의 채널임을 Env-v4 에서도 검증.
+
+### 학술적 함의
+
+1. **이전 Phase 2 발견 (asymmetric reward 효과) 가 환경 변경 후에도 유지** — 발견의 robustness 입증.
+2. **효과 약화 (8%) 가 있지만 본질 유지** — 4D 자유도 → 2D ATR 비례로 일부 표현력 손실 가능. exp032 4 variant 비교에서 추가 검증.
+3. **환경 의존성 발견** (exp023 Env-v2 계수가 Env-v4 에서 음수) — 본 논문 §3 Method 에서 "시뮬레이터 fill 가정의 결정적 영향" 명시.
 
 ---
 

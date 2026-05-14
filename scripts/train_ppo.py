@@ -86,9 +86,11 @@ def main() -> None:
     print(f"  Train: {len(df_train):,}행  |  Val: {len(df_val):,}행")
 
     # ── 3. MLflow 설정 ────────────────────────────────────────
+    # 통합 mlruns (프로젝트 루트) — 모든 실험을 한 mlflow ui 에서 비교 가능
+    # 사용: cd <project root> && mlflow ui --port 5000
     use_mlflow = not args.no_mlflow
     if use_mlflow:
-        mlflow.set_tracking_uri(os.path.join(log_dir, "mlruns"))
+        mlflow.set_tracking_uri("file:./mlruns")
         mlflow.set_experiment(exp_name)
         run = mlflow.start_run(run_name="ppo_train")
         # 하이퍼파라미터 기록
@@ -177,7 +179,7 @@ def main() -> None:
         })
         mlflow.log_artifact(os.path.join(log_dir, "config_snapshot.yaml"))
         mlflow.end_run()
-        print(f"\nMLflow 기록 완료: {os.path.join(log_dir, 'mlruns')}")
+        print(f"\nMLflow 기록 완료: ./mlruns (run_id={run.info.run_id[:8]}). 통합 UI: mlflow ui --port 5000")
 
     print(f"\n모델 저장 위치:")
     print(f"  best  : {best_model_path}.zip")

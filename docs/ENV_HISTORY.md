@@ -89,9 +89,9 @@
 
 → 본 논문 사전 증거 (asymmetric reward 효과) 가 이 환경에서 나옴. **다른 환경이라 본 논문 (Env-v4) 에서 재현 검증 필요**.
 
-### Env-v4 (canonical, exp030~035 예정) — 2D ATR 비례 + 지정가 체결
+### Env-v4 (canonical, 2026-05-14 확립) — 2D ATR 비례 + 지정가 체결
 
-본 졸업 논문의 정식 환경.
+본 졸업 논문의 정식 환경. exp030~035 가 모두 Env-v4 에서 진행.
 
 **Env-v2 와의 차이**:
 - 체결: favorable bias → 지정가 ✓ (수치 현실화)
@@ -101,7 +101,21 @@
 - Action: 4D 절대 gap → 2D ATR 비례 (학술 정합성 + state-action 정합성)
 - ATR이 state + action 공식 양쪽에서 활용 (dead state 해결)
 
-→ Phase 2~3 의 핵심 발견 (asymmetric reward, exp027_rl) 을 Env-v4 에서 재현하는 게 환경 복원 작업의 핵심.
+### Env-v4 검증 결과 (2026-05-14)
+
+**ATR Baseline (Bayesian 50 trials)**:
+- 최적 계수 (Trial #34): A_b=1.665, C_b=6.070, A_s=0.285, C_s=1.951, n_splits=2
+- Val Sharpe **1.505**, Return +35.80%, MDD 9.83%
+- ⚠️ exp023 Env-v2 계수는 Env-v4 에서 Sharpe -4.738 — 환경 의존성 입증
+
+**RL with Asymmetric Reward β=2.0 재현 (1M steps)**:
+- Best (100k): Val Sharpe **2.250**, Return +8.00%, MDD 1.75%
+- vs ATR baseline: **+0.745 (+49%) 우위**
+- 원본 (Env-v3 Val 2.444) 대비 -8% — 부분 재현 성공, 본질 효과 유지
+
+**결론**: 본 논문 §5 strong positive thesis 사전 증거 확보. exp032 4 variant 비교에서 정식 검증 예정.
+
+→ Phase 2~3 의 핵심 발견 (asymmetric reward, exp027_rl) 이 Env-v4 에서도 유지됨. 환경 복원 작업 성공.
 
 ---
 
@@ -143,4 +157,5 @@
 
 | 날짜 | 변경 | 근거 |
 |---|---|---|
-| 2026-05-14 | 본 문서 신설 (Step 1). 환경 변천 4단계 (Env-v1~v4) 정리. 본 논문 정식 환경 (Env-v4) 정의. 인용 가능성 매트릭스 작성. | 옵션 A (2D ATR 비례 복원) 결정 후 무효화 범위 명시 + 재현 작업 토대 마련 |
+| 2026-05-14 (1차) | 본 문서 신설 (Step 1). 환경 변천 4단계 (Env-v1~v4) 정리. 본 논문 정식 환경 (Env-v4) 정의. 인용 가능성 매트릭스 작성. | 옵션 A (2D ATR 비례 복원) 결정 후 무효화 범위 명시 + 재현 작업 토대 마련 |
+| 2026-05-14 (2차) | Env-v4 검증 결과 채움. ATR Bayesian (Val Sharpe 1.505) + RL asym β=2.0 재현 (Val Sharpe 2.250, +49%) 완료. 시나리오 A 확정. | 환경 복원 + 재현 작업 완료 |
