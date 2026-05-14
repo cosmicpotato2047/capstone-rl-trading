@@ -104,6 +104,18 @@ class BTCGridTradingEnv(gym.Env):
             self.cfg_env.get("reward_loss_beta", 1.0)
         )
 
+        # ── Reward Variant (exp032 4-variant 비교) ──
+        # "sym":  step_return                                                    (baseline)
+        # "asym": step_return × β if step_return<0 else step_return               (exp027_rl)
+        # "dsr":  Differential Sharpe Ratio (Moody & Saffell 2001)
+        # "pt":   sign(x)·|x|^α · (1 if x≥0 else λ)                                (Kahneman-Tversky 1979)
+        self.reward_type: str = self.cfg_env.get("reward_type", "asym")
+        # DSR hyperparameter (EMA decay rate)
+        self.dsr_eta: float = float(self.cfg_env.get("dsr_eta", 1.0 / 168.0))  # 1주 EMA
+        # Prospect theory hyperparameter
+        self.pt_alpha: float = float(self.cfg_env.get("pt_alpha", 0.88))
+        self.pt_lambda: float = float(self.cfg_env.get("pt_lambda", 2.25))
+
         # ── MDP 공식 계수 (Bayesian 튜닝 가능, 기본값 = 설계 기본값) ──
         # buy_hi_gap  = atr_ratio × (A_b + aggressiveness × B_b)
         # buy_lo_gap  = atr_ratio × (C_b + aggressiveness × D_b)
@@ -193,6 +205,11 @@ class BTCGridTradingEnv(gym.Env):
         # 직전 사이클 청산 시 평단가 (미보유 구간 divergence 계산용)
         self.last_avg_price: float = 0.0
 
+        # DSR EMA state (Moody & Saffell 2001 — Differential Sharpe Ratio)
+        # A_t = E[R_t], B_t = E[R_t²]. r_dsr = (B·ΔA - 0.5·A·ΔB) / (B - A²)^1.5
+        self.dsr_A: float = 0.0
+        self.dsr_B: float = 0.0
+
         # 통계 (디버깅/분석용)
         self.n_trades: int = 0
         self.completed_cycles: list = []
@@ -244,8 +261,49 @@ class BTCGridTradingEnv(gym.Env):
         # (- fee_rate * n_trades 항은 단위 불일치로 수수료를 8배 중복 계산함)
         equity_after = self._equity(next_price)
         step_return  = (equity_after - equity_before) / self.start_capital
-        beta         = self.reward_loss_beta if step_return < 0 else 1.0
-        step_reward  = step_return * beta
+
+        # Reward variant 분기 (exp032 4-variant 비교)
+        if self.reward_type == "sym":
+            step_reward = step_return
+
+        elif self.reward_type == "asym":
+            # exp027_rl 방식 + reward_loss_beta config
+            beta = self.reward_loss_beta if step_return < 0 else 1.0
+            step_reward = step_return * beta
+
+        elif self.reward_type == "dsr":
+            # Differential Sharpe Ratio (Moody & Saffell 2001)
+            # A_t = A_{t-1} + η·(R_t - A_{t-1})
+            # B_t = B_{t-1} + η·(R_t² - B_{t-1})
+            # r_dsr = (B_{t-1}·ΔA - 0.5·A_{t-1}·ΔB) / (B_{t-1} - A_{t-1}²)^1.5
+            eta = self.dsr_eta
+            A_prev = self.dsr_A
+            B_prev = self.dsr_B
+            delta_A = step_return - A_prev
+            delta_B = step_return * step_return - B_prev
+            variance = B_prev - A_prev * A_prev
+            if variance > 1e-12:
+                step_reward = (B_prev * delta_A - 0.5 * A_prev * delta_B) / (variance ** 1.5)
+                # clip 극단값 (학습 안정성)
+                step_reward = float(max(-100.0, min(100.0, step_reward)))
+            else:
+                step_reward = step_return  # warm-up 기간: 단순 return
+            # EMA 갱신
+            self.dsr_A = A_prev + eta * delta_A
+            self.dsr_B = B_prev + eta * delta_B
+
+        elif self.reward_type == "pt":
+            # Prospect Theory (Kahneman-Tversky 1979)
+            # r = sign(x)·|x|^α · (1 if x≥0 else λ)
+            x = step_return
+            if x >= 0:
+                step_reward = (x ** self.pt_alpha) if x > 0 else 0.0
+            else:
+                step_reward = -self.pt_lambda * ((-x) ** self.pt_alpha)
+
+        else:
+            raise ValueError(f"알 수 없는 reward_type: {self.reward_type!r}. "
+                             f"'sym'|'asym'|'dsr'|'pt' 중 선택")
 
         self.n_trades += n_trades_this_step
         self.current_step = next_step
