@@ -2276,3 +2276,305 @@ step= 750k: Sharpe=+0.122  Return= -0.9%  MDD= 9.4%  ← Early Stopping 발동
 - `experiments/exp029_rl_final/best_model.zip` — Val Sharpe 1.440 (450k step)
 - `experiments/exp029_env_optuna/best_params.yaml` — 환경 파라미터 최적값
 - `experiments/exp029_ppo_optuna/best_params.yaml` — PPO 파라미터 최적값
+
+---
+
+## 2026-05-13 — 이론적 토대 보강 자료 작성 (학습 자료 23개 노트)
+
+### 작업 내용
+프로젝트의 이론적 토대 부족 인식에 따라 4개 묶음 23개 노트를 `docs/study/rl_finance/`에 작성.
+
+### 묶음 구성
+- **Bundle A (8개): RL × 금융** — Differential Sharpe (Moody 2001), Zhang/Zohren 2020, Gort 2022 (PBO), FinRL, Reward hacking, Sim2Real, Distributional RL, Hierarchical RL
+- **Bundle D (7개): 약점 보강** — Bayesian Opt TPE, Walk-forward CV, PG 안정화, 현실적 체결, Volatility modeling, Offline RL warm-start, Curriculum learning
+- **Bundle B (5개): RL 이론 기초** — MDP/POMDP, PPO (Schulman 2017), DDPG (Lillicrap 2015), Reward shaping (Ng 1999), Prospect theory (Kahneman-Tversky)
+- **Bundle C (3개): 그리드 학술 뿌리** — Avellaneda-Stoikov 2008, Inventory/Adverse selection, Optimal grid spacing
+
+### 핵심 발견 (이론 ↔ 실험 매칭)
+
+1. **exp027_rl asymmetric reward의 학술적 출처 발견**:
+   - Kahneman-Tversky prospect theory의 loss aversion λ ≈ 2.25 ≈ 우리 beta=2.0
+   - Moody & Saffell (2001) Differential Sharpe Ratio의 직계
+   - 임의 hyperparameter가 아니라 이론적으로 정당화된 선택
+
+2. **exp026 체결가 버그 = 교과서적 reward hacking 사례**:
+   - Skalse et al. (2022) reward hacking 정의에 정확히 부합
+   - 디펜스에서 "탐지 → 차단"의 case study로 활용 가능
+
+3. **단일 walk-forward의 본질적 약점**:
+   - exp027 ATR+direction의 Val→Test reversal이 단일 분할의 우연성으로 설명 가능
+   - CPCV (Combinatorial Purged CV) + DSR (Deflated Sharpe Ratio)로 보강 필요
+   - Gort 2022는 우리가 이미 인용 중이지만 PBO를 실제 계산해본 적 없음 = 디펜스 빈틈
+
+4. **exp028/029 학습 불안정의 원인 가설들**:
+   - clip_range=0.367 (Optuna)이 표준 0.2 대비 너무 큼
+   - target_kl 미설정 → epoch 안에서 큰 update 가능
+   - ent_coef annealing 부재
+   - LR이 후반에도 큼
+
+5. **그리드 봇의 학술적 위치 정립**:
+   - Avellaneda-Stoikov (2008) 마켓 메이킹의 단순화 + RL 확장으로 정식 표현 가능
+   - 우리 sell_cost = AS의 inventory-aware reservation price
+   - 우리 ATR 비례 = AS의 σ²-dependence를 휴리스틱으로
+
+6. **Sim2Real gap의 정량화 필요성**:
+   - 현재 시뮬레이터: slippage=0, partial fill 없음, adverse selection 무시
+   - Paper trading이 이 gap의 진짜 측정기
+
+### 생성된 파일
+
+- `docs/study/rl_finance/00_overview.md` — 허브 노트
+- `docs/study/rl_finance/[A1-A8].md` — Bundle A 8개
+- `docs/study/rl_finance/[D1-D7].md` — Bundle D 7개
+- `docs/study/rl_finance/[B1-B5].md` — Bundle B 5개
+- `docs/study/rl_finance/[C1-C3].md` — Bundle C 3개
+- `docs/study/rl_finance/project_continuation_plan.md` — exp030~035 + 자산 확장 로드맵
+
+### 도출된 다음 작업 계획 (요약)
+
+| Exp | 목적 | 주요 도구 |
+|---|---|---|
+| exp030 | 학습 안정화 (PPO 보수화 + reward 점검) | policy_gradient_stabilization, reward_shaping_ng1999 |
+| exp031 | BC Warm-start (학습 초반 낭비 회피) | offline_rl_warm_start |
+| exp032 | Reward 정식화 비교 (DSR vs Asymmetric vs Prospect) | differential_sharpe, prospect_theory |
+| exp033 | Slippage + Domain Randomization | realistic_execution_simulation, curriculum_learning |
+| exp034 | CPCV 검증 + DSR 계산 | walk_forward_cv, bayesian_optimization_tpe |
+| exp035 | Test set 최종 평가 | (CPCV 분포 통과 후) |
+
+### 주요 인용 문헌 추가 (논문 디펜스용)
+
+- Avellaneda & Stoikov (2008) — 그리드 봇의 학술적 조상
+- Zhang, Zohren, Roberts (2020) — DRL 트레이딩 표준
+- Gort et al. (2022) — PBO/CPCV (이미 인용 중)
+- Moody & Saffell (2001) — DSR
+- Kahneman & Tversky (1979) — asymmetric reward
+- Ng, Harada, Russell (1999) — reward shaping safety
+- Schulman et al. (2017) — PPO 알고리즘
+- López de Prado (2018) — CPCV, DSR, fracdiff (Ch.5, 7, 11, 14, 15 — 기존 정리)
+
+### 이번 학습의 메타 원칙 (자율적으로 도출)
+
+1. 단일 hyperparameter, 단일 분할, 단일 reward는 위험. 다중 평가 path 필수.
+2. 학술 인용은 디펜스 무기 — "Kahneman-Tversky λ=2.25 채택"이 "beta=2.0 임의 선택"보다 강함.
+3. Sim2Real gap은 본질적 — Paper trading으로 측정하고 명시.
+4. Reward design이 알파의 핵심 채널 — exp027_rl이 증명. 정식화로 차별점 확립.
+5. 자산 확장 전에 BTC에서 완결성 확보 (CPCV + 논문 + Paper trading).
+
+---
+
+## 2026-05-14 — ★ Pivot 2: RQ 재정의 + 자산 확장 제외 + 프로젝트 폴더 전면 정리
+
+### 결정 사항
+
+사용자와 합의하여 졸업 논문의 RQ와 scope를 **명시적으로 재정의**.
+
+**기존 RQ (Phase 1 제안)**:
+> "PPO 동적 그리드가 비트코인 시장에서 고정 그리드 대비 Sharpe Ratio 우위?"
+> + Phase 4~6 자산 확장 (주식, FX, 원자재)
+
+**새 RQ (Phase 3 메인)**:
+> "BTC 그리드 트레이딩에서 RL이 ATR 규칙 기반을 초과하는 알파는 reward 설계에서 나온다.
+> 어떤 reward 함수가 이를 가능하게 하며, 그 이유는 무엇인가?"
+
+### 결정 근거 (사용자 발언 요약)
+
+- 자산 확장은 졸업 논문에서 빼기 — "다른 자산군들은 굳이 RL을 사용하지 않고 그냥 시장 수익률만 따라가도 괜찮을 것 같거든"
+- BTC도 단순 시장 수익률 따라가는 것은 사용자 개인 운용으로 분리
+- 졸업 논문에 남길 가치 있는 핵심: (1) RL이 그리드봇에 적절한가, (2) 보상함수를 어떻게 설정 — 두 개 모두 살리는 형태로 RQ 결합
+
+### 채택된 RQ 형태
+
+#1 (negative finding) + #2 (positive finding) 결합:
+- exp020~022가 보인 "RL ≈ ATR" 은 §4 Negative finding의 출발점
+- exp027_rl이 보인 "asymmetric reward로 RL > ATR" 은 §5 Positive finding의 메인 contribution
+- → 두 발견이 한 RQ 안에서 자연스럽게 연결됨
+
+### 프로젝트 폴더 전면 정리
+
+새 RQ를 단일 기준점으로 모든 문서 정렬:
+
+| 작업 | 파일 |
+|---|---|
+| 신설 (단일 기준점) | `docs/PROJECT_GOAL.md` |
+| 전면 개정 | `ROADMAP.md`, `README.md` |
+| 업데이트 | `CLAUDE.md`, `docs/study/rl_finance/project_continuation_plan.md`, `docs/study/rl_finance/00_overview.md` |
+| 상단 박스 + outdated 섹션 정리 | `docs/MDP.md`, `docs/FORMULAS.md`, `docs/RELATED_WORK.md` |
+| 인덱스 README 신설 | `experiments/README.md`, `config/README.md`, `reports/README.md`, `scripts/README.md`, `live_trading/README.md` |
+
+→ 모든 문서가 `docs/PROJECT_GOAL.md` 의 RQ에 정렬되도록 통일.
+
+### CLAUDE.md 절대 금지 규칙 추가
+
+기존 2개 규칙 + 신규:
+- **3. RQ를 벗어나는 작업 자동 진행 금지** — 자산 확장, hierarchical RL, multi-asset portfolio 등은 사용자 명시 합의 없이 시작 금지.
+
+### 명시적으로 제외된 영역 (의식적 scope discipline)
+
+- ❌ 자산 확장 (주식, FX, 원자재) — 사용자 개인 운용으로 분리
+- ❌ Hierarchical RL, Transformer state encoder — Discussion에서만 시사
+- ❌ Multi-asset portfolio
+- ❌ Tick-level microstructure (호가창 큐)
+- ❌ HFT, market making 실거래
+- △ Live trading — sim2real gap 측정 도구로만 제한적 활용 (Phase 5 선택)
+
+### 실험 시리즈 우선순위 재조정
+
+기존 exp030~035가 모두 그대로 유효. 단 **exp032의 비중을 메인으로 격상**:
+
+| Exp | 기존 비중 | 새 비중 |
+|---|---|---|
+| exp030 | Method 보조 | Method §3.3 (변경 없음) |
+| exp031 | Method 보조 | Method §3.4 (변경 없음) |
+| **exp032** | 변형 비교 | **§5 Positive finding 메인 챕터로 격상** |
+| exp033 | Robustness | §7.1 (변경 없음) |
+| exp034 | 통계 검증 | §5 + §7.2 (Positive finding 통계 보강) |
+| exp035 | Test | §7.3 최종 (변경 없음) |
+
+### 다음 작업
+
+1. exp030 실행 (PPO 학습 안정화 패키지) — `docs/study/rl_finance/project_continuation_plan.md` 참조
+2. exp031 실행 (BC warm-start)
+3. **exp032 본격 실행** — 4가지 reward variant × 5 seeds 비교 (논문 메인 챕터)
+
+### 변경된 파일 (이번 정리 세션)
+
+신설:
+- `docs/PROJECT_GOAL.md`
+- `experiments/README.md`, `config/README.md`, `reports/README.md`, `scripts/README.md`, `live_trading/README.md`
+
+전면 개정:
+- `ROADMAP.md`, `README.md`, `CLAUDE.md`
+- `docs/study/rl_finance/project_continuation_plan.md`
+- `docs/study/rl_finance/00_overview.md`
+
+상단 박스 + 일부 섹션 수정:
+- `docs/MDP.md`, `docs/FORMULAS.md`, `docs/RELATED_WORK.md`
+
+---
+
+## 2026-05-14 (같은 날 추가) — RQ 2차 수정: 단정문 → 열린 질문 형태
+
+### 결정 사항
+
+위 Pivot 2의 1차 결정에서 RQ를 다음과 같은 **단정문**으로 박았었음:
+> "BTC 그리드 트레이딩에서 RL이 ATR 규칙 기반을 초과하는 알파는 reward 설계에서 나온다.
+> 어떤 reward 함수가 이를 가능하게 하며, 그 이유는 무엇인가?"
+
+사용자가 학술적 정합성을 지적: **"이거 알파가 reward 설계에서 나온다고 확정지었는데 그래도 되는 부분이야?"**
+
+→ 단정문 RQ의 문제점:
+1. **확증 편향 위험** — 답을 정해놓고 검증하는 형태
+2. **검증 실패 시 RQ 자체가 무너짐** — exp032에서 4가지 reward 차이가 없거나 asymmetric이 우위 못 보이면 RQ가 부정됨
+3. **학술 컨벤션 위반** — RQ는 의문문, 단정문은 thesis statement (abstract/conclusion) 자리
+
+### 수정 후 RQ (열린 질문 형태)
+
+> **BTC 그리드 트레이딩에서 reward 설계가 RL 정책의 알파에 어떤 영향을 미치는가?
+> 특히, 어떤 reward 함수 하에서 RL이 ATR 규칙 기반을 초과하며 (혹은 초과하지 못하며), 그 메커니즘은 무엇인가?**
+
+### 핵심 원칙 (PROJECT_GOAL + CLAUDE + 메모리에 명시)
+
+- 사전 증거(exp027_rl Test Sharpe 1.955 등)가 강하더라도 RQ는 **열린 질문** 형태 유지
+- 강한 증거는 **가설 H1~H4의 정당성**으로 흡수, RQ의 답으로 단정 X
+- "Reward 설계가 RL 알파의 핵심 채널이다" 같은 단정문은 결과가 가설을 지지할 때 **§5 Positive finding** 또는 abstract/conclusion의 thesis statement로 사용
+- RQ는 검증 결과가 어느 쪽이든 살아남는 형태로
+
+### 왜 이런 일이 벌어졌나 (내가 분석한 원인)
+
+1. **사전 증거의 강도에 압도** — exp027_rl의 Test Sharpe 2배 격차가 너무 명확해서 "사실상 확정된 결과"로 무의식 처리
+2. **Thesis statement와 RQ 구분 실패** — 단정문을 RQ 자리에 잘못 배치
+3. **자율 작업 모드의 자체 검토 부족** — 한 곳에서 단정문 RQ가 24개 노트 + 5개 README + 6개 문서에 무비판적으로 복제됨
+
+### 메타 교훈 (메모리에 영구 저장)
+
+- `feedback_rq_open_question.md` 신설: "사전 증거가 강해도 RQ에 결론 박지 말 것"
+- 새 RQ 제안 시 단정문 형태가 보이면 즉시 "이건 thesis인데 RQ로 두려면 질문화해야 합니다" 라고 짚을 것
+
+### 변경된 파일 (2차 수정)
+
+RQ 문구 일괄 갱신:
+- `docs/PROJECT_GOAL.md` (RQ + RQ 표현 원칙 박스 + 변경 이력)
+- `ROADMAP.md`, `README.md`, `CLAUDE.md`
+- `docs/study/rl_finance/project_continuation_plan.md`
+- `docs/study/rl_finance/00_overview.md`
+
+메모리:
+- `project_rq_v2.md` 갱신
+- `feedback_rq_open_question.md` 신설
+- `MEMORY.md` 인덱스 갱신
+
+### 가설은 그대로 (H1~H4 유지)
+
+가설은 사전 증거를 정직하게 반영하면서도 검증 필요성을 명시하므로 그대로 유지:
+- H1 (사전 증거 있음): Symmetric reward + ATR 비례에서 RL ≈ ATR
+- H2 (사전 증거 있음, 검증 필요): Asymmetric/DSR/Prospect로 RL > ATR
+- H3 (검증 필요): 우수 reward의 효과는 "선택적 진입" 행동
+- H4 (검증 필요): CPCV + Slippage에서도 유지
+
+---
+
+## 2026-05-14 (같은 날 3차 추가) — exp032 설계 강화: a/b/c 3단계 분리 + 3개 학습 노트 추가
+
+### 결정 사항
+
+사용자가 "exp030~035가 새 RQ에 맞는가? + 더 서칭할 영역?" 으로 정합성 점검 요청.
+
+내가 점검 후 **세 가지 약점** 식별:
+
+1. **RQ-3 (메커니즘) 답변자가 약함**: 현재 plan은 "regime별 행동 분포 + 사이클 통계" 한 줄. 메커니즘 진술로는 얕음.
+2. **Reward variant 간 공정 비교 미보장**: β=2.0, λ=2.25 등이 임의값. "asymmetric 우위" 가 진짜 형식 때문인지 hyperparameter 운인지 구분 불가.
+3. **ATR baseline 강도가 한쪽으로 치우침**: ATR은 150 trials Bayesian, variant는 임의값 → 체계적 불공정.
+
+### 학습 노트 3개 신설 (Bundle E)
+
+| 노트 | 해결하는 약점 | 핵심 |
+|---|---|---|
+| `effect_size_rliable.md` (E1) | 약점 2: 통계적 정직성 | Cohen's d, rliable (Agarwal 2021), BEST (Kruschke 2013), IQM, Probability of Improvement |
+| `causal_counterfactual_rl.md` (E2) | 약점 1: 메커니즘 | COUNTERPOL, SHAP for RL, Mediation analysis, Policy distance |
+| `hyperparameter_parity.md` (E3) | 약점 3: 공정 비교 | Nested CV, Henderson 2018 "Deep RL that Matters", Andrychowicz 2020 |
+
+### exp032 3단계 분리 (a / b / c)
+
+기존 단일 exp032 → 다음 3단계로 분리:
+
+| 단계 | 목적 | 논문 챕터 | Compute |
+|---|---|---|---|
+| **exp032a** | 각 variant의 reward hyperparameter Optuna 튜닝 (공정 비교 보장) | Method §3.5 | 18M steps (3 variant × 30 trial × 200k) |
+| **exp032b** | 확정 hyperparameter로 full 4 variant 비교 + effect size 강화 | §5 Positive finding | 20M steps (4 × 5 seed × 1M) |
+| **exp032c** | Counterfactual + SHAP + Mediation으로 메커니즘 분석 | §6 Mechanism | 분석만 |
+
+총 Compute: 이전 plan 20M → 38M (1.9배 증가). 1~2주 → 4~5주.
+
+### 평가 보고 형식 강화 (exp032b)
+
+기존: Sharpe / MDD / 거래수 (mean ± std)
+
+추가:
+- Cohen's d (모든 pair)
+- rliable IQM + stratified bootstrap 95% CI
+- Probability of Improvement P(A > B)
+- Performance Profile (임계값별 분포)
+- BEST (Bayesian) 95% HDI
+
+→ 디펜스에서 "통계 robust한가" 질문에 표 한 개로 즉답 가능.
+
+### 영향받은 문서
+
+업데이트:
+- `docs/study/rl_finance/00_overview.md` — Bundle E 섹션 추가
+- `docs/study/rl_finance/project_continuation_plan.md` — exp032 → exp032a/b/c 분리, 새 학습 노트 cross-link
+- `ROADMAP.md` — 실험 시리즈 표 갱신, 예상 종료 6-8주 → 8-11주
+- `docs/PROJECT_GOAL.md` — exp 매핑 표 갱신
+
+신설:
+- `docs/study/rl_finance/effect_size_rliable.md`
+- `docs/study/rl_finance/causal_counterfactual_rl.md`
+- `docs/study/rl_finance/hyperparameter_parity.md`
+
+### 다음 작업
+
+1. exp030 실행 (PPO 학습 안정화 패키지)
+2. exp031 실행 (BC warm-start)
+3. **exp032a 실행** — variant별 reward hyperparameter 튜닝 (공정 비교 토대 마련)
+4. **exp032b 실행** — full 비교 + effect size 분석 (논문 §5 메인)
+5. **exp032c 실행** — 메커니즘 분석 (논문 §6)

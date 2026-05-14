@@ -1,19 +1,41 @@
 # CLAUDE.md — 프로젝트 브리핑
 
 Claude Code가 이 프로젝트에서 작업할 때 반드시 숙지해야 할 규칙과 맥락이다.
-상세 설계는 `docs/MDP.md`, `docs/RELATED_WORK.md`, `config/experiment_config.yaml`을 참고한다.
+
+**단일 기준점**: `docs/PROJECT_GOAL.md` — 모든 작업은 여기 정의된 RQ에 정렬되어야 한다.
+상세 설계는 `docs/MDP.md`, `docs/FORMULAS.md`, `docs/RELATED_WORK.md`, `config/experiment_config.yaml`을 참고한다.
+
+---
+
+## 프로젝트 RQ (2026-05-14 확정)
+
+> **BTC 그리드 트레이딩에서 reward 설계가 RL 정책의 알파에 어떤 영향을 미치는가?
+> 특히, 어떤 reward 함수 하에서 RL이 ATR 규칙 기반을 초과하며 (혹은 초과하지 못하며), 그 메커니즘은 무엇인가?**
+
+- **자산 범위**: BTC/USDT 1시간봉 **단일 자산**. 자산 확장은 졸업 논문 범위 외.
+- **메인 비교 단위**: 4가지 reward 변형 (Symmetric / Asymmetric / DSR / Prospect-theoretic) × ATR baseline.
+- **현재 위치**: Phase 3 진입. exp030~035 시리즈가 본 논문의 메인 실험.
+
+⚠️ **RQ 표현 원칙**: 사전 증거(exp027_rl Test Sharpe 1.955)가 강하더라도 RQ는 열린 질문 형태로 유지.
+강한 사전 증거는 **가설(H1~H4)** 의 정당성으로 흡수하지 RQ의 답으로 단정하지 않음 (학술 컨벤션 + 확증 편향 회피).
+
+상세는 `docs/PROJECT_GOAL.md`, `ROADMAP.md` 참조.
 
 ---
 
 ## 절대 금지 규칙
 
 1. **`data/processed/btc_test.parquet` 열람 금지**
-   테스트셋은 최종 평가 전까지 완전 봉인된다.
+   테스트셋은 exp035(최종 평가)까지 완전 봉인된다.
    어떤 코드, 노트북, 스크립트에서도 test 파티션을 로드하거나 출력해서는 안 된다.
    Gort et al.(2022) 백테스트 과적합 방지 설계의 핵심이다.
 
 2. **`data/raw/`의 원본 파일 수정 금지**
    다운로드한 OHLCV 원본은 불변이다. 전처리는 반드시 `data/processed/`에 저장한다.
+
+3. **RQ를 벗어나는 작업 자동 진행 금지**
+   자산 확장, hierarchical RL, multi-asset portfolio 등 RQ에서 명시적으로 제외한 영역은
+   사용자 명시적 합의 없이 시작하지 않는다. `docs/PROJECT_GOAL.md`의 "의식적으로 제외하는 것" 참조.
 
 ---
 
@@ -25,31 +47,52 @@ BTC 가격이 오를지 내릴지 예측하는 시스템이 아니다.
 **변동성 자체에서 수익을 추구하는 동적 그리드 트레이딩**이다.
 
 - 잘못된 접근: "RSI가 30 이하면 매수" 같은 방향성 신호
-- 올바른 접근: "지금 변동성 수준에서 그리드 간격을 얼마로 설정할 것인가"
+- 올바른 접근: "지금 변동성 수준 + 보상함수 설계에서 어떤 그리드 정책이 알파를 만드는가"
 
-### Action은 연속 2차원이다. 이산이 아니다
+### 본 논문의 핵심 가설 (사전 증거 → exp032에서 검증)
+
+- **H1 (사전 증거 있음)**: Symmetric reward + ATR 비례 공식 조합에서 RL은 ATR과 동등 (exp020~022)
+- **H2 (사전 증거 있음, 검증 필요)**: Asymmetric / DSR / Prospect-theoretic reward 로 정식화하면 RL이 ATR 초과 가능 (exp027_rl)
+- **H3 (검증 필요)**: 우수 reward의 효과는 "선택적 진입" 행동으로 나타남
+- **H4 (검증 필요)**: 그 우위(또는 비우위)가 CPCV + Slippage에서도 유지
+
+가설이지 결론이 아님. exp032에서 정식 검증한다.
+
+### Action은 연속 다차원이다
 
 ```python
-# 틀린 구현
-action_space = Discrete(3)  # Buy / Sell / Hold  ← 절대 안 됨
-
-# 올바른 구현
+# 현 표준 (exp020~027)
 action_space = Box(low=0.0, high=1.0, shape=(2,), dtype=np.float32)
 # [0] aggressiveness  → 매수 간격 결정
 # [1] profit_target   → 매도 간격 결정
+
+# exp029 변형 (사이클 시작 시 1회 결정, 5D)
+action_space = Box(low=0.0, high=1.0, shape=(5,), dtype=np.float32)
+# [0] n_splits_coef  [1] gap_b1  [2] gap_b2  [3] gap_s1  [4] gap_s2
 ```
+
+이산 action (Discrete(3) Buy/Sell/Hold) 은 절대 사용 금지.
 
 ### Sell 우선 원칙
 
 같은 봉에서 buy와 sell이 동시 체결 가능할 때 **sell을 먼저 처리**한다.
 
+### RL 설계 무결성 체크 (메모리 feedback)
+
+새 기능 추가, 최적화, 파라미터 튜닝 작업을 시작하기 전에 반드시:
+> **"이 작업이 RL agent가 state를 보고 다르게 행동하는 능력을 유지하는가?"**
+
+Bayesian 최적화가 RL action과 동일한 파라미터 (gap 크기) 를 동시 제어하면
+정책이 [0,0]으로 포화 수렴한다 (exp016 사례). 계수와 RL action의 역할이 겹치지 않도록 설계.
+
 ---
 
 ## MDP 빠른 참조
 
-### State (5차원, rolling z-score 정규화)
+### State (현 7D, exp029는 9D)
 
 ```
+# 기본 7D (exp020 이후 표준)
 [0] log_price            = log(price / price.rolling(168).mean())
 [1] divergence           = (avg_price - price) / avg_price
                            # 보유 중: 현재 평단가 기준
@@ -58,60 +101,65 @@ action_space = Box(low=0.0, high=1.0, shape=(2,), dtype=np.float32)
 [2] holdings_value_ratio = (holdings × price) / start_capital  # 미보유 시 0
 [3] cash_ratio           = cash / start_capital
 [4] volatility           = ATR(168) / price
+[5] trend_short          = pct_change(72)
+[6] trend_long           = pct_change(720)
+
+# exp029 추가 2D (사이클 1회 결정 방식)
+[7] idle_norm            = idle_steps / grace_period
+[8] n_splits_norm        = (n_splits - n_splits_min) / (n_splits_max - n_splits_min)
 ```
 
-### Action → 주문 변환 공식 (ATR 비례 스케일링)
+모든 변수 rolling z-score (window=168) 정규화, clip [-5, 5].
+
+### Action → 주문 변환 공식 (ATR 비례 스케일링, 현 baseline)
 
 ```python
 atr_ratio = ATR(168) / price               # volatility_raw 컬럼
 
-buy_hi_gap      = atr_ratio * (0.5 + aggressiveness * 1.5)  # [0.5×ATR, 2.0×ATR]
-buy_lo_gap      = atr_ratio * (2.5 + aggressiveness * 7.5)  # [2.5×ATR, 10×ATR]
-sell_market_gap = atr_ratio * (0.5 + profit_target  * 1.5)  # [0.5×ATR, 2.0×ATR]
-sell_cost_gap   = atr_ratio * (2.5 + profit_target  * 7.5)  # [2.5×ATR, 10×ATR]
-# 최소 gap 0.5×ATR: val p10 ATR=0.35%에서도 round-trip net = +0.25% (fee=0.1%)
+# 7D state + 2D action 표준
+buy_hi_gap      = atr_ratio * (A_b + B_b * aggressiveness)
+buy_lo_gap      = atr_ratio * (C_b + D_b * aggressiveness)
+sell_market_gap = atr_ratio * (A_s + B_s * profit_target)
+sell_cost_gap   = atr_ratio * (C_s + D_s * profit_target)
 
 buy_hi      = price     * (1 - buy_hi_gap)
 buy_lo      = price     * (1 - buy_lo_gap)
 sell_market = price     * (1 + sell_market_gap)
-sell_cost   = avg_price * (1 + sell_cost_gap)   # avg_price=0이면 price fallback
+sell_cost   = avg_price * (1 + sell_cost_gap)
 ```
 
-설계 근거:
-- 고정 절대 간격 → 시장 변동성과 분리, action 범위 대부분이 "체결 불가" 영역
-- ATR 비례 → action [0,1] 전체가 체결 확률 스펙트럼 [~13%, ~87%]에 고르게 대응
-- State[4] volatility 정보를 Policy가 직접 활용 가능 (State-Action 정합성)
+ATR 고정 시스템(exp026 best)의 Bayesian 계수: A_b=1.921, C_b=5.719, A_s=0.688, C_s=9.673, n_splits=3.
 
-### Reward
+### 체결 방식 (exp026 이후)
+
+```
+지정가(limit) 체결:
+  next_low  <= buy_hi      → buy_hi  가격으로 매수 체결
+  next_low  <= buy_lo      → buy_lo  가격으로 매수 체결
+  next_high >= sell_market → sell_market 가격으로 매도 체결
+  next_high >= sell_cost   → sell_cost   가격으로 매도 체결
+```
+
+⚠️ 이전 버전은 `next_low/next_high`로 체결 (favorable bias) → 수조% 가짜 수익 → exp026에서 수정.
+
+### Reward (현 baseline)
 
 ```python
-step_reward = (equity_t - equity_{t-1}) / start_capital
+step_reward = (equity_t - equity_{t-1}) / start_capital  # symmetric
 ```
 
-- 수수료는 `_execute_buy` / `_execute_sell`에서 cash에 이미 반영됨:
-  - 매수: `cash -= spend` (fee 포함), `holdings += (spend - fee) / price`
-  - 매도: `cash += qty × price - fee`
-  - → equity 변화분 자체에 수수료가 포함되므로 별도 차감 불필요.
+- 수수료는 `_execute_buy` / `_execute_sell`에서 cash에 이미 반영. 별도 차감 불필요.
 - `fee_rate`: 0.05% (Binance maker fee)
-- 사이클 종료 시 별도 보너스 없음. `completed_cycles` 리스트에 통계만 기록.
-- 사이클: holdings == 0 → 첫 체결 시 시작 / holdings → 0 복귀 시 종료
+- 사이클 종료 시 별도 보너스 없음. 통계만 기록.
 
-### 주문 크기 (Order Sizing)
+### Phase 3 reward 변형 (exp032 비교 대상)
 
-```python
-# 매수 — 사이클 시작 시 예산 확정 (고정 금액)
-cycle_slot_size = cycle_start_cash / n_splits
-per_order_size  = cycle_slot_size / n_buy_orders
-# cycle_budget_remaining < per_order_size → 추가 매수 완전 차단
-
-# 매도 — 1슬롯 임계값 기준
-threshold_btc = cycle_slot_size / avg(sell_lo, sell_hi)
-sell_qty = holdings           # 전량 청산  (holdings ≤ threshold_btc)
-sell_qty = holdings / n_sell_orders  # 균등 분할 (holdings > threshold_btc)
-```
-
-- `n_splits`: 4 초기값 (Val 셋 튜닝 예정)
-- 전량 청산 조건: 보유 BTC 가치 ≤ 1슬롯 현금 → 사이클 종료 보장
+| 코드 | 정의 |
+|---|---|
+| `sym` | 현 baseline (위 공식) |
+| `asym` | `r = sign(x) * abs(x) * (1 if x>=0 else β)`, β=2.0 |
+| `dsr` | Differential Sharpe Ratio (Moody 2001) |
+| `pt` | `r = sign(x) * abs(x)^α * (1 if x>=0 else λ)`, α=0.88, λ=2.25 |
 
 ---
 
@@ -122,31 +170,26 @@ sell_qty = holdings / n_sell_orders  # 균등 분할 (holdings > threshold_btc)
 
 | 구분 | 기간 | 파일 |
 |------|------|------|
-| Train | 2020.01 ~ 2022.12 | `data/processed/btc_train.parquet` |
-| Validation | 2023.01 ~ 2023.12 | `data/processed/btc_val.parquet` |
-| Test | 2024.01 ~ | `data/processed/btc_test.parquet` ← **봉인** |
+| Train | 2017-08-17 ~ 2022-12-31 | `data/processed/btc_train.parquet` |
+| Validation | 2023-01-01 ~ 2023-12-31 | `data/processed/btc_val.parquet` |
+| Test | 2024-01-01 ~ | `data/processed/btc_test.parquet` ← **봉인 (exp035까지)** |
 
 ---
 
-## 현재 구현 상태 (2026-04-09 기준)
+## 다음 실험 시리즈 (Phase 3 진행 중)
 
-### 완료
-- [x] 프로젝트 폴더 구조 및 스캐폴딩
-- [x] `config/experiment_config.yaml` 전체 파라미터 확정
-- [x] `src/utils/config.py` YAML 로더
-- [x] `scripts/download_data.py` — ccxt Binance 1h 다운로드 (54,933캔들)
-- [x] `scripts/preprocess_data.py` — ATR(직접구현), log_price, rolling z-score, parquet 저장
-- [x] `src/env/trading_env.py` — 전체 구현 완료, gymnasium env_checker 통과
-- [x] 주간 보고서 템플릿 (`reports/WEEKLY_TEMPLATE.md`)
+| Exp | 목적 | 논문 챕터 | 상태 |
+|---|---|---|---|
+| exp030 | PPO 학습 안정화 | Method 3.3 | 대기 |
+| exp031 | BC warm-start | Method 3.4 | 대기 |
+| exp031b | CQL + mixed (조건부) | Method 3.4 | 조건부 대기 |
+| **exp032** | **4가지 reward 비교 (메인)** | **§5 Positive finding** | 대기 |
+| exp033 | Slippage + DR | §7.1 Robustness | 대기 |
+| exp034 | CPCV 6-fold + DSR | §5, §7.2 | 대기 |
+| exp035 | Test set 봉인 해제 | §7.3 최종 | 대기 |
 
-### 미구현 (구현 순서대로)
-- [ ] `tests/test_trading_env.py` — 포트폴리오 수학 검증 (평단가, 수수료, 사이클 보너스)
-- [ ] `src/agents/baselines.py` — Buy-and-Hold, 고정 그리드(1%/2%/5%), ATR 비례 그리드
-- [ ] `notebooks/01_data_exploration.ipynb` — 데이터 분포, ATR 시계열, zscore 시각화
-- [ ] `src/agents/ppo_agent.py` + `scripts/train_ppo.py`
-- [ ] `src/evaluation/metrics.py` — Sharpe, MDD, 누적수익률, 사이클 통계
-- [ ] `src/evaluation/behavior.py` — (state, action) 수집 및 분석
-- [ ] 노트북 02~05
+기존 exp001~029 결과는 RQ-1 negative finding + RQ-2 가설 시발점으로 활용. `RESEARCH_LOG.md` 참조.
+상세 설계는 `docs/study/rl_finance/project_continuation_plan.md` 참조.
 
 ---
 
@@ -196,13 +239,15 @@ data:     데이터 관련 스크립트
 ### 구조
 - **로직은 반드시 `src/`에** — 노트북은 `src/`를 import해서 사용, 로직 직접 작성 금지
 - **스크립트는 `scripts/`에** — 커맨드라인 실행 진입점. `src/`를 호출하는 얇은 레이어
-- **실험 파라미터는 `config/experiment_config.yaml`에** — 코드 내 하드코딩 금지
+- **실험 파라미터는 `config/`에** — 코드 내 하드코딩 금지. exp별 yaml 분리.
 
 ### 의존성
 - 기술 지표: ATR은 `src/data/preprocessor.py`에서 pandas로 직접 계산. 외부 라이브러리 불필요
 - 데이터 다운로드: `ccxt` (Binance). `yfinance`는 보조 용도만
 - RL: `stable-baselines3` + `gymnasium`. `gym` (구버전) 사용 금지
+- Offline RL (exp031b 조건부): `d3rlpy` (CQL, IQL)
 - 실험 추적: `mlflow` (로컬). Weights & Biases 사용 금지
+- Hyperparameter: `optuna` (TPE + MedianPruner)
 
 ### 환경 검증
 `trading_env.py` 수정 후 반드시 실행:
@@ -211,14 +256,21 @@ from gymnasium.utils.env_checker import check_env
 check_env(env)
 ```
 
+또한 `tests/test_trading_env.py` 46개 테스트 통과 확인.
+
 ---
 
 ## 주요 문서 위치
 
 | 문서 | 경로 | 내용 |
 |------|------|------|
-| MDP 설계 | `docs/MDP.md` | State/Action/Reward 설계 근거, 행동 분석 계획 |
+| **본 논문 목표 (단일 기준점)** | `docs/PROJECT_GOAL.md` | **RQ, 가설, 평가 방법, scope** |
+| 로드맵 | `ROADMAP.md` | Phase별 진행 현황 + 의사결정 기록 |
+| 실험 시리즈 상세 | `docs/study/rl_finance/project_continuation_plan.md` | exp030~035 설계 |
+| 학습 자료 허브 | `docs/study/rl_finance/00_overview.md` | 24개 이론 노트 인덱스 |
+| 공식 정의 | `docs/FORMULAS.md` | ATR 고정 / RL 버전 공식 |
+| MDP 설계 | `docs/MDP.md` | State/Action/Reward 설계 근거 |
 | 선행 연구 | `docs/RELATED_WORK.md` | 논문 7편 역할 및 차별점 |
 | 실험 설정 | `config/experiment_config.yaml` | 모든 수치 파라미터 |
 | 실험 기록 | `RESEARCH_LOG.md` | 날짜별 의사결정 |
-| 제안서 v3.0 | `D:\PARA\Assets\Semesters\26-1\캡디\캡스톤_주제제안서_v3.0.docx` | 지도교수 제출용 공식 문서 |
+| 제안서 v3.0 | `D:\PARA\Assets\Semesters\26-1\캡디\캡스톤_주제제안서_v3.0.docx` | 지도교수 제출용 공식 문서 (Pivot 2 반영 필요할 수 있음) |

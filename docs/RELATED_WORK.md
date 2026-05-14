@@ -4,6 +4,18 @@
 각 논문 대비 본 연구의 차별점을 정리한다.
 제안서 v3.0 섹션 4의 코드 저장소 버전이다.
 
+> **본 문서의 위치 (2026-05-14 기준)**:
+> - 본 문서는 제안서 시점의 선행 연구 7편 + Phase 1~2 시점의 차별점 정리.
+> - Phase 3 진입 시 RQ가 "Reward design이 RL 알파의 핵심 채널?"로 재정의됨.
+> - **본 문서에 추가로 통합될 학술 인용은 [`study/rl_finance/00_overview.md`](study/rl_finance/00_overview.md) 의 24개 노트** — 특히:
+>   - Avellaneda-Stoikov (2008) — 그리드의 학술적 조상 (§2 Background)
+>   - Moody & Saffell (2001) — DSR reward (§3.4 Method)
+>   - Kahneman & Tversky (1979) — Prospect theory (§3.4 Method)
+>   - Ng, Harada, Russell (1999) — Reward shaping (§3.3 Safety)
+>   - Schulman et al. (2017) — PPO algorithm (§3.2 Method)
+>   - Zhang, Zohren, Roberts (2020) — DRL trading baseline (§2 Background)
+> - 단일 기준점: [`PROJECT_GOAL.md`](PROJECT_GOAL.md).
+
 ---
 
 ## 논문 목록 (`papers/` 폴더)
@@ -127,6 +139,19 @@
 | 기술지표 state (RSI, SMA, BB 등) | 포지션 상태 + 시장 레짐 state |
 | 고정 전략 or 전략 선택 | 그리드 간격 직접 학습 |
 | 추세 시장에서 유리 | 변동성 시장에서 유리 (방향 무관) |
+| 단일 reward (대부분 PnL) | **Reward 변형 4종 비교 (Phase 3 추가)** |
+
+### Phase 3에서 강화된 차별점 (본 논문 메인 contribution)
+
+**"Reward design이 RL 알파의 핵심 채널이다"** 가설을 정식 검증.
+
+| 측면 | 선행 연구 | 본 연구 |
+|---|---|---|
+| Reward 종류 | 보통 단일 PnL or 변동성 패널티 추가 | **Symmetric / Asymmetric / DSR / Prospect-theoretic 4종 정식 비교** |
+| Reward 학술적 출처 | 임의 선택 | 학술 근거 명시 (Moody 2001, Ng 1999, Kahneman 1979) |
+| 통계 검증 | 단일 분할 | **CPCV + DSR (Gort 2022, López de Prado 2014)** |
+| Sim2Real gap | 무시 또는 한 줄 언급 | Slippage + DR (exp033) |
+| 베이스라인 | Buy-Hold + 1~2 변형 | ATR Bayesian-optimized + 7종 변형 |
 
 ---
 

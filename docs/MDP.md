@@ -3,12 +3,19 @@
 이 문서는 `src/env/trading_env.py`의 설계 의도와 근거를 기록한다.
 구현 파라미터는 `config/experiment_config.yaml`, 코드 인터페이스는 `trading_env.py` docstring을 참고한다.
 
+> **본 문서의 위치 (2026-05-14 기준)**:
+> - 본 문서는 Phase 1 (환경 설계) 시점의 상세 설계 근거를 담고 있다.
+> - 현 시점(Phase 3)의 RQ와 실제 구현 상태는 [`PROJECT_GOAL.md`](PROJECT_GOAL.md), [`../ROADMAP.md`](../ROADMAP.md), [`../CLAUDE.md`](../CLAUDE.md) 참조.
+> - Phase 1 이후 변경 사항은 본 문서 끝의 "Phase 2~3 주요 변경" 섹션 참조.
+
 ---
 
 ## 개요
 
 **목표**: 가격 방향을 예측하지 않고, 현재 시장 상태와 포지션 상태에만 반응하여
 그리드 간격과 익절 목표를 동적으로 결정하는 에이전트 학습.
+
+본 환경 설계는 **본 졸업 논문 §3 Method (환경 정의)** 의 근거가 된다.
 
 **데이터**: yfinance → Binance API (ccxt) BTC/USDT **1시간봉**
 (yfinance 1h는 최근 730일 제한 → 학습 기간 전체 커버를 위해 ccxt 사용)
@@ -120,13 +127,23 @@ if next_low  <= buy_lo:   → buy_lo  체결 (보수적 매수)
 1. **Reward에 거래비용 반영** — 매 거래마다 0.05% 차감
 2. **PPO 엔트로피 정규화** — `ent_coef=0.01`로 탐색 유지
 
-### 1학기 → 2학기 확장
+### Phase별 Action 변천
 
 ```
-1학기 PPO:  buy 2개 + sell 2개 고정, 출력층 → tanh(2) → [0, 1] 스케일링
-2학기 SAC:  off-policy로 연속 행동 공간 효율 향상
-            State, 환경 체결 로직, Reward 재사용 / 출력층만 교체
-            이후: sell_mid 추가 또는 주문 개수 가변화
+Phase 1 (exp001~016):
+  buy 2개 + sell 2개 고정
+  고정 절대 갭 (buy_hi_gap = 0.0001 + agg * 0.05)
+  Action: [aggressiveness, profit_target], Box[0,1]^2
+
+Phase 2 (exp017~027):
+  ATR 비례 스케일링 도입
+  buy_hi_gap = atr_ratio * (A_b + B_b * aggressiveness)
+  Sell market vs cost 명칭 분리
+
+Phase 3 (exp028+):
+  Action 의미 자체를 변경 (exp020 budget_fraction, exp021 entry_gate 등 ablation 후)
+  exp029: 사이클 시작 시 1회 결정 (5D action)
+  본 논문은 표준 2D action을 메인 비교 단위로 사용
 ```
 
 ---
@@ -261,3 +278,44 @@ df_behavior = pd.DataFrame(records)
 | `notebooks/01_data_exploration.ipynb` | 원본 데이터 탐색 |
 | `notebooks/02_indicator_analysis.ipynb` | state 변수 분포 및 상관관계 확인 |
 | `RESEARCH_LOG.md` | 설계 의사결정 날짜별 기록 |
+
+---
+
+## 7. Phase 2~3 주요 변경 (본 문서 작성 후)
+
+본 문서가 작성된 Phase 1 시점 이후의 누적 변경 사항. 상세는 `RESEARCH_LOG.md`.
+
+### State
+
+- **5D → 7D (exp017)**: `trend_short` (72h pct_change), `trend_long` (720h pct_change) 추가
+- **7D → 9D (exp029)**: 사이클 시작 시 1회 결정 방식 도입 시 `idle_norm`, `n_splits_norm` 추가
+
+### Action
+
+- **고정 절대 갭 → ATR 비례 스케일링 (exp003 이후)**:
+  ```python
+  buy_hi_gap = atr_ratio * (A_b + B_b * aggressiveness)   # 등
+  ```
+  계수 A_b, B_b, C_b, D_b, A_s, B_s, C_s, D_s는 config에서 조정 (Optuna 최적화 대상)
+
+- **sell_lo/sell_hi → sell_market/sell_cost (exp003 이후)**: 기준가 명시
+  - `sell_market` = price 기준 (시장 모멘텀)
+  - `sell_cost` = avg_price 기준 (원가 수익 보장)
+
+### Reward
+
+- **사이클 보너스 제거 (exp003 이후)**: `cycle_pnl_pct + alpha/cycle_hours` 항 삭제. step_reward만 사용.
+- **fee 이중차감 버그 수정 (exp003 이후)**: `_execute_buy/_sell`에서 이미 fee가 cash에 반영 → 별도 차감 없음.
+- **Phase 3 reward 변형 (exp032 예정)**: Symmetric (현재) / Asymmetric / DSR / Prospect-theoretic 4종 비교.
+
+### 체결
+
+- **next_low/next_high → 지정가 체결 (exp026 이후)**: favorable bias 제거. 시뮬레이션 정합성 확보.
+
+### Order sizing
+
+- **`order_size_fraction` → `n_splits` 균등 분할 (exp003 이후)**: 사이클 시작 시 예산 확정.
+- **`threshold_btc` 기준**: `cycle_slot_size / price` (exp003 이후, 이전엔 sell_market/sell_cost 평균)
+- **균등 분할 매도**: `holdings / n_splits` (exp003 이후, 이전엔 n_sell_orders)
+
+자세한 history는 `RESEARCH_LOG.md` 참조.

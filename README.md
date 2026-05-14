@@ -1,62 +1,58 @@
-# PPO 기반 BTC 동적 그리드 트레이딩
+# BTC 그리드 트레이딩 — Reward Design이 RL 알파에 미치는 영향
 
-2026 컴퓨터공학과 캡스톤 디자인
+2026 컴퓨터공학과 캡스톤 디자인 / 졸업 논문
 
-## 연구 개요
+## 핵심 연구 질문 (RQ)
 
-고정 간격 그리드 봇과 달리, 시장 상태와 포지션 상태에 반응하여
-**그리드 간격과 익절 목표를 동적으로 결정**하는 PPO 에이전트를 학습시킨다.
-가격 방향을 예측하지 않고 변동성 자체에서 수익을 추구한다.
+> **BTC 그리드 트레이딩에서 reward 설계가 RL 정책의 알파에 어떤 영향을 미치는가?
+> 특히, 어떤 reward 함수 하에서 RL이 ATR 규칙 기반을 초과하며 (혹은 초과하지 못하며), 그 메커니즘은 무엇인가?**
 
-**주 연구 질문:**
-> 시장 상태와 포지션 상태에 반응하여 그리드 간격과 익절 목표를 동적으로 결정하는
-> PPO 에이전트가 비트코인 시장에서 고정 그리드 전략 대비 Sharpe Ratio 기준 우위를 보이는가?
+가격 방향을 예측하지 않고, 변동성 자체에서 수익을 추구하는 **동적 그리드 트레이딩** 환경에서,
+PPO 에이전트가 ATR 비례 규칙 기반 시스템 대비 보이는 성능 차이를 reward 함수 별로 비교 분석한다.
 
-**부 연구 질문:**
-> 학습된 에이전트는 어떤 시장 상태(변동성, 가격 수준)에서 어떤 간격을 선택하는가?
+**자산 범위**: BTC/USDT 1시간봉 **단일 자산** (자산 확장은 본 논문 범위 외).
 
----
-
-## MDP 정의
-
-### State (5차원, rolling z-score 정규화)
-
-| # | 변수 | 수식 | 역할 |
-|---|------|------|------|
-| 0 | log_price | `log(price / price.rolling(168).mean())` | 시장: 가격 수준 |
-| 1 | divergence | `(avg_price - price) / avg_price` (미보유 시 0) | 포지션: 손익 |
-| 2 | holdings_value_ratio | `(holdings × price) / start_capital` | 포지션: 보유 규모 |
-| 3 | cash_ratio | `cash / start_capital` | 포지션: 여력 |
-| 4 | volatility | `ATR(168) / price` | 시장: 변동성 레짐 |
-
-### Action (2차원 연속, [0, 1]²)
-
-| 변수 | 범위 | 결정하는 것 |
-|------|------|------------|
-| aggressiveness | [0, 1] | buy_hi_gap → [0.01%, 5%], buy_lo_gap → [0.1%, 10%] |
-| profit_target | [0, 1] | sell_lo_gap → [0.01%, 5%], sell_hi_gap → [0.1%, 15%] |
-
-주문: buy_hi / buy_lo / sell_lo / sell_hi 4개 고정. 체결은 다음 봉 고/저가 기준.
-
-### Reward
-
-```
-매 스텝:      (equity_t - equity_{t-1}) / start_capital - fee × n_trades
-사이클 종료:  위 + cycle_pnl_pct + alpha / cycle_hours
-```
-
-사이클: holdings == 0 → 첫 체결 시 시작 / holdings → 0 복귀 시 종료
+상세는 [docs/PROJECT_GOAL.md](docs/PROJECT_GOAL.md) 참조.
 
 ---
 
-## 베이스라인 비교
+## 핵심 가설 및 사전 증거
 
-| 전략 | 설명 | 비교 목적 |
-|------|------|----------|
-| Buy-and-Hold | BTC 단순 보유 | 절대 기준선 |
-| 고정 그리드 | 1% / 2% / 5% 고정 간격 | "적응이 의미 있는가?" |
-| ATR 비례 그리드 | `gap = k × (ATR_168 / price)` (규칙 기반) | "학습이 규칙보다 나은가?" |
-| PPO 에이전트 | 동적 간격 학습 | 피실험자 |
+| 가설 | 사전 증거 | 정식 검증 |
+|---|---|---|
+| **H1**: Symmetric reward + ATR 비례 공식에서 RL ≈ ATR | exp020~022 (Test Sharpe 42.0 vs 41.8) | RQ-1 (재현) |
+| **H2**: Asymmetric / Prospect-theoretic reward로 RL > ATR | exp027_rl (Test Sharpe 1.955 vs 0.935) | **RQ-2 (메인, exp032)** |
+| **H3**: 우수 reward는 "선택적 진입" 행동 | exp027_rl 거래수 214 (ATR 1591의 1/7) | RQ-3 (exp032 행동 분석) |
+| **H4**: 알파가 CPCV + Slippage에서도 유지 | — | RQ-4 (exp033~035) |
+
+---
+
+## Phase 진행 상황
+
+```
+Phase 1  ██████████ 완료  환경 설계 + RL 학습 + 핵심 발견 (negative finding 확보)
+Phase 2  ██████████ 완료  체결 정합성 + ATR 재최적화 + asymmetric reward 사전 증거
+Phase 3  ██░░░░░░░░ 진행  Reward 변형 비교 (본 논문 메인) — exp030~035
+Phase 4  ░░░░░░░░░░ 대기  논문 작성 + 디펜스 (Phase 3 후반과 병행)
+```
+
+상세는 [ROADMAP.md](ROADMAP.md) 참조.
+
+---
+
+## 다음 실험 시리즈
+
+| Exp | 목적 | 논문 챕터 | 상태 |
+|---|---|---|---|
+| exp030 | PPO 학습 안정화 | §3.3 Method | 대기 |
+| exp031 | BC warm-start | §3.4 Method | 대기 |
+| exp031b | (조건부) CQL + mixed | §3.4 Method | 조건부 |
+| **exp032** | **4가지 reward 비교 (메인)** | **§5 Positive finding** | 대기 |
+| exp033 | Slippage + Domain Randomization | §7.1 | 대기 |
+| exp034 | CPCV 6-fold + DSR | §5, §7.2 | 대기 |
+| exp035 | Test set 봉인 해제 | §7.3 | 대기 |
+
+상세 설계는 [docs/study/rl_finance/project_continuation_plan.md](docs/study/rl_finance/project_continuation_plan.md).
 
 ---
 
@@ -68,8 +64,7 @@ venv\Scripts\activate       # Windows
 pip install -r requirements-dev.txt
 ```
 
-> ⚠️ yfinance 1h 데이터는 최근 730일까지만 제공한다.
-> 학습 기간(2020~2022) 데이터는 Binance API(ccxt)로 다운로드한다.
+> ⚠️ yfinance 1h 데이터는 최근 730일 제한. 학습 기간 전체는 Binance API(ccxt)로 다운로드.
 
 ## 데이터 다운로드 및 전처리
 
@@ -102,9 +97,9 @@ mlflow ui   # http://localhost:5000
 
 | 구분 | 기간 | 용도 |
 |------|------|------|
-| Train | 2020.01 ~ 2022.12 | 에이전트 학습 |
-| Validation | 2023.01 ~ 2023.12 | 하이퍼파라미터 튜닝 |
-| Test | 2024.01 ~ | 최종 평가 — **학습 완료 전 열람 금지** |
+| Train | 2017-08-17 ~ 2022-12-31 | 에이전트 학습 |
+| Validation | 2023-01-01 ~ 2023-12-31 | 하이퍼파라미터 튜닝, CPCV |
+| Test | 2024-01-01 ~ | 최종 평가 — **exp035까지 봉인** |
 
 ---
 
@@ -112,46 +107,62 @@ mlflow ui   # http://localhost:5000
 
 ```
 capstone-rl-trading/
-├── config/                  # 실험 설정 (하이퍼파라미터)
-├── data/raw/                # 다운로드 원본 (불변)
-├── data/processed/          # 전처리 완료 parquet (.gitignore)
+├── docs/
+│   ├── PROJECT_GOAL.md         # ★ 단일 기준점 (RQ, 가설, scope)
+│   ├── MDP.md                  # 환경 설계 근거
+│   ├── FORMULAS.md             # ATR/RL 공식
+│   ├── RELATED_WORK.md         # 선행 연구
+│   └── study/
+│       ├── rl_finance/         # ★ 학습 노트 24개 (이론 보강)
+│       │   ├── 00_overview.md  #   허브
+│       │   └── project_continuation_plan.md  # exp030~035 상세
+│       ├── ernie chan/         # Quantitative Trading (Chan)
+│       ├── lopez de prado/     # Advances in FinML
+│       └── *.md                # 팩터, 위험지표 등
+├── config/                     # 실험 설정 (exp별 yaml)
+├── data/raw/                   # 다운로드 원본 (불변)
+├── data/processed/             # 전처리 parquet (.gitignore)
 ├── src/
-│   ├── data/                # 다운로더, 전처리기
-│   ├── env/                 # Gymnasium 트레이딩 환경
-│   ├── agents/              # PPO 래퍼, 베이스라인
-│   ├── evaluation/          # 지표, 행동 분석
-│   └── utils/               # 설정 로더, 시각화
-├── scripts/                 # 실행 진입점
-├── notebooks/               # 탐색/시각화 전용
-├── experiments/             # 실험별 결과 (config + 로그)
-├── reports/                 # 학기별 보고서
-├── tests/                   # 단위 테스트
-└── papers/                  # 참고 논문
+│   ├── data/                   # 다운로더, 전처리기
+│   ├── env/                    # Gymnasium 트레이딩 환경
+│   ├── agents/                 # PPO 래퍼, 베이스라인
+│   ├── evaluation/             # 지표, 행동 분석
+│   └── utils/                  # 설정 로더, 시각화
+├── scripts/                    # CLI 진입점
+├── notebooks/                  # 탐색/시각화 전용
+├── experiments/                # 실험별 결과 (model + config + log)
+├── reports/                    # 학기별 보고서
+├── tests/                      # 단위 테스트 (46개)
+├── papers/                     # 참고 논문 PDF
+├── live_trading/               # (선택) Paper trading 인프라
+├── ROADMAP.md                  # Phase별 진행 + 의사결정
+├── CLAUDE.md                   # Claude Code 작업 규칙
+└── RESEARCH_LOG.md             # 날짜별 실험 기록
 ```
 
 ---
 
-## 1학기 목표 (2026년 3~6월)
+## 주요 문서
 
-| 기간 | 목표 | 산출물 |
-|------|------|--------|
-| 3~4월 | 환경 구현 + 데이터 파이프라인 | trading_env.py, 전처리 완료 데이터 |
-| 4~5월 | PPO 학습 + 베이스라인 비교 | 학습 곡선, Sharpe 비교표 |
-| 6월 | 행동 패턴 분석 + 중간 보고서 | aggressiveness/profit_target vs 시장 레짐 분석 |
-
-## 2학기 확장 계획
-
-- Ablation: state 변수별 기여도 측정
-- SAC 전환: 연속 행동 공간에서 더 안정적인 off-policy 알고리즘
-- 주문 개수 가변화: 2개 고정 → n개 가변
+| 문서 | 내용 |
+|------|------|
+| **[docs/PROJECT_GOAL.md](docs/PROJECT_GOAL.md)** | **★ 단일 기준점. RQ, 가설, 평가 방법, scope** |
+| [ROADMAP.md](ROADMAP.md) | Phase별 진행 현황 + 의사결정 기록 |
+| [docs/study/rl_finance/00_overview.md](docs/study/rl_finance/00_overview.md) | 학습 노트 24개 허브 |
+| [docs/study/rl_finance/project_continuation_plan.md](docs/study/rl_finance/project_continuation_plan.md) | exp030~035 상세 설계 |
+| [docs/MDP.md](docs/MDP.md) | 환경 설계 근거 (Phase 1~3 변천 포함) |
+| [docs/FORMULAS.md](docs/FORMULAS.md) | ATR 고정 / RL / Phase 3 reward 변형 공식 |
+| [docs/RELATED_WORK.md](docs/RELATED_WORK.md) | 선행 연구 + Phase 3 인용 매핑 |
+| [RESEARCH_LOG.md](RESEARCH_LOG.md) | 날짜별 의사결정 및 실험 결과 |
+| [CLAUDE.md](CLAUDE.md) | Claude Code 작업 규칙 |
 
 ---
 
-## 관련 문서
+## 이전 README
 
-| 문서 | 위치 | 내용 |
-|------|------|------|
-| 주제 제안서 v3.0 | `D:\PARA\Assets\Semesters\26-1\캡디\캡스톤_주제제안서_v3.0.docx` | 지도교수 제출용 공식 문서 |
-| MDP 설계 | [`docs/MDP.md`](docs/MDP.md) | State / Action / Reward 설계 근거 |
-| 선행 연구 | [`docs/RELATED_WORK.md`](docs/RELATED_WORK.md) | 참고 논문 7편 역할 및 차별점 |
-| 실험 기록 | [`RESEARCH_LOG.md`](RESEARCH_LOG.md) | 날짜별 의사결정 및 실험 결과 |
+본 README는 2026-05-14 RQ 재정의 (Pivot 2) 에 맞춰 전면 개정됨.
+Phase 1 시점의 RQ ("PPO 동적 그리드가 고정 그리드 대비 Sharpe Ratio 우위?") 와
+자산 확장 계획(Phase 4~6 주식/FX/원자재) 은 **본 졸업 논문 범위에서 제외됨**.
+이전 RQ의 결과(RL ≈ ATR 발견) 는 본 논문의 §4 Negative finding의 출발점으로 활용.
+
+같은 날 2차 수정으로 RQ를 단정문에서 열린 질문 형태로 다듬음 — 학술 컨벤션 준수.

@@ -3,6 +3,13 @@
 두 시스템은 **동일한 ATR 비례 구조**를 공유한다.  
 차이는 오직 하나: 계수를 Bayesian이 고정하느냐(ATR 버전), RL이 동적으로 결정하느냐(RL 버전).
 
+> **본 문서의 위치 (2026-05-14 기준)**:
+> - 본 문서는 Phase 2 (ATR vs RL 비교) 시점의 공식 정의.
+> - 현 시점(Phase 3)에서는 두 시스템의 비교가 **§4 Negative finding (RQ-1)** 으로 정리되고,
+>   본 논문의 메인은 **reward 변형 비교 (RQ-2, exp032)** 로 이동.
+> - 본 문서의 ATR 시스템은 Phase 3 실험들의 **고정 baseline** 으로 계속 사용된다.
+> - 단일 기준점: [`PROJECT_GOAL.md`](PROJECT_GOAL.md).
+
 ---
 
 ## 공통 구조
@@ -137,38 +144,80 @@ ATR 비례 구조를 유지하면서도, RL이 같은 ATR 수준에서 **어떤 
 
 ATR 버전은 이 판단을 하지 않는다. 변동성(ATR 크기)만 반영하고 추세 방향은 무시.
 
-### 예상 성능 (BTC)
+### 실제 성능 (BTC, exp022 결과)
 
-미지수. 가능한 시나리오:
-- **RL ≈ ATR**: BTC에서도 ATR 최적이 이미 최선 → 계수 고정이 충분
-- **RL > ATR**: trend 신호를 활용해 ATR 고정보다 나은 계수 조합 발견
-- **RL < ATR**: 학습 불안정, ATR 최적 계수를 초과/미달
+exp022 결과로 위 시나리오는 답이 나왔다.
+
+| 시스템 | Val Sharpe | Test Sharpe |
+|---|---|---|
+| ATR 고정 (Bayesian Trial #42) | 45.390 | 41.769 |
+| RL exp020 (budget_fraction) | 45.390 | 42.090 |
+| Fixed [1.0, 0.0] (RL 수렴 값 고정) | **45.390** (RL과 동일) | 41.769 |
+
+→ **RL과 ATR이 사실상 동등** (Val Sharpe 완전 일치, Test ±0.32 이내).
+→ **시나리오 1 (RL ≈ ATR) 채택.**
+
+> **체결가 버그 수정 후 (exp026)**:
+> 위 결과는 next_low/next_high 체결의 favorable bias 영향. 지정가 체결로 수정 후:
+> - ATR Val Sharpe 1.978 (Test 0.935)
+> - RL Val Sharpe 0.896 (Test 0.009)
+> - ATR > RL 로 결과 역전.
+>
+> **그러나 exp027_rl asymmetric reward 도입 후**:
+> - RL Test Sharpe 1.955 (ATR 0.935의 2배)
+> - **→ Reward 설계가 RL 알파의 핵심 채널**이라는 가설의 사전 증거.
+> - 본 졸업 논문의 메인 주제.
 
 ---
 
-## 두 시스템 비교 요약
+## Phase 3 — Reward 변형이 결정한다 (현 주제)
 
-| | ATR 고정 | RL |
+Phase 2의 발견 "RL ≈ ATR" 은 **Symmetric reward + ATR 비례 공식의 조합** 에서만 성립.
+
+Phase 3에서는 동일 공식 구조를 유지하되 **reward 함수만 변경** 하여 RL이 ATR을 초과하는 조건을 탐색.
+
+### Reward Variant (exp032 메인 비교)
+
+| 코드 | 정의 | 출처 |
+|---|---|---|
+| `sym` | `(equity_t - equity_{t-1}) / start_capital` | Phase 1~2 baseline |
+| `asym` | `sym` if ≥0 else `β * sym` (β=2.0) | exp027_rl, Kahneman-Tversky 단순화 |
+| `dsr` | Differential Sharpe Ratio | Moody & Saffell (2001) |
+| `pt` | `sign(x) * abs(x)^α * (1 or λ)` (α=0.88, λ=2.25) | Kahneman & Tversky (1979) |
+
+→ 각 variant × 5 seeds × Val 평가 → CPCV 분포 → DSR 검증.
+
+---
+
+## 두 시스템 비교 요약 (Phase 2 시점 결론, 본 논문 §4 Negative finding 근거)
+
+| | ATR 고정 | RL (Symmetric reward) |
 |---|---|---|
 | 계수 결정 | Bayesian 1회 최적화, 고정 | 매 스텝 동적 결정 |
 | State 활용 | 없음 (공식만) | trend, volatility, position |
 | 학습 필요 | 없음 | PPO 1M 스텝 |
 | 장점 | 안정적, 해석 가능, 빠름 | 레짐 적응 가능성 |
 | 단점 | trend 방향성 무시 | 과적합 위험, 학습 불안정 |
-| BTC 성능 | Test Sharpe 41.769 | Test Sharpe 42.090 (≈ 동일) |
+| BTC 성능 (체결가 수정 후) | Test Sharpe 0.935 | Test Sharpe 0.009 (Symmetric) → **1.955 (Asymmetric, exp027_rl)** |
+
+→ Reward 변형으로 RL이 ATR 명확히 초과 가능 → 본 논문 §5 Positive finding.
 
 ---
 
-## 다자산 확장 시 예상 차이
+## 다자산 확장 (본 논문 범위 외) ⛔
+
+본 졸업 논문에서는 **자산 확장을 명시적으로 제외**.
+
+이전 검토 (Phase 2 시점, 참고용으로만 보관):
 
 | 자산 | ATR 강점 | RL 기회 | 예상 우위 |
 |---|---|---|---|
-| BTC | 변동성 자체가 전략 전부 | 없음 (이미 확인) | ATR = RL |
-| 주식 | 일반 변동성 포착 | 실적 발표, 갭, 섹터 레짐 | **RL 가능성** |
-| 외환 | 일반 변동성 포착 | 금리 결정, 고용지표 | 중간 |
-| 금/원자재 | 단기 변동성 | 계절성, 공급 충격 | **RL 가능성** |
+| BTC | 변동성 자체가 전략 전부 | 없음 (이미 확인) | ATR = RL → Reward 변형 시 RL 우위 |
+| 주식 | 일반 변동성 포착 | 실적 발표, 갭, 섹터 레짐 | (가설, 본 논문에서 검증 안 함) |
+| 외환 | 일반 변동성 포착 | 금리 결정, 고용지표 | (가설, 본 논문에서 검증 안 함) |
+| 금/원자재 | 단기 변동성 | 계절성, 공급 충격 | (가설, 본 논문에서 검증 안 함) |
 
-공식 계수(A_b, C_b, A_s, C_s)는 자산별로 Bayesian 재최적화 필요.
+본 논문 §8 Discussion에서 "확장 시사점"으로만 짧게 언급.
 
 ---
 
@@ -178,5 +227,7 @@ ATR 버전은 이 판단을 하지 않는다. 변동성(ATR 크기)만 반영하
 |---|---|
 | 환경 (공통) | `src/env/trading_env.py` |
 | ATR 고정 설정 | `config/experiment_config.yaml` |
-| RL 실험 (exp022) | `experiments/exp022_rl_coef/` (예정) |
-| 비교 스크립트 | `scripts/compare_atr_vs_rl.py` (예정) |
+| RL 실험 (Phase 2) | `experiments/exp020_*`, `experiments/exp022_rl_coef/` |
+| ATR 최적화 (Phase 2) | `experiments/exp023_atr_optuna/`, `experiments/exp026_atr_limitfill/` |
+| Reward 변형 (Phase 3) | `experiments/exp032_reward_variants/` (예정) |
+| 비교 스크립트 | `scripts/eval_atr_test.py`, `scripts/eval_test.py` |
