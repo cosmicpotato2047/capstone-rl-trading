@@ -94,6 +94,7 @@ def main() -> None:
         # 하이퍼파라미터 기록
         agent_cfg   = config["agent"]
         vec_cfg     = config.get("vec_normalize", {})
+        env_cfg = config["environment"]
         params = {
             "algorithm":       agent_cfg["algorithm"],
             "learning_rate":   agent_cfg["learning_rate"],
@@ -105,8 +106,11 @@ def main() -> None:
             "gamma":           agent_cfg["gamma"],
             "ent_coef":        agent_cfg["ent_coef"],
             "total_timesteps": agent_cfg["total_timesteps"],
-            "n_splits_min":    config["environment"]["n_splits_min"],
-            "n_splits_max":    config["environment"]["n_splits_max"],
+            # Env-v4 environment params
+            "n_buy_orders":     env_cfg.get("n_buy_orders", 2),
+            "n_splits":         env_cfg.get("n_splits", 2),
+            "threshold_basis":  env_cfg.get("threshold_basis", "price"),
+            "reward_loss_beta": env_cfg.get("reward_loss_beta", 1.0),
             "vec_normalize":   vec_cfg.get("enabled", False),
             "norm_obs":        vec_cfg.get("norm_obs", False),
             "norm_reward":     vec_cfg.get("norm_reward", False),
