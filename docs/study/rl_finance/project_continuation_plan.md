@@ -66,28 +66,32 @@
 
 ---
 
-## exp031 — BC Warm-Start (1주)
+## exp031 — BC Warm-Start (Action Bias Init): **Negative Result, 폐기 (2026-05-14)**
 
-**목적**: 학습 초반 200k 스텝 낭비 회피. ATR 정책을 출발선으로.
+**원래 의도**: ATR 정책을 PPO 출발선으로 → 학습 초반 random 정책 낭비 회피.
 
-**변경 사항** ([[offline_rl_warm_start]]):
-1. ATR 고정 정책 (exp026 best params)으로 dataset 생성
-   - 5,000~10,000 trajectory (state, action) pair
-   - ATR 정책의 결정론적 action 기록
-2. PPO policy network를 dataset에 BC pretrain (MSE loss, 10 epochs)
-3. Pretrained 정책으로 exp030 안정화 패키지 실행
+**시도한 접근 (Action Bias Initialization)**:
+- PPO `policy.action_net.bias` 를 `[-10, -10]` (action ≈ 0) → 학습 정체
+- bias 약화 `[-3, -3]` 도 학습 정체 (Sharpe 1.526 정확히 동일)
 
-**왜 BC를 먼저 (CQL 아닌)**:
-- 단일 sub-optimal 전문가만 보유 (exp026 ATR, Val Sharpe 1.978)
-- Kumar 2022: "단일 정책 데이터면 BC, mixed에서 CQL"
-- 인프라 비용: BC ~50줄 vs CQL d3rlpy 도입 = 1주 vs 2~3주
-- 알고리즘 정합성: PPO는 on-policy → BC pretrain → PPO online 자연
+**원인** (SB3 PPO + Box action_space 의 알고리즘 특성):
+```
+deterministic action = clip(raw_mean, 0, 1)
+```
+- bias 가 음수면 raw_mean 항상 음수 영역 → clip 으로 action 항상 0
+- 학습 mean 을 음수 → 양수로 옮기는 reward signal 약함 → 학습 진행 X
 
-**성공 기준**:
-- step 50k에서 Sharpe ≥ 1.0 (exp029는 -6.2)
-- 최종 best Sharpe가 exp030과 동등 이상
+→ 본 환경 / PPO baseline / 후속 exp 에 영향 **없음** (exp030 random init 으로 정상 학습됨 — best Sharpe 1.974).
 
-**산출물**: `experiments/exp031_bc_warmstart/`, BC pretrain 코드, comparison plot.
+**결정**: exp031 폐기, exp032 (reward variant 비교) 로 직행.
+
+**본 논문에서의 처리**: §3.4 Method 또는 §8 Discussion 에서 한 줄
+> "Action bias initialization 을 BC 의 단순화 형태로 시도했으나 SB3 PPO + Box action_space 의 clipping 특성으로 학습이 진행되지 않음. 정석 BC pretrain 또는 SAC 등 알고리즘 변경이 future work."
+
+**Future work (선택)**:
+- 정석 BC pretrain — `imitation` library 활용
+- SAC 전환 — squashed Gaussian + auto ent_coef 가 본 환경에 적합할 수도
+- 둘 다 본 논문 범위 외
 
 ---
 
