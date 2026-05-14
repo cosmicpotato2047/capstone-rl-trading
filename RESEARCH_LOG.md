@@ -2609,6 +2609,88 @@ RQ 문구 일괄 갱신:
 
 ---
 
+## 2026-05-14 — exp031 시도 (BC Action Bias Init): Negative Result
+
+### Objective (RQ 매핑)
+
+- **목표**: ATR Baseline 정책을 PPO 출발선으로 → 학습 초반 random 정책 낭비 회피 + 후반 안정성 개선
+- **RQ 매핑**: §3.4 Method (Warm-start). RQ 직접 답변 X — exp030 의 후반 붕괴 해결 시도
+
+### Changes
+
+| 파일 | 변경 |
+|---|---|
+| `src/agents/ppo_agent.py` | `action_bias_init` 지원 추가 — PPO policy network 의 action_net bias 직접 설정 |
+| `config/exp031_bc_warmstart_config.yaml` | 신설 — exp030 base + `action_bias_init: [-10, -10]` (1차) → `[-3, -3]` (2차) |
+
+### 두 시도 모두 학습 정체
+
+**1차 (bias=[-10, -10])**:
+```
+step= 50k: Sharpe 1.526 (best 저장)
+step=100k~550k: Sharpe 1.526 (변화 없음, 정확히 동일)
+[early stop] 10회 미개선
+```
+
+**2차 (bias=[-3, -3])**:
+```
+step= 50k~550k: Sharpe 1.526 (변화 없음, 1차와 정확히 동일)
+[early stop] 10회 미개선
+```
+
+### 원인 분석
+
+SB3 PPO + Box action_space [0, 1] 의 작동:
+```
+deterministic action = clip(raw_mean, 0, 1)
+```
+
+- bias=-10 → raw_mean=-10 → clip = 0 (action 항상 0)
+- bias=-3 → raw_mean=-3 → clip = 0 (action 항상 0)
+- 학습이 raw_mean 을 -10/-3 → 0+ 로 옮기는 reward signal 약함 → policy 정체
+
+**근본 문제**: SB3 PPO + Box clipping 의 dead zone 으로 정책을 밀어버린 결과. bias init 의 단순화가 SB3 알고리즘 특성과 마찰.
+
+→ 환경/baseline/PPO 자체의 문제가 **아님** (exp030 SB3 default init 으로 정상 학습됨).
+
+### Decision
+
+**exp031 폐기, exp032 로 직행.**
+
+이유:
+1. **exp030 best Sharpe 1.974 가 이미 ATR Baseline (1.505) 의 31% 초과** — baseline 으로 충분
+2. **exp031 의 원래 가설 (BC 로 학습 초반 효율 ↑) 이 약함**: exp030 학습 곡선이 점진적 향상 (낭비 아님)
+3. **본 논문 메인 (§5 exp032 reward variant 비교) 에 영향 없음** — random init 사용
+4. **후반 붕괴는 별개 문제**: best_model 사용 + early_stopping patience 6 으로 회피 가능
+
+### 본 논문에서의 처리
+
+§3.4 Method 또는 §8 Discussion 에서 한 줄:
+> "Action bias initialization 을 BC 의 단순화 형태로 시도했으나 SB3 PPO + Box action_space 의 clipping 특성으로 학습이 진행되지 않음 (raw_mean 이 음의 영역에 있으면 deterministic action 항상 0). 정석 BC pretrain (imitation library) 또는 SAC 등 알고리즘 변경이 future work."
+
+### Figures
+
+해당 없음. 학습 곡선 자체가 직선 (Sharpe 1.526 동일).
+
+### 보류 아이디어 (future work)
+
+- **정석 BC pretrain** — `imitation` library 활용. ATR 정책의 (state, action) trajectory 수집 + MSE pretrain.
+- **bias=0 또는 작은 양수**: ATR 정확 매칭은 아니지만 학습 가능. 다만 의도와 거리.
+- **SAC 알고리즘 전환**: SAC 의 squashed Gaussian + auto ent_coef 가 본 환경에 더 적합할 수 있음.
+
+### 산출물
+
+- `experiments/exp031_bc_warmstart/best_model.zip` (Val Sharpe 1.526, step 50k — 학습 정체)
+- `experiments/exp031_bc_warmstart/final_model.zip` (동일)
+
+→ best_model 은 ATR Baseline 시뮬레이션 결과 (1.526 ≈ 1.505) 와 거의 같음. 학습 없이 ATR 정책 출발선 자체.
+
+### Lesson
+
+**RL 알고리즘 + action space 의 알고리즘 디테일을 미리 점검해야 함**. 단순화 (action bias init) 가 의도와 다른 결과를 만든 사례.
+
+---
+
 ## 2026-05-14 (같은 날 3차 추가) — exp032 설계 강화: a/b/c 3단계 분리 + 3개 학습 노트 추가
 
 ### 결정 사항

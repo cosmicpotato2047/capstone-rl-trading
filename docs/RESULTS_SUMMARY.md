@@ -243,6 +243,19 @@ Early stopping 발동 (100k peak 후 patience=6) → 400k 종료.
 1. **§5 Positive finding 유지** — Reward variant (sym → asym) 가 RL 알파에 의미 있는 차이 (+14% 추가 우위)
 2. **§4 Negative finding 약화** — Env-v4 에서 sym RL 도 best 시점에 ATR 초과 (학습 안정성 의존). exp020 Env-v2 "RL = Fixed [1.0, 0.0]" 가 Env-v4 에서는 정확히 성립 안 함.
 
+### exp031 — BC Action Bias Init (Negative Result, 2026-05-14)
+
+**시도**: PPO policy network 의 action_net bias 를 ATR Baseline 행동에 매칭 (bias=[-10,-10], 이후 [-3,-3] 으로 약화).
+
+**결과**: 두 시도 모두 학습 정체 (Sharpe 1.526 정확히 동일, early stop).
+
+**원인**: SB3 PPO + Box action_space [0,1] 의 clipping (deterministic action = clip(raw_mean, 0, 1)). bias 음수면 dead zone, gradient signal 약함.
+
+**implication**:
+- exp032~035 메인 챕터 영향 **없음** (random init 사용)
+- 본 논문 §3.4 Method 또는 §8 Discussion 에서 "단순 bias init 의 한계 + future work" 한 줄
+- 정석 BC pretrain 또는 SAC 전환은 future work
+
 ### 진행 예정
 
 | Exp | 목적 | 결과 (예정) | 논문 챕터 |
