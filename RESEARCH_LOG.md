@@ -4024,3 +4024,45 @@ PAPER_OUTLINE §5 매핑: exp032b 결과 (4 variants × 10 seeds × 1M) → Pare
 - §5.7 의 exp027_rl 환경 의존성 frame이 §8.2 와 중복. §8 작성 시 짧게 cross-reference 만 유지하고 본 논의는 §8 로 이동 검토.
 - Per-variant t-test p-value 가 §5.6 의 H1 verdict 에서 ``p < 10⁻³'' 로 사용되었으나 정확한 수치는 보조 figure/table 로 §7.2 의 ATR 비교 table 에 함께 정리 가능.
 
+---
+
+## 2026-05-16 — §6 Mechanism Quantification 본문 작성 완료 (양 버전)
+
+### Objective
+
+PAPER_OUTLINE §6 매핑: exp032c 1.04M step trajectory 분석 → reward 형식 → 거래 빈도 / hold 시간 → cluster 인과 사슬 정량. 본 논문 메인 §2.
+
+### Changes
+
+| 파일 | 변경 |
+|---|---|
+| `reports/paper/main_ko.tex` | §6 TBD placeholder → 6 서브섹션 본문 (~5 페이지) |
+| `reports/paper/main.tex` | §6 TBD placeholder → 6 서브섹션 본문 (~5 페이지) |
+
+### 6 서브섹션 구조
+
+- §6.1 Trajectory dataset (40 models × 26K steps = 1.04M rows)
+- §6.2 거래 빈도 — Menu 4 trade rate 표, sym≈dsr > asym > pt, regime 차이 << variant 차이. H3 행동 수준 확인.
+- §6.3 Hold rate — DSR 2~6× 격차 정량 (sym 0.074 vs dsr 0.142 = 1.9×, ... pt 0.020 vs dsr 0.120 = 6.0×). DSR EWMA 분모 $(B-A^2)^{3/2}$ 가 short hold 의 reward signal-to-noise 결정 메커니즘 설명.
+- §6.4 Action 분포 — Menu 2 표, 매수 그리드: sym/dsr ~0.12 vs asym/pt 0.30~0.45. 매도 그리드: dsr 만 0.15 (다른 셋 0.03~0.07).
+- §6.5 Counterfactual state-grid — Menu 3 figure, same state 다른 action 직접 확인.
+- §6.6 인과 사슬 종합 — 4단계 인과 box: Reward → 거래 + hold → cluster → trade-off. 각 화살표별 정량 증거.
+
+### Results
+
+- 빌드 검증: `xelatex main_ko.tex` 3회 + bibtex → **27 페이지** (이전 22, +5)
+- `pdflatex main.tex` 3회 + bibtex → **28 페이지** (이전 23, +5)
+- §6 분량 ~17% 목표 정확 일치
+- 표 2개 (regime별 behavior, regime별 action), figure 3개 (behavior, action distribution, counterfactual)
+- H3 강한 지지로 확정
+- in-sample ↔ OOS trade-off 인과 사슬의 출발점: DSR 긴 holding = §7.2 CPCV 우위 + §7.3 OOS 실패 의 양면 (§7.3 forward-reference)
+
+### Decision
+
+다음 작업 = §7.1 Slippage Robustness (분량 비중 7%, exp033 결과). 사용자 명시적 "진행" 응답 후 시작.
+
+### 보류 아이디어
+
+- §6.3 의 DSR mechanism 설명 (EWMA 분모 + signal-to-noise) 이 §3.4 의 DSR 정식 정의에서 forward-reference 가능. §3.4 에 짧은 ``§6에서 행동 효과 분석'' note 추가 검토.
+- §6.6 의 4단계 인과 box 가 본 논문의 핵심 시각화. abstract figure 후보 (현재 phase15 menu_c) 대신 §6 인과 box 와 menu_c 두 figure 후보 비교 검토 (§9 작성 시).
+

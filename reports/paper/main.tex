@@ -1113,9 +1113,277 @@ independently and is statistically established on canonical Env-v4.
 \section{Mechanism Quantification}
 \label{sec:mechanism}
 
-\textit{[TBD. exp032c:
-policy distance matrix, behavior per regime, counterfactual action map,
-action distribution; causal chain reward $\to$ trade frequency $\to$ cluster.]}
+\S\ref{sec:pareto} showed \emph{what} happened: the four reward variants
+statistically separate into two clusters. This section quantifies \emph{why}.
+The core hypothesis is that the loss asymmetry of the reward form directly
+determines the policy's trade frequency and holding time, and that this
+behavioral difference is the causal origin of the risk-profile difference.
+We analyze the 1.04M-step trajectories of the 40 models to verify this
+causal chain step by step.
+
+\subsection{Trajectory Dataset}
+\label{sec:mechanism_dataset}
+
+We replay the 40 best\_models of \S\ref{sec:pareto} on the full Val range in
+deterministic mode and record at every step the
+(state, action, reward, fill, holdings, regime label). Evaluation runs with
+\texttt{random\_start=False} and without episode truncation, giving roughly
+26{,}074 steps per seed in a single uninterrupted trajectory. The total is
+$40 \times 26{,}074 \approx 1.04\text{M}$ rows, collected in 7.2 minutes. We
+run the following five analyses on this dataset: (1) Sharpe--MDD scatter
+[used in \S\ref{sec:pareto}], (2) per-regime action distribution,
+(3) state-grid counterfactual, (4) per-regime behavior statistics
+(trade/hold rate), (5) policy distance [used in \S\ref{sec:pareto}].
+
+Volatility regimes are assigned by quantiles of $s_t^{(4)} =
+\mathrm{ATR}_{168}/p_t$, partitioning the time axis into three bins
+(low/mid/high). Each (variant, regime) cell contains
+$\sim$28{,}000--30{,}000 steps.
+
+\subsection{Trade Frequency: Direct Effect of Reward Asymmetry}
+\label{sec:mechanism_trade_rate}
+
+\begin{table}[h]
+\centering
+\small
+\caption{Per-regime trade/hold rate, averaged over 40 models (exp032c Menu 4).
+\textbf{Trade rate} = (steps with a fill) / (total steps).
+\textbf{Hold rate} = (steps with non-zero holdings and no fill) / (total steps).
+\textit{Note the 2--6$\times$ gap in \texttt{dsr}'s hold rate.}}
+\begin{tabular}{lcccccc}
+\toprule
+ & \multicolumn{3}{c}{Trade rate} & \multicolumn{3}{c}{Hold rate} \\
+\cmidrule(lr){2-4} \cmidrule(lr){5-7}
+Variant & low\_vol & mid\_vol & high\_vol & low\_vol & mid\_vol & high\_vol \\
+\midrule
+\texttt{sym}  & 0.073 & 0.058 & 0.047 & 0.074 & 0.058 & 0.048 \\
+\texttt{dsr}  & 0.073 & 0.057 & 0.047 & \textbf{0.142} & \textbf{0.120} & \textbf{0.120} \\
+\texttt{asym} & 0.058 & 0.044 & 0.038 & 0.036 & 0.028 & 0.023 \\
+\texttt{pt}   & 0.049 & 0.037 & 0.032 & 0.031 & 0.023 & 0.020 \\
+\bottomrule
+\end{tabular}
+\label{tab:behavior_per_regime}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.95\textwidth]{menu4_behavior_per_regime}
+\caption{Trade/hold rate over 4 variants $\times$ 3 vol regimes. Top row:
+trade rate. Bottom row: hold rate. \texttt{dsr}'s hold rate stands out at
+roughly 2--6$\times$ the other variants.}
+\label{fig:behavior_per_regime}
+\end{figure}
+
+Two key patterns emerge in Table~\ref{tab:behavior_per_regime} and
+Figure~\ref{fig:behavior_per_regime}.
+
+\paragraph{(i) Trade-frequency ordering: sym $\approx$ dsr $>$ asym $>$ pt.}
+In every regime, \{\texttt{sym}, \texttt{dsr}\} (the aggressive cluster) trade
+roughly 30--50\% more often than \{\texttt{asym}, \texttt{pt}\} (the
+conservative cluster). The variant-induced effect (variant $|d| \approx 1.0$)
+is \emph{larger} than the regime-induced effect (regime $|d| \approx 0.3$).
+That is, the policy's trade frequency is determined primarily by the
+\emph{reward form itself} rather than by market volatility. This is the
+action-level confirmation of H3 ``selective entry $\to$ conservative cluster.''
+
+\paragraph{(ii) Regime adaptation: a consistent decrease across all variants.}
+Going from low\_vol to high\_vol, all four variants drop trade frequency by
+about 30\% (e.g., \texttt{sym} $0.073 \to 0.047$). This is mechanically
+imposed by the ATR-proportional grid formula: as volatility rises, grid
+widths widen automatically and fill probability falls. The fact that this
+pattern is the same for all four variants tells us that the cluster separation
+does \emph{not} originate in differential regime-adaptation capability but
+rather in differential baseline trade frequency.
+
+\subsection{Hold Rate: The Mechanism of DSR's Sliding-Window Memory}
+\label{sec:mechanism_hold_rate}
+
+The single most striking row in Table~\ref{tab:behavior_per_regime} is
+\texttt{dsr}'s hold rate. With trade frequency nearly identical to
+\texttt{sym}'s ($0.073$ vs $0.073$), \texttt{dsr}'s hold rate of $0.142$ is
+\textbf{1.9$\times$} \texttt{sym}'s $0.074$, \textbf{3.9$\times$}
+\texttt{asym}'s $0.036$, and \textbf{4.6$\times$} \texttt{pt}'s $0.031$.
+At high\_vol the gap widens to $0.120$ vs $0.020$, i.e., \textbf{6.0$\times$}
+\texttt{pt}.
+
+The mechanism follows directly from the DSR formulation of
+\S\ref{sec:reward_variants}. The DSR step reward
+\[
+r_t^{\mathrm{dsr}} =
+\frac{B_{t-1} \, \Delta A_t - \tfrac{1}{2} A_{t-1} \, \Delta B_t}
+     {(B_{t-1} - A_{t-1}^2)^{3/2}}
+\]
+is built from the EWMA-window ($\eta = 1/28\,\mathrm{h}$, $\approx$ 1.2 days)
+mean and variance moments. A short holding (buy followed quickly by a sell)
+injects large noise into both $\Delta A$ and $\Delta B$ within the window, and
+when the denominator $(B - A^2)^{3/2}$ is small (i.e., variance is small)
+that noise is amplified in the reward signal. From the policy's point of
+view, this reads as \emph{``short holdings have a noisy, weak training
+signal,''} and the policy preferentially learns \emph{longer holdings}. The
+other three variants (\texttt{sym}, \texttt{asym}, \texttt{pt}) have step
+rewards that are instantaneous functions of 1-step PnL with no direct
+dependence on holding length, hence their low hold rates.
+
+This mechanism aligns with \texttt{dsr}'s top ranking in final Sharpe (at
+the 1M step) and in cumulative return reported in \S\ref{sec:pareto}. Long
+holdings absorb late-stage policy variability and stabilize final
+performance, and they are the principal driver of \texttt{dsr}'s reversal to
+1st place in CPCV (\S\ref{sec:cpcv}). At the same time, the very same
+``preference for long holding'' becomes a \emph{fatal liability} in the OOS
+bull market of \S\ref{sec:oos}, completing this paper's central in-sample
+$\leftrightarrow$ OOS trade-off causal chain.
+
+\subsection{Per-Regime Action Distribution}
+\label{sec:mechanism_action_dist}
+
+\begin{table}[h]
+\centering
+\small
+\caption{Per-regime action statistics by variant.
+$\bar{a}^{(0)}$ = aggressiveness, $\bar{a}^{(1)}$ = profit\_target;
+mean (and std for $\bar{a}^{(0)}$).}
+\begin{tabular}{lcccc}
+\toprule
+Variant & Vol regime & $\bar{a}^{(0)}$ mean & $\bar{a}^{(0)}$ std & $\bar{a}^{(1)}$ mean \\
+\midrule
+\texttt{sym}  & low  & $0.129$ & $0.151$ & $0.063$ \\
+              & high & $0.125$ & $0.148$ & $0.068$ \\
+\texttt{dsr}  & low  & $0.129$ & $0.217$ & $0.145$ \\
+              & high & $0.124$ & $0.207$ & $0.161$ \\
+\texttt{asym} & low  & $0.325$ & $0.300$ & $0.029$ \\
+              & high & $0.281$ & $0.271$ & $0.032$ \\
+\texttt{pt}   & low  & $0.446$ & $0.311$ & $0.056$ \\
+              & high & $0.399$ & $0.301$ & $0.053$ \\
+\bottomrule
+\end{tabular}
+\label{tab:action_stats}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.95\textwidth]{menu2_action_distribution}
+\caption{2D action distribution $(a^{(0)}, a^{(1)})$ over the 4 variants
+$\times$ 3 vol regimes grid. Points are trajectory steps; red crosses are
+per-cell means. \texttt{sym/dsr} cluster around $a^{(0)} \approx 0.12$ (narrow
+buy spacing); \texttt{asym/pt} cluster around $a^{(0)} \approx 0.30$--$0.45$
+(deeper buy quotes). Only \texttt{dsr} has $a^{(1)} \approx 0.15$, with a
+slightly wider sell grid to extend holding time.}
+\label{fig:action_distribution}
+\end{figure}
+
+Table~\ref{tab:action_stats} and Figure~\ref{fig:action_distribution} make
+the across-variant behavioral differences quantitative.
+
+\paragraph{Buy-side grid position ($\bar{a}^{(0)}$).}
+\texttt{sym/dsr} settle around $\bar{a}^{(0)} \approx 0.12$, placing buy quotes
+very close to the current price (in \S\ref{sec:mdp}'s grid formula
+$g^{\mathrm{buy\_hi}} = r_t(A_b + B_b a^{(0)})$, small $a^{(0)}$ gives a
+narrow buy spacing and a fill-friendly position). \texttt{asym} sits at
+$\bar{a}^{(0)} \approx 0.30$ and \texttt{pt} at $\approx 0.42$, placing quotes
+``deeper'' away from the current price. \texttt{asym/pt} therefore receive
+fills only on larger price drops, and their trade frequency falls accordingly
+(consistent with Table~\ref{tab:behavior_per_regime}).
+
+\paragraph{Sell-side grid position ($\bar{a}^{(1)}$).}
+\texttt{sym}, \texttt{asym}, and \texttt{pt} all sit at
+$\bar{a}^{(1)} \approx 0.03$--$0.07$, with very tight (fast-exit) sell quotes.
+Only \texttt{dsr} sits at $\bar{a}^{(1)} \approx 0.15$, a \emph{2--3$\times$
+wider sell spread}. This is the direct cause of \texttt{dsr}'s long hold rate
+(Table~\ref{tab:behavior_per_regime}, right): deeper sell quotes wait longer
+for a fill and extend holding time.
+
+\paragraph{Mild regime adaptation.}
+Going from low\_vol to high\_vol, all four variants reduce $\bar{a}^{(0)}$
+slightly (e.g., \texttt{pt}: $0.446 \to 0.399$, $-10\%$). Higher volatility
+nudges policies toward closer buy quotes. However, the change is much smaller
+than the across-variant differences ($\approx 0.30$), reinforcing the
+conclusion of \S\ref{sec:mechanism_trade_rate}: \textbf{the contribution of
+the vol regime to cluster separation is minor, with the reward form being
+dominant}.
+
+\subsection{Counterfactual State-grid Verification}
+\label{sec:mechanism_counterfactual}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.95\textwidth]{menu3_counterfactual_action_map}
+\caption{Counterfactual mean-action heatmaps over the
+(atr\_ratio, divergence) state grid for each variant. All four variants
+differ most in the region with large negative divergence and mid
+atr\_ratio (i.e., when the held position is above the average cost and
+volatility is moderate).}
+\label{fig:counterfactual}
+\end{figure}
+
+The analysis so far is restricted to the state distribution that policies
+actually encounter. To complement this, we partition the (atr\_ratio,
+divergence) plane into a state grid and visualize each variant's mean action
+in Figure~\ref{fig:counterfactual} on the same grid. Observations:
+\begin{itemize}[leftmargin=*]
+\item All four variants behave differently in the region with large
+divergence ($s_t^{(1)}$) values (deep-loss region relative to average cost),
+i.e., state-conditional behavioral differences exist beyond just distribution
+means.
+\item The cell with the largest across-variant difference is
+$s_t^{(1)} < 0$ + moderate atr\_ratio, which corresponds to ``the held
+position is above the average cost, with moderate volatility.'' In this
+region, \texttt{sym/dsr} pick narrow sell grids whereas \texttt{asym/pt}
+pick hold/wider-sell behavior, i.e., they \emph{wait longer for additional
+profit}.
+\end{itemize}
+This counterfactual analysis confirms directly that the cluster separation
+arises from differences in the policy mapping $\pi_{\text{variant}}(a|s)$
+itself, not merely from differences in the state distribution that the
+policies encounter.
+
+\subsection{Summary of the Causal Chain}
+\label{sec:mechanism_causal}
+
+We summarize the chain linking the results of this section to the
+risk-profile trade-off of \S\ref{sec:pareto} in a single line:
+\[
+\boxed{
+\text{Reward form}
+\;\to\;
+\text{trade frequency + hold time}
+\;\to\;
+\text{Risk profile cluster}
+\;\to\;
+\text{(Sharpe, MDD) trade-off}
+}
+\]
+
+Quantitative evidence per arrow:
+
+\begin{enumerate}[leftmargin=*]
+\item \textbf{Reward form $\to$ trade frequency}: The loss-asymmetric variants
+(\texttt{asym} $\beta=3.42$, \texttt{pt} $\lambda=3.30$) push buy quotes
+deeper ($\bar{a}^{(0)}$ $0.30$--$0.45$ vs $\sim 0.12$ for \texttt{sym/dsr}),
+yielding 25--35\% lower trade frequency (Table~\ref{tab:behavior_per_regime}).
+\item \textbf{Reward form $\to$ hold time}: The DSR sliding-window memory
+raises the signal-to-noise ratio of longer holdings, so the policy learns a
+wider sell grid ($\bar{a}^{(1)} \approx 0.15$) and 2--6$\times$ longer holds.
+This effect is \emph{independent} of the loss-asymmetry effect; the evidence
+is that \texttt{dsr} matches \texttt{sym} in trade frequency but is much
+higher on hold rate alone.
+\item \textbf{Trade frequency + hold time $\to$ Risk profile}: Few trades +
+short hold $\to$ low MDD + high Calmar (conservative cluster). Frequent
+trades + short hold $\to$ high Sharpe + high MDD (\texttt{sym}). Frequent
+trades + long hold $\to$ stable final Sharpe + larger MDD (\texttt{dsr}).
+These three combinations map directly to the per-variant metric leaders in
+\S\ref{sec:pareto_per_variant}.
+\item \textbf{Policy distance}: This behavioral structure is captured
+statistically by the 2.22$\times$ policy-distance ratio of
+\S\ref{sec:pareto_policy_distance}, providing the action-level basis for the
+distributional cluster separation (within $|d|<0.30$, across $|d|>0.79$).
+\end{enumerate}
+
+Hypothesis \textbf{H3 (selective entry $\to$ conservative cluster)} is
+\emph{strongly supported} by combining the trade-frequency quantification of
+this section with the buy-grid-position evidence. The section also provides
+the starting point of this paper's central in-sample $\leftrightarrow$ OOS
+trade-off mechanism (the ``DSR's long holding is both an in-sample asset and
+an OOS liability'' causal chain that returns in \S\ref{sec:oos}).
 
 % ─── 7. Robustness ───────────────────────────────────────────────────────────
 \section{Robustness Analysis}

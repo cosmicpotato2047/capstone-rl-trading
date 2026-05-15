@@ -1036,10 +1036,251 @@ Env-v4 위에서 통계적으로 확립된다.
 \section{메커니즘 정량화}
 \label{sec:mechanism}
 
-\textit{[TBD: 추후 작성. exp032c 결과:
-Policy distance 행렬, behavior per regime,
-counterfactual action map, action distribution.
-인과 사슬: reward 형식 $\to$ 거래 빈도 $\to$ 클러스터.]}
+\S\ref{sec:pareto}는 \emph{무엇이} 일어났는지를 보였다: 4 reward 변형이 두 클러스터로
+통계적으로 분리된다는 결과. 본 절은 \emph{왜} 그렇게 갈라지는지의 메커니즘을
+정량화한다. 핵심 가설은
+\textit{reward 형식의 손실 비대칭이 정책의 거래 빈도와 holding 시간을 직접 결정하며,
+이 행동 차이가 risk profile 차이의 인과 원인이라는 것}이다. 본 절은 40개 모델의
+1.04M step trajectory를 분석하여 이 인과 사슬을 단계별로 확인한다.
+
+\subsection{Trajectory dataset}
+\label{sec:mechanism_dataset}
+
+\S\ref{sec:pareto}의 40개 best\_model을 Val 전 구간에 대해 deterministic 모드로
+재구동하여 매 step마다 (state, action, reward, 체결 여부, 보유 상태, regime 라벨)을
+기록한다. 평가 환경은 \texttt{random\_start=False}로 고정하고 episode를
+truncate하지 않아 한 시드당 약 26{,}074 step의 완전한 trajectory를 얻는다. 총
+$40 \times 26{,}074 \approx 1.04\text{M}$ rows이며 수집에 7.2분 소요되었다. 이
+trajectory dataset 위에서 다음 5개 메뉴의 분석을 수행한다: (1) Sharpe-MDD scatter
+[\S\ref{sec:pareto}에 사용], (2) regime별 action 분포, (3) state-grid
+counterfactual, (4) regime별 행동 통계 (거래/hold rate), (5) 정책 거리
+[\S\ref{sec:pareto}에 사용].
+
+변동성 regime은 $s_t^{(4)} = \mathrm{ATR}_{168}/p_t$의 분위수로 분할하여
+low/mid/high의 3-bin으로 라벨링한다. 이로써 각 (variant, regime) cell 안에서
+$\sim$28{,}000\,$\sim$\,30{,}000 step의 통계를 얻는다.
+
+\subsection{거래 빈도: Reward 비대칭의 직접 효과}
+\label{sec:mechanism_trade_rate}
+
+\begin{table}[h]
+\centering
+\small
+\caption{Regime별 거래/hold rate (40 models 평균, exp032c Menu 4).
+\textbf{Trade rate} = (체결 발생 step 수) / (전체 step 수).
+\textbf{Hold rate} = (보유량 0 이상 + 체결 없음) / (전체 step 수).
+\textit{DSR의 hold rate가 다른 변형의 2--6배인 점에 주목.}}
+\begin{tabular}{lcccccc}
+\toprule
+ & \multicolumn{3}{c}{Trade rate} & \multicolumn{3}{c}{Hold rate} \\
+\cmidrule(lr){2-4} \cmidrule(lr){5-7}
+Variant & low\_vol & mid\_vol & high\_vol & low\_vol & mid\_vol & high\_vol \\
+\midrule
+\texttt{sym}  & 0.073 & 0.058 & 0.047 & 0.074 & 0.058 & 0.048 \\
+\texttt{dsr}  & 0.073 & 0.057 & 0.047 & \textbf{0.142} & \textbf{0.120} & \textbf{0.120} \\
+\texttt{asym} & 0.058 & 0.044 & 0.038 & 0.036 & 0.028 & 0.023 \\
+\texttt{pt}   & 0.049 & 0.037 & 0.032 & 0.031 & 0.023 & 0.020 \\
+\bottomrule
+\end{tabular}
+\label{tab:behavior_per_regime}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.95\textwidth]{menu4_behavior_per_regime}
+\caption{4 variant $\times$ 3 vol regime의 거래/hold rate. 위 행: trade rate.
+아래 행: hold rate. \texttt{dsr}의 hold rate (가운데 행 두 번째 패널)가
+다른 변형의 약 2--6배로 두드러진다.}
+\label{fig:behavior_per_regime}
+\end{figure}
+
+표 \ref{tab:behavior_per_regime}과 그림 \ref{fig:behavior_per_regime}에서
+두 가지 핵심 패턴이 확인된다.
+
+\paragraph{(i) 거래 빈도 순서: sym $\approx$ dsr $>$ asym $>$ pt.}
+모든 regime에서 \{\texttt{sym}, \texttt{dsr}\} (aggressive cluster)이
+\{\texttt{asym}, \texttt{pt}\} (conservative cluster)보다 약 30--50\% 더 자주
+거래한다. 변형 간 차이가 regime 차이보다 \emph{크다} (variant $|d|$ 약 1.0,
+regime $|d|$ 약 0.3). 즉 정책의 거래 빈도는 시장의 변동성이 아니라
+\emph{reward 형식 자체}에 의해 1차적으로 결정된다. 이는 \S\ref{sec:pareto}의 H3
+``selective entry $\to$ conservative cluster''를 행동 수준에서 정량 확인한다.
+
+\paragraph{(ii) Vol regime 적응: 모든 변형 일관 감소.}
+low\_vol $\to$ high\_vol로 변동성이 증가함에 따라 4 변형 모두 거래 빈도가 약
+30\% 감소한다(예: \texttt{sym} $0.073 \to 0.047$). ATR 비례 격자 공식이 변동성
+증가 시 격자 폭을 자동 확대하므로 같은 정책이라도 fill 확률이 자연 감소한다.
+이 패턴이 4 변형에 일관 나타난다는 사실은 cluster 분리가 \emph{regime 적응 능력의
+차이}가 아니라 \emph{baseline 거래 빈도의 차이}에서 옴을 시사한다.
+
+\subsection{Hold rate: DSR Sliding-Window Memory의 메커니즘적 효과}
+\label{sec:mechanism_hold_rate}
+
+표 \ref{tab:behavior_per_regime}에서 가장 두드러진 단일 행은 \texttt{dsr}의 hold
+rate이다. 거래 빈도는 \texttt{sym}과 거의 동일($0.073$ vs $0.073$)이면서, hold
+rate는 $0.142$로 \texttt{sym}의 $0.074$ 대비 \textbf{1.9배}, \texttt{asym}의
+$0.036$ 대비 \textbf{3.9배}, \texttt{pt}의 $0.031$ 대비 \textbf{4.6배}이다.
+high\_vol에서는 격차가 더 벌어진다(\texttt{dsr} $0.120$ vs \texttt{pt} $0.020$,
+즉 \textbf{6.0배}).
+
+이 격차의 메커니즘은 \S\ref{sec:reward_variants}의 DSR 정식에서 직접 유도된다.
+DSR step reward
+\[
+r_t^{\mathrm{dsr}} =
+\frac{B_{t-1} \, \Delta A_t - \tfrac{1}{2} A_{t-1} \, \Delta B_t}
+     {(B_{t-1} - A_{t-1}^2)^{3/2}}
+\]
+는 EWMA 윈도우($\eta = 1/28\,\mathrm{h}$, 약 1.2일) 안의 평균과 분산 모멘트로
+구성된다. 짧은 holding(매수 후 곧바로 매도)은 윈도우 내부에서 $\Delta A$와 $\Delta B$
+둘 다에 큰 noise를 발생시키며, 분모 $(B - A^2)^{3/2}$가 작을 때(즉 분산이 작을 때)
+이 noise는 reward signal에 과대 증폭된다. 정책 입장에서 이는
+\emph{``짧은 holding은 학습 신호가 약하고 변동이 크다''}는 것으로 읽히고, 결과적으로
+\emph{더 긴 holding}을 선호하는 정책이 학습된다. 다른 세 변형(\texttt{sym},
+\texttt{asym}, \texttt{pt})은 step reward가 1-step PnL의 즉시 함수이므로 holding
+길이에 직접 의존하지 않으며, 따라서 holding rate가 낮게 유지된다.
+
+이 메커니즘은 \texttt{dsr}이 \S\ref{sec:pareto}에서 final Sharpe(1M step 종료 시점)와
+누적 수익률 1위를 차지한 결과와 일관 정렬된다. 긴 holding은 학습 후반의 정책
+변동성을 흡수하여 final 성능을 안정화하며 \S\ref{sec:cpcv}의 CPCV에서도
+\texttt{dsr}이 reversal 1위를 차지하는 핵심 원인이다. 동시에 이 같은
+``긴 holding 선호''는 \S\ref{sec:oos}의 OOS 강세장에서 \emph{치명적 단점}으로
+작용하며, 본 논문의 in-sample $\leftrightarrow$ OOS trade-off의 핵심 인과 사슬을
+완성한다.
+
+\subsection{Regime별 Action 분포}
+\label{sec:mechanism_action_dist}
+
+\begin{table}[h]
+\centering
+\small
+\caption{Regime별 action 통계 (변형별, $\bar{a}^{(0)}$ = aggressiveness,
+$\bar{a}^{(1)}$ = profit\_target, mean $\pm$ std).}
+\begin{tabular}{lcccc}
+\toprule
+Variant & Vol regime & $\bar{a}^{(0)}$ (mean) & $\bar{a}^{(0)}$ (std) & $\bar{a}^{(1)}$ (mean) \\
+\midrule
+\texttt{sym}  & low  & $0.129$ & $0.151$ & $0.063$ \\
+              & high & $0.125$ & $0.148$ & $0.068$ \\
+\texttt{dsr}  & low  & $0.129$ & $0.217$ & $0.145$ \\
+              & high & $0.124$ & $0.207$ & $0.161$ \\
+\texttt{asym} & low  & $0.325$ & $0.300$ & $0.029$ \\
+              & high & $0.281$ & $0.271$ & $0.032$ \\
+\texttt{pt}   & low  & $0.446$ & $0.311$ & $0.056$ \\
+              & high & $0.399$ & $0.301$ & $0.053$ \\
+\bottomrule
+\end{tabular}
+\label{tab:action_stats}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.95\textwidth]{menu2_action_distribution}
+\caption{4 variant $\times$ 3 vol regime grid의 (aggressiveness, profit\_target)
+2D 분포. 각 셀의 점은 trajectory step, 빨간 십자는 평균. \texttt{sym/dsr}이
+$a^{(0)} \approx 0.12$로 좁은 매수 그리드, \texttt{asym/pt}는 $a^{(0)} \approx
+0.3$--$0.45$로 넓은 매수 그리드(즉 ``현재가에서 멀리 떨어진 호가''). \texttt{dsr}만
+$a^{(1)} \approx 0.15$로 매도 그리드가 살짝 더 넓어 hold 시간을 확보.}
+\label{fig:action_distribution}
+\end{figure}
+
+표 \ref{tab:action_stats}와 그림 \ref{fig:action_distribution}에서 변형 간
+정량적 행동 차이가 다음과 같다.
+
+\paragraph{매수 그리드 위치 ($\bar{a}^{(0)}$).}
+\texttt{sym/dsr}은 $\bar{a}^{(0)} \approx 0.12$로 매수 호가가 현재가에 매우 가깝다
+(\S\ref{sec:mdp}의 격자 공식에서 $g^{\mathrm{buy\_hi}} = r_t(A_b + B_b a^{(0)})$
+이므로 작은 $a^{(0)}$는 좁은 매수 간격, 즉 fill이 잦은 위치). 반면 \texttt{asym}은
+$\bar{a}^{(0)} \approx 0.30$, \texttt{pt}는 $\approx 0.42$로 매수 호가가 더
+``깊다''(현재가에서 먼 호가). 이로 인해 \texttt{asym/pt}는 큰 가격 하락이
+있을 때만 매수 fill이 발생하며, 거래 빈도가 자연 감소한다(표
+\ref{tab:behavior_per_regime} trade rate 행과 정합).
+
+\paragraph{매도 그리드 위치 ($\bar{a}^{(1)}$).}
+\texttt{sym}, \texttt{asym}, \texttt{pt}는 모두 $\bar{a}^{(1)} \approx 0.03$--$0.07$로
+매도 호가가 매우 가깝다(빠른 청산). \texttt{dsr}만 $\bar{a}^{(1)} \approx 0.15$로
+\emph{2--3배 넓은 매도 그리드}를 선택한다. 이것이 \texttt{dsr}의 긴 hold rate
+(표 \ref{tab:behavior_per_regime} 우측 패널)의 직접 원인이다: 매도 호가가 멀수록
+fill까지의 대기 시간이 길어지고 holding 시간이 늘어난다.
+
+\paragraph{Vol regime 적응의 미세함.}
+low\_vol에서 high\_vol로 이동할 때 4 변형 모두 $\bar{a}^{(0)}$가 미세하게 감소한다
+(예: \texttt{pt} $0.446 \to 0.399$, $-10\%$). 즉 변동성이 큰 시기에는 매수 호가가
+\emph{더 가까워진다}. 그러나 이 변화는 변형 간 차이(약 $0.30$)보다 훨씬 작아서
+\textbf{cluster 분리에서 vol regime의 기여는 미약하며, reward 형식이 지배적}이라는
+\S\ref{sec:mechanism_trade_rate}의 결론을 강화한다.
+
+\subsection{Counterfactual State-grid 검증}
+\label{sec:mechanism_counterfactual}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.95\textwidth]{menu3_counterfactual_action_map}
+\caption{(atr\_ratio, divergence) state-grid 위에서 각 변형의 mean action
+counterfactual map. 4 variant 모두 divergence 큰 영역에서 다른 행동을 보이며,
+변형 간 차이가 가장 큰 영역은 ($s_t^{(1)} < 0$, mid atr\_ratio) 셀.}
+\label{fig:counterfactual}
+\end{figure}
+
+위 분석은 ``실제 시장에서 정책이 본 state 분포''에 한정된 통계이다. 이를 보완하기
+위해 (atr\_ratio, divergence)의 state-grid를 격자로 분할하고, 같은 state에서
+4 변형이 어떤 평균 action을 출력하는지를 그림 \ref{fig:counterfactual}에 시각화한다.
+관찰:
+\begin{itemize}[leftmargin=*]
+\item 4 변형 모두 divergence ($s_t^{(1)}$)가 큰 영역(평단가 대비 깊은 손실 영역)에서
+서로 다른 action을 출력한다 --- 즉 state-기반 행동 차이가 분포 평균뿐 아니라
+\emph{같은 state 조건}에서도 존재한다.
+\item 변형 간 차이가 가장 큰 셀은 \emph{$s_t^{(1)} < 0$ + 중간 atr\_ratio} 영역으로,
+이는 ``평단가 위쪽인 보유 상태에서 변동성이 보통일 때''에 해당한다. 이 영역에서
+\texttt{sym/dsr}은 좁은 매도 그리드를 선택하지만 \texttt{asym/pt}는 hold/넓은
+매도를 선택하여 \emph{이익을 더 기다리는} 행동을 보인다.
+\end{itemize}
+이 counterfactual 결과는 cluster 분리가 변형이 만나는 state 분포의 차이가 아니라
+\emph{같은 state에서 변형이 내리는 행동의 차이} 임을 직접 확인한다. policy
+mapping $\pi_{\text{variant}}(a|s)$가 실제로 변형 간에 다르다.
+
+\subsection{인과 사슬 종합}
+\label{sec:mechanism_causal}
+
+본 절의 결과를 \S\ref{sec:pareto}의 risk profile trade-off로 연결하는 인과 사슬을
+한 줄로 정리하면:
+\[
+\boxed{
+\text{Reward 형식}
+\;\to\;
+\text{거래 빈도 + Hold 시간}
+\;\to\;
+\text{Risk profile cluster}
+\;\to\;
+\text{(Sharpe, MDD) trade-off}
+}
+\]
+
+화살표별 정량 증거:
+
+\begin{enumerate}[leftmargin=*]
+\item \textbf{Reward 형식 $\to$ 거래 빈도}: 손실 비대칭 변형(\texttt{asym} $\beta=3.42$,
+\texttt{pt} $\lambda=3.30$)이 정책의 매수 호가를 더 멀리 배치하도록 학습시켜
+($\bar{a}^{(0)}$ $0.30$--$0.45$ vs $\sim 0.12$ for \texttt{sym/dsr}) 거래 빈도가
+약 25--35\% 감소한다(표 \ref{tab:behavior_per_regime}).
+\item \textbf{Reward 형식 $\to$ Hold 시간}: \texttt{dsr}의 sliding-window memory가
+긴 holding의 reward signal-to-noise를 높이므로 정책이 더 넓은 매도 그리드
+($\bar{a}^{(1)} \approx 0.15$)와 더 긴 hold(2--6배)를 학습한다. 이 효과는 손실
+비대칭 효과와 \emph{독립적}이며, \texttt{dsr}이 거래 빈도는 \texttt{sym}과 같으면서도
+hold rate만 따로 높은 점이 그 증거이다.
+\item \textbf{거래 빈도 + Hold 시간 $\to$ Risk profile}: 적은 거래 + 짧은 hold
+$\to$ MDD 작음 + Calmar 큼(conservative cluster). 잦은 거래 + 짧은 hold $\to$
+높은 Sharpe + 높은 MDD(\texttt{sym}). 잦은 거래 + 긴 hold $\to$ 안정적 final
+Sharpe + 큰 MDD(\texttt{dsr}). 세 행동 조합이 \S\ref{sec:pareto_per_variant}의
+4 metric 1위 분기로 그대로 이어진다.
+\item \textbf{정책 거리}: 이 행동 차이가 \S\ref{sec:pareto_policy_distance}의
+정책 거리 2.22배 ratio로 정량 확인되며, 통계적 cluster 분리(within $|d|<0.30$,
+across $|d|>0.79$)의 행동 수준 원인이다.
+\end{enumerate}
+
+가설 \textbf{H3 (selective entry $\to$ conservative cluster)}는 본 절의 거래 빈도
+정량과 매수 그리드 위치 차이를 결합하여 \emph{강한 지지}로 확정된다. 동시에 본
+절은 본 논문의 핵심 in-sample $\leftrightarrow$ OOS trade-off 메커니즘
+(\S\ref{sec:oos}에서 다시 등장하는 ``DSR의 긴 holding이 in-sample 우위와 OOS
+실패의 양면''이라는 인과)의 출발점을 제공한다.
 
 % ─── 7. Robustness Trio ──────────────────────────────────────────────────────
 \section{강건성 분석}
