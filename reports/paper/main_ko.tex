@@ -677,9 +677,114 @@ $4$-way Bonferroni 보정과 \citet{lopezdeprado2014dsr}의 Deflated Sharpe Rati
 \section{Phase 1: 대칭 보상 하의 정책 포화}
 \label{sec:phase1_negative}
 
-\textit{[TBD: 추후 작성. exp020--022의 ``RL = Fixed [1.0, 0.0]'' 발견.
-대칭 보상 + ATR 비례 공식 조합의 RL 자유도 흡수.
-본 논문의 reward 정식화 동기.]}
+본 절은 본 논문에 \emph{앞서} 진행된 Phase 1(2026년 4월 작업) 실험 시리즈
+exp020--022의 negative finding을 간략히 재인용한다. 이 발견은 본 논문의 reward
+정식화 비교(\S\ref{sec:reward_variants})를 동기화하는 출발점이다. Phase 1
+실험들은 본 논문의 canonical 환경(Env-v4)이 아닌 \emph{Env-v2}(2D ATR 비례
+공식, 다음 봉 극값 체결) 위에서 수행되었으므로 절대 Sharpe 수치는 favorable
+bias artifact를 포함한다. 그러나 본 절의 핵심인 \emph{``정책이 상수로
+수렴한다''}는 정성적 관찰은 환경과 무관하므로 본 논문의 동기로 인용 가능하다.
+
+\subsection{정책 포화 현상}
+\label{sec:phase1_setting}
+
+Phase 1의 실험 설정은 본 논문 \S\ref{sec:method}와 거의 동일하다: state 7D,
+action 2D, ATR-비례 격자 공식, symmetric reward $r_t = (E_t - E_{t-1})/C_0$.
+차이는 (i) 체결 방식이 다음 봉 극값 기반이라는 점과 (ii) 학습 안정화 패키지
+(\S\ref{sec:ppo_stab})가 아직 도입되기 전이라는 점 두 가지이다.
+
+세 가지 exp 시리즈가 같은 결론을 보였다.
+
+\paragraph{(a) exp020 (budget\_fraction).}
+$a_t^{(0)}$를 ``공격성''에서 ``예산 사용 비율''로 재정의했다. 즉, 매 사이클 시작 시
+현금 잔고 중 얼마를 본 사이클에 투입할지 RL이 결정한다(0\,=\,진입 금지,
+1\,=\,전액 투입). 가설은 ``하락장에서는 적게 투입, 상승장에는 많이 투입''이었으나
+학습된 정책은 모든 레짐에서 $a_t^{(0)} \approx 1.0$으로 수렴했다.
+
+\paragraph{(b) exp021 (entry\_gate).}
+$a_t^{(0)}$를 ``사이클 진입 게이트''로 재정의했다(0\,=\,진입 금지, 1\,=\,진입 허용).
+가설은 ``하락장 진입 차단''이었으나 학습 결과는 \texttt{bear} 레짐에서 진입 비율이
+$99.7\%$로 사실상 모든 봉에서 게이트가 열렸다.
+
+\paragraph{(c) exp022 (aggressiveness, 본 논문과 동일한 의미).}
+$a_t^{(0)}$를 원래의 ``공격성''으로 복원한 뒤 1M 스텝 학습. 학습된 deterministic
+정책의 행동 통계: 모든 레짐에서 $a_t^{(0)} \approx 0$, $a_t^{(1)} \approx 0$
+(중앙값 모두 $0.0000$, 평균 $\leq 0.001$). 가장 결정적인 진단은 정책망의
+\emph{raw output}이 $[-9.19, -4.30]$로 squash 함수의 saturation 영역에
+포화되었다는 사실이다.
+
+\subsection{결정적 Ablation: ``RL = Fixed $[1.0, 0.0]$''}
+\label{sec:phase1_ablation}
+
+행동 통계의 수렴값을 들고 와 RL을 \emph{고정 정책}으로 교체하는 ablation을 수행했다.
+\texttt{aggressiveness} 의미 위에서 $a_t = [1.0, 0.0]$이 학습된 RL의 행동에
+대응한다($a_t^{(0)} \to 1$은 ATR 격자 폭 공식에서 가장 좁은 매수 간격을 의미하며
+$a_t^{(1)} \to 0$은 가장 빠른 매도 간격을 의미한다).
+
+\begin{table}[h]
+\centering
+\caption{Phase 1 (Env-v2) Decisive ablation. 절대 Sharpe 수치는 다음 봉 극값
+체결의 favorable bias artifact를 포함하지만, RL과 Fixed $[1.0, 0.0]$의
+\emph{일치}는 환경과 무관한 정성적 결론이다.}
+\begin{tabular}{lcc}
+\toprule
+정책 & Val Sharpe & Test Sharpe \\
+\midrule
+RL exp020 (\texttt{sym} reward, 1M steps) & \textbf{45.390} & 42.090 \\
+Fixed $[1.0, 0.0]$ (RL 수렴값 그대로 고정) & \textbf{45.390} & 41.769 \\
+\midrule
+Fixed $[1.0, 0.5]$ & 4.116 & 4.683 \\
+Fixed $[1.0, 1.0]$ & 1.060 & 1.843 \\
+\bottomrule
+\end{tabular}
+\label{tab:phase1_ablation}
+\end{table}
+
+표 \ref{tab:phase1_ablation}의 결정적 관찰은 RL과 Fixed $[1.0, 0.0]$의 Val Sharpe가
+\emph{소수점 셋째 자리까지 완전히 일치}한다는 점이다. 1M 스텝 RL 학습의 결과가
+사실상 상수 정책으로 환원되었음을 의미한다. 그 외 Fixed 정책 ($[1.0, 0.5]$,
+$[1.0, 1.0]$)이 큰 폭으로 열등하다는 점은 ``RL이 의미 있게 어떤 점을 골랐다''는
+주장을 부분적으로 정당화하지만, 그 ``어떤 점''이 시점-독립 상수라는 사실이 핵심이다.
+
+\subsection{메커니즘 해석: ATR 공식이 자유도를 흡수한다}
+\label{sec:phase1_mechanism}
+
+정책 포화의 구조적 원인은 격자 공식 자체에 있다. \S\ref{sec:mdp}의 정의를 다시
+보면, sell 측 격자 폭은
+\begin{equation}
+g^{\mathrm{sell\_mkt}}_t = \frac{\mathrm{ATR}_{168}(p)}{p_t}
+\cdot (A_s + B_s \cdot a_t^{(1)})
+\end{equation}
+이며 $\mathrm{ATR}_{168}/p_t$ 항이 시장 변동성을 \emph{이미} 반영한다. 즉,
+하락장(ATR↑)에는 격자 폭이 자동 확대되어 보수적 포지션이 자동 달성되고,
+상승장(ATR↓)에는 격자 폭이 자동 축소되어 공격적 포지션이 자동 달성된다.
+RL에게 남은 역할은 ``ATR이 결정한 폭을 어떻게 추가 조정할까?''인데, symmetric
+reward 하에서는 \emph{사이클 수 극대화 → 복리 누적 극대화}가 유일한 최적화
+방향이고, 그 결과 매수 격자는 가장 좁게($a_t^{(0)} \to 1$), 매도 격자도 가장
+좁게($a_t^{(1)} \to 0$) 가 단일 최적해가 된다. 상태 의존적 행동을 학습할
+인센티브가 사라진다.
+
+\subsection{본 논문의 동기}
+\label{sec:phase1_implication}
+
+Phase 1 negative finding의 표면적 결론은 ``BTC 그리드 트레이딩에서 RL은 의미
+없다''로 보였으나, 본 논문은 이 결론이 \emph{symmetric reward}라는 특정 가정에
+조건적이라는 가설을 채택했다. 즉:
+
+\begin{quote}
+\emph{대칭 reward + ATR 비례 공식의 조합이 RL 자유도를 흡수한다면, reward를
+\emph{비대칭}으로 정식화(asymmetric, prospect-theoretic) 하거나 \emph{경로 의존적}
+으로 정식화(DSR의 sliding-window memory) 하면 RL이 추가 가치를 가질 수 있는가?}
+\end{quote}
+
+이 가설은 본 논문의 핵심 비교 (\S\ref{sec:reward_variants}, \S\ref{sec:pareto})로
+정식화된다. 또한 본 논문의 canonical 환경(Env-v4, 지정가 체결 + 학습 안정화
+패키지)에서 symmetric reward만으로도 RL이 ATR 베이스라인을 초과함을 추가로
+확인할 것이다(\S\ref{sec:pareto} 결과에서 Val Sharpe sym = $1.87 > $ ATR
+$1.378$). 즉, Phase 1의 ``RL = Fixed''라는 강한 negative는 \emph{체결가 favorable
+bias와 학습 안정성 부족이 동시에 작용한 특정 조건의 결과}이며, 환경이 정상화되고
+학습이 안정화된 본 논문 조건에서는 reward 형식 자체가 RL의 가치-부가 채널의
+주된 결정 요인이 된다는 것이 본 논문의 메시지이다.
 
 % ─── 5. Main Finding: Pareto Frontier ────────────────────────────────────────
 \section{Pareto 프론티어와 시나리오 D}

@@ -715,8 +715,127 @@ skew, we follow \citet{henderson2018rlreproducibility} and add IQM
 \section{Phase 1: Policy Saturation under Symmetric Reward}
 \label{sec:phase1_negative}
 
-\textit{[TBD. Reproduces the ``RL $=$ Fixed $[1.0, 0.0]$'' finding from
-exp020--022 of the earlier phase. Motivates reward formulation in this paper.]}
+This section briefly reproduces the negative finding of an \emph{earlier} Phase
+1 (April 2026) experiment series exp020--022 that precedes this paper. The
+finding is the starting point that motivates the reward-formulation comparison
+of \S\ref{sec:reward_variants}. The Phase 1 experiments were run on
+\emph{Env-v2} (2D ATR-proportional formula, next-bar-extreme execution) rather
+than on this paper's canonical Env-v4, so the absolute Sharpe values include
+a favorable-bias artifact. However, the qualitative observation at the heart
+of this section---that the \emph{policy converges to a constant}---is
+environment-independent and remains valid as motivation.
+
+\subsection{The Saturation Phenomenon}
+\label{sec:phase1_setting}
+
+The Phase 1 setup is almost identical to \S\ref{sec:method} of this paper:
+state 7D, action 2D, ATR-proportional grid formula, symmetric reward
+$r_t = (E_t - E_{t-1})/C_0$. The two differences are (i) execution uses the
+next-bar extremes rather than limit fills, and (ii) the stabilization package
+of \S\ref{sec:ppo_stab} had not yet been introduced.
+
+Three experiments converged to the same conclusion.
+
+\paragraph{(a) exp020 (budget\_fraction).}
+$a_t^{(0)}$ was redefined from ``aggressiveness'' to ``fraction of cash
+budget'': at the start of each cycle, the RL policy decides how much of the
+cash balance to commit to the cycle (0 = no entry, 1 = full commitment). The
+hypothesis was ``commit less in bear regimes and more in bull regimes,'' but
+the learned policy converged to $a_t^{(0)} \approx 1.0$ across all regimes.
+
+\paragraph{(b) exp021 (entry\_gate).}
+$a_t^{(0)}$ was redefined as a ``cycle entry gate'' (0 = no entry, 1 = allow
+entry). The hypothesis was ``block entries in bear regimes,'' but the learned
+entry rate in the \texttt{bear} regime was $99.7\%$, effectively keeping the
+gate open at every bar.
+
+\paragraph{(c) exp022 (aggressiveness, identical semantics to this paper).}
+$a_t^{(0)}$ was restored to ``aggressiveness'' and PPO was trained for 1M
+steps. Behavioral statistics of the deterministic policy: across all regimes
+$a_t^{(0)} \approx 0$ and $a_t^{(1)} \approx 0$ (both medians equal to
+$0.0000$, means $\leq 0.001$). The most decisive diagnostic is that the
+\emph{raw network outputs} were $[-9.19, -4.30]$, deep in the saturation
+region of the squashing nonlinearity.
+
+\subsection{Decisive Ablation: ``RL = Fixed $[1.0, 0.0]$''}
+\label{sec:phase1_ablation}
+
+We took the converged behavioral statistics and ran an ablation that replaces
+the RL policy with a \emph{fixed} action. In the \texttt{aggressiveness}
+semantics, $a_t = [1.0, 0.0]$ corresponds to the learned policy's behavior
+($a_t^{(0)} \to 1$ produces the narrowest buy spacing in the ATR grid formula
+and $a_t^{(1)} \to 0$ produces the narrowest sell spacing).
+
+\begin{table}[h]
+\centering
+\caption{Phase 1 (Env-v2) decisive ablation. Absolute Sharpe values reflect
+the next-bar-extreme execution favorable bias, but the
+\emph{agreement} between RL and Fixed $[1.0, 0.0]$ is environment-independent.}
+\begin{tabular}{lcc}
+\toprule
+Policy & Val Sharpe & Test Sharpe \\
+\midrule
+RL exp020 (\texttt{sym} reward, 1M steps) & \textbf{45.390} & 42.090 \\
+Fixed $[1.0, 0.0]$ (RL convergence point) & \textbf{45.390} & 41.769 \\
+\midrule
+Fixed $[1.0, 0.5]$ & 4.116 & 4.683 \\
+Fixed $[1.0, 1.0]$ & 1.060 & 1.843 \\
+\bottomrule
+\end{tabular}
+\label{tab:phase1_ablation}
+\end{table}
+
+The decisive observation in Table~\ref{tab:phase1_ablation} is that RL and
+Fixed $[1.0, 0.0]$ agree on Val Sharpe \emph{to three decimal places}, meaning
+the result of 1M steps of PPO training reduces to a constant policy. The
+remaining Fixed policies $[1.0, 0.5]$ and $[1.0, 1.0]$ are substantially
+worse, partly justifying the claim that ``RL did pick a meaningful point in
+the action space.'' The crucial qualifier is that the point is
+time-independent.
+
+\subsection{Mechanism: The ATR Formula Absorbs Degrees of Freedom}
+\label{sec:phase1_mechanism}
+
+The structural cause of policy saturation lies in the grid formula itself.
+Recalling from \S\ref{sec:mdp}, the sell-side grid width is
+\begin{equation}
+g^{\mathrm{sell\_mkt}}_t = \frac{\mathrm{ATR}_{168}(p)}{p_t}
+\cdot (A_s + B_s \cdot a_t^{(1)})
+\end{equation}
+and the term $\mathrm{ATR}_{168}/p_t$ \emph{already} reflects market
+volatility. In a bear regime (ATR$\uparrow$) the grid widens automatically,
+producing a conservative position; in a bull regime (ATR$\downarrow$) the grid
+narrows, producing an aggressive position. The role left for RL is
+``how should I further adjust the width that ATR already chose?''---and under
+a symmetric reward the only optimization direction is \emph{maximize cycle
+count $\to$ maximize compounding}, whose unique optimum is to pick the
+narrowest buy spacing ($a_t^{(0)} \to 1$) and the narrowest sell spacing
+($a_t^{(1)} \to 0$). There is no incentive to learn a state-dependent action.
+
+\subsection{Motivation for This Paper}
+\label{sec:phase1_implication}
+
+Read literally, the Phase 1 negative finding suggests ``RL adds no value to
+BTC grid trading.'' This paper takes a different stance: that the conclusion
+is conditional on the specific assumption of a \emph{symmetric reward}. That
+is:
+
+\begin{quote}
+\emph{If the combination of symmetric reward and ATR-proportional formula
+absorbs the RL degrees of freedom, can reformulating the reward as
+\emph{asymmetric} (asymmetric, prospect-theoretic) or \emph{path-dependent}
+(sliding-window DSR) restore the value-add of RL?}
+\end{quote}
+
+This is precisely the hypothesis formalized in this paper's main comparison
+(\S\ref{sec:reward_variants}, \S\ref{sec:pareto}). We will further see in
+\S\ref{sec:pareto} that, on the canonical environment Env-v4 (limit-order
+execution plus the stabilization package), even the symmetric reward yields a
+policy that exceeds the ATR baseline (Val Sharpe sym $= 1.87 > $ ATR $1.378$).
+The strong Phase 1 negative ``RL = Fixed'' is therefore a joint result of
+favorable-bias execution and insufficient training stabilization; once the
+environment is normalized and training is stabilized, the reward form itself
+becomes the principal channel through which RL adds value.
 
 % ─── 5. Main Finding: Pareto Frontier ────────────────────────────────────────
 \section{Pareto Frontier and Scenario D}

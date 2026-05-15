@@ -3945,3 +3945,40 @@ PAPER_OUTLINE §3 매핑 6 서브섹션 (MDP, Trading-env, ATR baseline, Reward 
 - §3.3 ATR baseline 의 ``action [0,0] 고정'' 설명이 코드 구현 (atr_baseline policy) 과 실제로 맞는지 확인 필요. 본 논문 작성 후 검증.
 - §3.4 의 DSR 공식 (Moody-Saffell 2001) 의 분모 $(B - A^2)^{3/2}$ 가 본 구현 코드와 일치하는지 src/env/trading_env.py 의 dsr step 함수에서 직접 확인.
 
+---
+
+## 2026-05-16 — §4 Phase 1 Negative Finding 본문 작성 완료 (양 버전)
+
+### Objective
+
+PAPER_OUTLINE §4 매핑: exp020~022 의 ``RL = Fixed [1.0, 0.0]'' 재인용. 본 논문 reward 정식화 비교의 동기 frame.
+
+### Changes
+
+| 파일 | 변경 |
+|---|---|
+| `reports/paper/main_ko.tex` | §4 TBD placeholder → 4 서브섹션 본문 (~1 페이지) |
+| `reports/paper/main.tex` | §4 TBD placeholder → 4 서브섹션 본문 (~2 페이지) |
+
+### 4 서브섹션 구조
+
+- §4.1 정책 포화 현상 — exp020 (budget_fraction), exp021 (entry_gate), exp022 (aggressiveness). 세 실험 모두 같은 결론. raw network output [-9.19, -4.30] 포화 사실 인용.
+- §4.2 결정적 ablation — Fixed [1.0, 0.0] = RL exp020 Val Sharpe 45.390 일치 표 (Env-v2 favorable bias caveat 명시).
+- §4.3 메커니즘 해석 — ATR/price 항이 변동성을 자동 반영, RL 자유도 흡수. 사이클 수 극대화 → 복리 누적 극대화가 유일한 최적화 방향.
+- §4.4 본 논문의 동기 — Phase 1 결론은 sym reward 라는 특정 가정에 조건적. asym/dsr/pt 정식화로 RL 가치-부가 채널 복원 가설. Env-v4 안정화 패키지에서 sym 도 ATR 초과함 (1.87 > 1.378) 미리 언급.
+
+### Results
+
+- 빌드 검증: `xelatex main_ko.tex` 3회 + bibtex → **16 페이지** (이전 15, +1)
+- `pdflatex main.tex` 3회 + bibtex → **17 페이지** (이전 15, +2)
+- §4 분량 ~7% 목표 일치 (양 버전 1~2 페이지)
+- Env-v2 favorable bias caveat 명시. 정성적 결론 (정책 포화) 만 인용, 절대 Sharpe 수치는 artifact 로 표시.
+
+### Decision
+
+다음 작업 = §5 Pareto 프론티어 (메인 §1, 분량 비중 20%). 사용자 명시적 "진행" 응답 후 시작.
+
+### 보류 아이디어
+
+- §4 의 Fixed [1.0, 0.0] ablation 표가 Env-v2 라 caveat 가 길어졌음. §8 Discussion 의 ``honesty section'' 에서 Phase 1 → Phase 3 의 환경 변천 (Env-v2 → v3 → v4) 명시 추가 가능.
+
