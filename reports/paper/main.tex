@@ -208,13 +208,172 @@ discusses distribution shift quantification and limitations, and Section
 \section{Related Work}
 \label{sec:related}
 
-\textit{[TBD. Subsections mapped from PAPER\_OUTLINE \S2:
-market making and grid trading (Avellaneda-Stoikov 2008);
-DRL trading (Zhang-Zohren-Roberts 2020, Gort 2022, Sun 2023, Liu 2025);
-reward design theory (Moody-Saffell 2001 DSR, Kahneman-Tversky 1979 PT,
-Ng 1999 reward shaping);
-evaluation methodology (Lopez de Prado 2018 CPCV, 2014 DSR,
-Henderson 2018 reproducibility).]}
+This paper sits at the intersection of four areas: (i) market making and grid
+trading, (ii) reinforcement-learning-based trading, (iii) reward-design theory,
+and (iv) evaluation methodology for trading policies. This section surveys the
+key prior work in each area and clarifies where our contribution lies.
+
+\subsection{Market Making and Grid Trading}
+\label{sec:related_grid}
+
+The academic ancestor of grid trading is the market-making model of
+\citet{avellaneda2008market}. Their analysis derives a closed-form optimal
+policy for a risk-averse market maker who faces inventory risk and must place
+\emph{asymmetric} bid/ask quotes around the mid-price. Two key insights are
+that (a) the bid--ask spread is a function of volatility and remaining time
+horizon, and (b) inventory skew shifts the quote midpoint asymmetrically. Grid
+trading is a simplified practical variant of this model in which orders are
+placed on a pre-defined ladder of price levels in order to monetize
+micro-volatility.
+
+The standard mechanism for adapting grid widths to market volatility is the
+Average True Range \citep{wilder1978atr} (ATR; 14-period moving average is the
+default). ATR is a smoothed average of the true price range and provides a
+simple, robust rule that automatically widens the grid in volatility-cluster
+regimes. ATR-proportional grids of the form $\Delta = c \cdot \mathrm{ATR}$
+(with proportional coefficient $c$) are widely used in practice and serve as
+the baseline of this paper.
+
+Most prior academic work in this area is limited to the analysis of
+\emph{rule-based} policies, with relatively few attempts to learn the grid-width
+decision from data. This paper adopts a structure in which the proportional
+coefficient and the number of grid splits in the ATR formula are dynamically
+determined by an RL policy, while quantitatively analyzing how the design of
+the reward function influences the resulting learned policy's behavior---a
+combination, to our knowledge, that has not been explored.
+
+\subsection{Reinforcement Learning for Trading}
+\label{sec:related_drl}
+
+The standard DRL baseline for cryptocurrency trading is the PPO/A2C/DQN
+comparison framework of \citet{zhang2020drl}, which feeds price time series
+directly into a PPO policy and shows consistent improvements over simple
+buy-and-hold (B\&H) and moving-average crossover strategies. The ACM survey of
+\citet{sun2023rl} and the more recent review of \citet{liu2025review} both
+identify two open problems in the area: \emph{(a) interpretability of policy
+behavior and (b) generalization across market regimes}. This paper addresses
+both directly: \S\ref{sec:mechanism} quantifies the causal chain from reward
+form to behavioral difference, and \S\ref{sec:robustness} documents
+out-of-sample (OOS) generalization phenomena that are not captured by
+single-split validation alone.
+
+There are four directly preceding works. \citet{liu2021bitcoin} feeds the
+output of an LSTM price predictor into the state of a PPO trading policy in a
+two-stage pipeline. The limitation of this approach is that prediction errors
+propagate directly into trading decisions; this paper bypasses the limitation
+by \emph{eliminating} the price-prediction stage and using a volatility-adaptive
+grid structure instead. \citet{yasin2024rl} compares DQN/PPO/A2C with 20
+technical indicators, but the action space is discrete buy/sell with no hold
+action. This paper adopts a continuous two-dimensional action (aggressiveness
+and profit target) that supports fine-grained grid control.
+\citet{pham2025dqn} uses DQN to select one of five predefined strategies as a
+meta-strategy, but the strategies themselves are not learned.
+\citet{bandarupalli2025risk} augments PPO with a volatility penalty and a
+transaction-cost term, but stays at the level of hyperparameter tuning within
+a single reward variant and does not compare across reward \emph{forms}, which
+is the focus of this paper.
+
+A particularly relevant prior work is \citet{gort2022backtest}, which
+empirically shows that \emph{single-split train/test results do not guarantee
+OOS generalization} in cryptocurrency DRL trading, and recommends CPCV
+(Combinatorial Purged Cross-Validation) and DSR (Deflated Sharpe Ratio). This
+paper adopts those recommendations, using Val (2021--2023), CPCV (6-fold inside
+the Train partition), and Test (2024-- unsealed) environments concurrently.
+Our \emph{winner reversal} finding (Val \texttt{sym} $\to$ CPCV \texttt{dsr}
+$\to$ Test \texttt{pt}) is a quantitative confirmation that Gort et al.'s
+concern reappears in the dimension of reward-variant selection.
+
+In one sentence, our position is: whereas prior DRL trading literature focuses
+on comparing algorithms and state designs under a \emph{single} reward function,
+this paper performs a controlled comparison of \emph{four reward functions} on
+top of the same algorithm (PPO) and the same environment, and separately
+measures their effects on in-sample / multi-split / OOS environments.
+
+\subsection{Reward-Design Theory}
+\label{sec:related_reward}
+
+The four reward variants compared in this paper draw from three theoretical
+lineages in reinforcement learning and behavioral economics. (i) Symmetric
+(\texttt{sym}) is the standard PnL-return reward and serves as our baseline.
+(ii) Asymmetric (\texttt{asym}) places a positive weight $\beta>1$ on losses,
+a simple first-order approximation of a risk-averse utility. (iii) Differential
+Sharpe Ratio (\texttt{dsr}) is the formulation of \citet{moody2001dsr}.
+(iv) Prospect-theoretic reward (\texttt{pt}) directly uses the utility function
+of \citet{kahneman1979prospect} and \citet{tversky1992cumulative},
+$v(x) = \mathrm{sgn}(x) |x|^\alpha$ for $x \geq 0$ and $-\lambda |x|^\alpha$
+for $x < 0$, as a per-step reward.
+
+The DSR formulation of \citet{moody2001dsr} uses the \emph{differential change
+of the online Sharpe-ratio estimator} as the step reward, tracking first and
+second moments via exponentially-weighted moving averages (EWMA, decay rate
+$\eta$). This has two implications for RL training: (a) it directly optimizes
+a risk-adjusted return rather than raw PnL, and (b) the sliding-window memory
+imposes a \emph{multi-step temporal dependency} on the policy. As we show in
+\S\ref{sec:mechanism}, this memory structure is what causes the \texttt{dsr}
+policy to learn 2--6$\times$ longer holding times than the other variants---a
+property that becomes the in-sample advantage of \S\ref{sec:robustness} and
+the OOS failure of \S\ref{sec:oos} as two sides of the same causal coin.
+
+Prospect theory \citep{kahneman1979prospect} is a foundational model of
+human decision making under risk, with two characteristic parameters:
+(a) loss aversion $\lambda \approx 2.25$ (standard value from
+\citealt{tversky1992cumulative}) and (b) the concavity exponent
+$\alpha \approx 0.88$. While the theory has been widely used to describe
+human trader behavior (e.g., the disposition effect of clinging to losses and
+realizing gains too early), \emph{direct use of prospect-theoretic utility as
+an RL reward} is rare in the literature. To our knowledge, this paper is the
+first to directly implement the \citet{kahneman1979prospect} utility as an RL
+reward (with $\alpha=0.68$, $\lambda=3.30$, tuned by Optuna) and quantitatively
+establish the OOS robustness that the resulting policy exhibits.
+
+\citet{ng1999reward}'s policy-invariance theorem of potential-based reward
+shaping states that ``a monotone transformation of the reward signal does not
+alter the policy learned by RL.'' At first glance, this paper's comparison of
+four reward variants may appear to conflict with the theorem, but it does not:
+the \texttt{sym} $\to$ \texttt{asym}/\texttt{pt} transformations are
+\emph{non-potential-based} (they apply an asymmetric scale on the negative
+half-line), while \texttt{dsr} is not a simple per-step reward transformation
+but a \emph{state-extended} reward (the sliding-window moments effectively
+become part of the state). Our reward-variant comparison thus lies outside the
+scope of the Ng et al.\ theorem, and indeed we confirm in
+\S\ref{sec:mechanism} that policy behavior differs across variants in a
+statistically significant manner.
+
+\subsection{Evaluation Methodology}
+\label{sec:related_eval}
+
+The two principal pitfalls in evaluating RL trading policies are (a) backtest
+overfitting and (b) seed dependence of results.
+\citet{henderson2018rlreproducibility} empirically demonstrates that seed
+variability alone can produce large differences for the same algorithm, and
+proposes 5--10 seed statistical comparisons, IQM (Interquartile Mean), and
+bootstrap confidence intervals as standard recommendations. This paper uses
+10 seeds per variant (Val/exp033) and 100 models (Test), and applies pairwise
+Cohen's $d$ and bootstrap $\mathrm{P}(A>B)$ to all comparisons.
+
+\citet{lopezdeprado2018advances} (Ch.\ 8) proposes \emph{Combinatorial Purged
+Cross-Validation} (CPCV), which avoids train/test leakage in time-series data
+while leveraging $\binom{N}{k}$ split combinations to strengthen the
+generalization guarantees of single-split results. We adopt 6-fold CPCV
+(15 paths) in \S\ref{sec:cpcv}.
+
+\citet{lopezdeprado2014dsr}'s \emph{Deflated Sharpe Ratio}
+(DSR\textsuperscript{*}) is a statistical-significance test on the Sharpe
+ratio that corrects for the number of backtest trials and for the skewness/kurtosis
+of the underlying distribution. We apply Bonferroni 4-way correction together
+with DSR\textsuperscript{*} testing to the multiple comparisons of CPCV
+results (\S\ref{sec:cpcv}), and confirm that all four reward variants are
+significant relative to the ATR baseline at $p<0.001$.
+
+The methodological distinctiveness of this paper is the \emph{simultaneous use
+of three evaluation environments} (Val / CPCV / Test) that allowed us to
+discover the winner reversal. Studies relying solely on single-split or solely
+on CPCV cannot expose OOS generalization failure, and studies relying solely
+on OOS cannot expose the in-sample conservatism of \texttt{pt}. The
+simultaneous application of three environments is, in our view, a methodological
+contribution: it generalizes the multi-evaluation recommendations of
+\citet{henderson2018rlreproducibility} and \citet{gort2022backtest} to the
+single dimension of reward-variant comparison.
 
 % ─── 3. Method ───────────────────────────────────────────────────────────────
 \section{Method}

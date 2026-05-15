@@ -3867,3 +3867,40 @@ Phase 15 사실상 완료. 본 논문 모든 실험 + 분석 + figures 준비됨
 - `reports/exp035_analysis.md`
 - `data/processed/btc_test.parquet` (봉인 해제, worktree 에만)
 
+---
+
+## 2026-05-16 — §2 Related Work 본문 작성 완료 (양 버전)
+
+### Objective
+
+PAPER_OUTLINE §2 매핑 4 서브섹션 (시장 조성/그리드, DRL 트레이딩, Reward 이론, 평가 방법론) 본문 완성. 한글 (`main_ko.tex`) + 영문 (`main.tex`) 동시 작성.
+
+### Changes
+
+| 파일 | 변경 |
+|---|---|
+| `reports/paper/main_ko.tex` | §2 TBD placeholder → 4 서브섹션 본문 (~4 페이지) |
+| `reports/paper/main.tex` | §2 TBD placeholder → 4 서브섹션 본문 (~4 페이지) |
+
+### 4 서브섹션 구조
+
+- §2.1 시장 조성/그리드 — Avellaneda-Stoikov (2008), Wilder (1978) ATR. 본 논문 위치: ATR 비례 + RL 격자 결정 + reward 비교
+- §2.2 DRL 트레이딩 — Zhang-Zohren-Roberts (2020), Sun (2023), Liu (2025), Liu et al. (2021), Yasin-Gill (2024), Pham (2025), Bandarupalli (2025), Gort (2022). 본 논문 차별점: 4 reward 변형 통제 비교 + Gort 의 OOS 우려를 reward 차원에 적용
+- §2.3 Reward 이론 — Moody-Saffell (2001) DSR, Kahneman-Tversky (1979) + Tversky-Kahneman (1992) PT, Ng (1999) reward shaping. 본 논문 위치: PT 를 RL reward 로 직접 사용한 첫 사례 + Ng 정리의 적용 범위 밖
+- §2.4 평가 방법론 — Henderson (2018), López de Prado (2018 CPCV, 2014 DSR). 본 논문 차별점: 세 환경 (Val/CPCV/Test) 동시 사용으로 winner reversal 발견
+
+### Results
+
+- 빌드 검증: `xelatex main_ko.tex` 3회 + `bibtex` → 10 페이지 (이전 6 페이지)
+- `pdflatex main.tex` 3회 + `bibtex` → 10 페이지 (이전 7 페이지)
+- 양 버전 모두 references.bib 의 20개 인용 모두 정상 해소
+- bibtex warning 3개 (volume/number 중복, journal empty) — 인쇄에 영향 없음, 미세 수정 가능
+
+### Decision
+
+다음 작업 = §3 Method 작성. 분량 비중 17% (본 논문 가장 큰 §), 다음 세션 1~3 시간 예상.
+
+### 보류 아이디어
+
+- `references.bib` 의 bibtex warning 3건 수정 (henderson2018 volume/number, liu2021bitcoin/wilder1978atr empty journal). 미세 작업. §3 작업 시 함께.
+
