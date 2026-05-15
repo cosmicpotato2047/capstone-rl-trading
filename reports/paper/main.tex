@@ -2083,13 +2083,273 @@ paper's true main contribution.}
 \section{Discussion}
 \label{sec:discussion}
 
-\textit{[TBD. Subsections:
-\S8.1 Val--Test distribution-shift quantification (KS $p<10^{-10}$, $-27\%$
-variance);
-\S8.2 honest acknowledgment of environment dependence in exp027\_rl prior
-evidence (Env-v3 \texttt{asym} 1.955);
-\S8.3 limits of single-metric winner;
-\S8.4 limitations: BTC-only, single regime in Test, single slippage level.]}
+This section consolidates the scientific interpretation of the findings of
+\S\ref{sec:pareto}--\S\ref{sec:oos}. We address five topics: (i) quantitative
+characterization of the Val/Test distribution shift (\S\ref{sec:disc_shift}),
+(ii) honest acknowledgment of the environment dependence of the prior
+exp027\_rl evidence (\S\ref{sec:disc_env_dependence}), (iii) the limitations
+of single-metric winners and a recommended multi-environment evaluation
+protocol (\S\ref{sec:disc_multi_env}), (iv) the application of behavioral
+economics to RL OOS safety (\S\ref{sec:disc_pt_safety}), and (v) limitations
+and future work (\S\ref{sec:disc_limitations}).
+
+\subsection{Quantifying the Val--Test Distribution Shift}
+\label{sec:disc_shift}
+
+\S\ref{sec:oos_policy_stability} showed that each variant's policy behaves
+nearly identically across Val and Test ($\Delta \leq 5\%$). The large
+generalization gap reported in \S\ref{sec:oos_gap} must therefore originate in
+the \emph{distribution shift of the market itself}. Phase 15b directly
+compared the market statistics of the two partitions.
+
+\begin{table}[h]
+\centering
+\caption{Val (2021--2023) vs Test (2024--2026) market statistics. Test is
+statistically a different distribution: \emph{lower volatility, stronger
+upward trend}.}
+\begin{tabular}{lcccc}
+\toprule
+Metric & Val mean (std) & Test mean (std) & KS $p$ & Wasserstein dist. \\
+\midrule
+ATR ratio (volatility) & $0.96\%$ ($0.51\%$) & $0.70\%$ ($0.23\%$) & $<10^{-10}$ & $0.00268$ \\
+Hourly log return & $1.4 \cdot 10^{-5}$ ($0.71\%$) & $2.9 \cdot 10^{-5}$ ($0.52\%$) & $<10^{-10}$ & $0.00097$ \\
+\bottomrule
+\end{tabular}
+\label{tab:disc_shift}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.95\textwidth]{menu_b_distribution_shift}
+\caption{KDE plots of the ATR ratio and hourly log return on Val
+(2021--2023, blue) and Test (2024+, orange). Test is tighter and centered
+at a positive mean log return. KS $p < 10^{-10}$ on both metrics.}
+\label{fig:disc_shift}
+\end{figure}
+
+Two facts stand out:
+
+\paragraph{(i) Volatility drops by $\sim 27\%$.}
+The mean ATR ratio drops from $0.96\%$ on Val to $0.70\%$ on Test (a $27\%$
+decrease), and the standard deviation more than halves ($0.51\% \to 0.23\%$).
+Grid trading essentially monetizes volatility (\S\ref{sec:related_grid}), so a
+volatility drop translates directly into a \emph{drop in earning
+opportunities}. Policies trained in a high-volatility Val regime weaken in
+the low-volatility Test, as expected.
+
+\paragraph{(ii) Mean return roughly doubles.}
+The mean of hourly log returns roughly doubles in Test, reflecting the
+2024+ sustained uptrend. This is \emph{two-sided} for grid trading: sell
+quotes fill more easily when prices rise (a positive), but if prices keep
+moving away after a buy, the sell-side timing risk increases (a negative).
+\S\ref{sec:oos_mechanism} showed that the negative side is the principal
+driver of \texttt{dsr}'s OOS failure, and that short holdings
+(\texttt{pt}) avoid precisely this risk.
+
+KS $p < 10^{-10}$ means the two partitions are samples from essentially
+different market distributions. The standard OOS-evaluation assumption of
+``train and test from the same distribution'' fails for the BTC 1-hour
+series in question, and the generalization gap reported here is a
+\emph{real artifact of market distribution shift, not a simulation flaw}.
+
+\subsection{Environment Dependence of the exp027\_rl Prior Evidence}
+\label{sec:disc_env_dependence}
+
+We now elaborate on the environment dependence briefly raised in
+\S\ref{sec:intro_motivation} and \S\ref{sec:pareto_env_dependence}.
+
+The strong prior evidence motivating this paper (observed in late
+Phase 2, April 2026) was that a simplified prospect-style asymmetric reward
+($\beta=2.0$) on \emph{Env-v3 (4D absolute-gap, limit-order execution)} hit
+Test Sharpe $1.955$, $+109\%$ above ATR Test $0.935$. The working
+hypothesis at the time (Scenario A) was ``asymmetric reward alone makes RL
+clearly beat ATR.''
+
+For this paper we changed the canonical environment to \emph{Env-v4 (2D
+ATR-proportional, limit-order execution)}. This is more academically
+coherent for the following reasons:
+\begin{itemize}[leftmargin=*]
+\item The ATR-proportional formula naturally encodes market volatility in
+the grid width (\S\ref{sec:phase1_mechanism}).
+\item The 2D action space cleanly separates the meaning of
+\texttt{aggressiveness} and \texttt{profit\_target} (\S\ref{sec:mdp}).
+\item Limit-order execution removes the favorable-bias artifact
+(\S\ref{sec:env_dynamics}).
+\end{itemize}
+
+On Env-v4, training the same \texttt{asym} variant with Optuna-retuned
+$\beta=3.42$ yields Val Sharpe $1.681$, \emph{below} \texttt{sym}'s $1.871$.
+
+\begin{table}[h]
+\centering
+\caption{exp027\_rl (Env-v3) vs this paper (Env-v4) on the \texttt{asym}
+variant. The environment-induced effect is \emph{larger} than the
+reward-variant effect.}
+\begin{tabular}{lcccc}
+\toprule
+Environment & Action dim. & Grid formula & \texttt{asym} Sharpe & vs ATR \\
+\midrule
+Env-v3 (exp027\_rl) & 4D absolute gap & non-ATR & $1.955$ (Test) & $+109\%$ \\
+Env-v4 (this paper) & 2D ATR-proportional & ATR-proportional & $1.681$ (Val) & $+22\%$ \\
+\midrule
+$\Delta$ & --- & --- & $-0.27$ & $-87$ pp \\
+\bottomrule
+\end{tabular}
+\label{tab:disc_env_dependence}
+\end{table}
+
+Table~\ref{tab:disc_env_dependence} shows that the change due to
+\emph{environment} exceeds the change due to \emph{reward variant}. We accept
+this honestly:
+\begin{itemize}[leftmargin=*]
+\item The strong \texttt{asym} advantage on Env-v3 is most likely
+environment-specific. The 4D absolute-gap action gives RL much more
+freedom to set grid widths, and asymmetric reward had room to learn a
+conservative policy on top of that freedom.
+\item On Env-v4, the ATR-proportional formula \emph{already} sets most of
+the grid width, reducing RL's freedom (\S\ref{sec:phase1_negative}). On top
+of that, the reward-variant effect appears as a risk-profile trade-off
+rather than a Sharpe-axis lead (\S\ref{sec:pareto}).
+\end{itemize}
+
+That said, the paper's true contribution is a finding \emph{independent} of
+this environment dependence: even on canonical Env-v4, \texttt{pt} is
+OOS-robust on both sources at $p < 0.002$ (\S\ref{sec:oos}). H5 thus
+\emph{supersedes} the earlier evidence as the new principal claim, while
+preserving academic honesty.
+
+\subsection{Limits of Single-Metric Winners; Toward Multi-Environment Evaluation}
+\label{sec:disc_multi_env}
+
+The table in \S\ref{sec:oos_three_env_reversal} directly exposes the limits
+of single-metric conclusions of the form ``X variant is the best reward
+design.'' \texttt{sym} ranks first on Val, \texttt{dsr} on CPCV, and
+\texttt{pt} on Test. \emph{Which environment serves as the baseline}
+determines which variant is ``superior.''
+
+This extends \citet{henderson2018rlreproducibility}'s reproducibility
+concern from the seed-variance axis to the reward-design comparison axis.
+Just as single-seed variance can mask variant differences, a single
+evaluation environment can determine the \emph{dimension} along which
+variant differences are reported. Our analysis spans from the single-split
+Cohen's $d$ pattern of \S\ref{sec:pareto_clusters}, through the CPCV
+preservation of \S\ref{sec:cpcv_cluster}, to the three-environment reversal
+of \S\ref{sec:oos_three_env_reversal}, quantifying how the evaluation
+environment itself reshapes the distance metric between reward variants.
+
+We therefore recommend a \emph{three-environment standard protocol} for RL
+trading studies:
+\begin{enumerate}[leftmargin=*]
+\item \textbf{Single-split Val}: indicates a variant's typical policy
+behavior and baseline outperformance.
+\item \textbf{CPCV multi-split}: measures in-sample robustness across
+splits. Distinguishes between split-specific advantage and genuine
+generalization.
+\item \textbf{Sealed Test}: tests OOS safety under distribution shift. The
+winner here should drive real deployment decisions.
+\end{enumerate}
+
+If the same variant ranks first in all three environments, the conclusion is
+a strong monotone advantage (Scenario A). If different variants win
+different environments, the result is this paper's Scenario D
+(trade-off frontier). The common practice of declaring ``X variant is best''
+from a single environment is, in light of our three-environment reversal,
+scientifically imprecise.
+
+\subsection{From Behavioral Economics to RL OOS Safety}
+\label{sec:disc_pt_safety}
+
+H5 of \S\ref{sec:oos_h5} (\texttt{pt}'s OOS robustness) opens a new
+dimension of application for behavioral economics. Prospect theory
+\citep{kahneman1979prospect} originally models risk-averse human decision
+making, with human-fit parameters $\alpha \approx 0.88$ (mild concavity)
+and $\lambda \approx 2.25$ (moderate loss aversion;
+\citealt{tversky1992cumulative}).
+
+The Optuna-best parameters for our RL policy are $\alpha = 0.683$ and
+$\lambda = 3.303$, both \emph{more extreme} than the human values:
+\begin{itemize}[leftmargin=*]
+\item $\alpha = 0.683 < 0.88$: \emph{stronger concavity}. Diminishing
+marginal utility of gains kicks in faster than for humans.
+\item $\lambda = 3.303 > 2.25$: \emph{stronger loss aversion}. Loss weight
+is about $47\%$ higher than the human value.
+\end{itemize}
+
+Interpreted, when an RL policy pursues OOS-robust returns on BTC grid
+trading, choosing a utility function ``more conservative than human''
+proves advantageous. This is the policy-side basis for the
+\S\ref{sec:oos_mechanism} behavior ``exit very quickly (mean $1.4$\,h) to
+avoid sell-side timing risk,'' and it suggests that the human-trader
+behavior pattern often characterized as ``profit-taking too early'' is
+rational from the standpoint of OOS safety.
+
+Two scientific implications:
+\begin{itemize}[leftmargin=*]
+\item Behavioral-economics parameter estimates are fit to \emph{descriptive}
+human behavior. Parameters for an \emph{optimal} policy can differ.
+\item When using behavioral-economics utility functions as RL rewards,
+do not adopt the human-fit values uncritically; tune them on
+domain data instead.
+\end{itemize}
+
+H5 establishes ``using prospect theory as an RL reward produces an
+OOS-robust policy'' at the application level, with consistent confirmation
+across two sources at $p<0.002$. To our knowledge, this is the first
+quantitative OOS-safety result at the intersection of behavioral economics
+and RL.
+
+\subsection{Limitations and Future Work}
+\label{sec:disc_limitations}
+
+The findings of this paper hold under the following limitations.
+
+\paragraph{(1) Asset scope --- BTC only.}
+We evaluate the BTC/USDT 1-hour series only. Whether ``\texttt{pt}'s OOS
+robustness'' holds for equities, FX, or commodities is not addressed.
+Because distribution shifts differ across assets (BTC's leverage cycle vs
+equity earnings/ATH events, etc.), generalization of the causal mechanism
+needs to be verified.
+
+\paragraph{(2) Test regime --- single bull market.}
+The Test partition (2024-01 \,--\, 2026-04) is a strong bull market
+(\$42K $\to$ \$75K, $+78\%$). Whether \texttt{pt}'s OOS robustness holds in
+bear (e.g., 2018) or sideways (e.g., 2019) regimes is unconfirmed. Our
+mechanism is that ``short holdings avoid sell-side timing risk,'' but in
+bear markets holding itself incurs greater cumulative loss risk, so a
+different mechanism may dominate.
+
+\paragraph{(3) Slippage model --- a single level (0.02\%).}
+\S\ref{sec:slippage} evaluated only one slippage level. A multi-level
+sensitivity (0.005\%, 0.01\%, 0.05\%) would quantify how robust \texttt{pt}'s
+OOS advantage is to slippage. Due to time constraints we chose a single
+worst-case level (Binance taker side).
+
+\paragraph{(4) No Domain Randomization (DR).}
+Domain Randomization (varying slippage/fee/start time across episodes) is
+known to help train OOS-robust policies. We show that \texttt{pt} is
+OOS-robust under \emph{naive} training without DR. With DR, the OOS failure
+of \texttt{dsr} might recover, which is left for future work.
+
+\paragraph{(5) Training length --- 1M steps.}
+All variants train for the same 1M steps ($\approx$ 4 hours CPU per seed).
+\S\ref{sec:ppo_stab}'s late-stage collapse pattern (e.g., \texttt{sym} best
+$1.97$ at 550k $\to$ final $1.21$ at 1M) suggests that longer training could
+change the result, though we use best\_checkpoint only, which limits the
+direct effect of training length.
+
+\paragraph{Future work.}
+Topics that respond to these five limitations:
+\begin{itemize}[leftmargin=*]
+\item Verify H5 on multi-asset environments (equity ETFs, FX).
+\item Add other regimes (2018 bear, 2019 sideways) via simulation or
+historical tests.
+\item Combine DR with meta-learning to recover \texttt{dsr}'s OOS failure.
+\item This paper uses only PPO. Replicate the reward-variant comparison
+on SAC, TD3, etc.\ to separate the algorithm effect.
+\item Vary prospect-theory parameters (time-varying $\alpha$, $\lambda$;
+history-dependent reference points) to probe the parameter sensitivity of
+OOS-robust policies.
+\end{itemize}
 
 % ─── 9. Conclusion ───────────────────────────────────────────────────────────
 \section{Conclusion}

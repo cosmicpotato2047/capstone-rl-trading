@@ -4189,3 +4189,43 @@ PAPER_OUTLINE §7.3 매핑: exp035 (100 RL 모델 + ATR + B&H Test) + Phase 16b 
 - §7.3.5 의 ``같은 reward formulation 의 같은 행동 효과가 평가 환경에 따라 반대 부호'' 의 통찰을 §9 Conclusion 또는 abstract figure 캡션에 강조 - 본 논문 가장 핵심.
 - §7.3.7 B&H baseline 의 Calmar 22× 우위 frame 이 §8 한계 절에 reformulate 검토. ``RL pt 의 OOS robust 는 grid trading 의 risk-adjusted 의미에서이며, absolute return 의 의미가 아님'' 명시.
 
+---
+
+## 2026-05-16 — §8 Discussion 본문 작성 완료 (양 버전)
+
+### Objective
+
+PAPER_OUTLINE §8 매핑: 5 서브섹션 (distribution shift, exp027_rl 환경 의존성, 단일 metric 한계, prospect theory 응용, 한계 5개). 본 논문 발견의 학술적 해석.
+
+### Changes
+
+| 파일 | 변경 |
+|---|---|
+| `reports/paper/main_ko.tex` | §8 TBD placeholder → 5 서브섹션 본문 (~4 페이지) |
+| `reports/paper/main.tex` | §8 TBD placeholder → 5 서브섹션 본문 (~4 페이지) |
+
+### 5 서브섹션 구조
+
+- §8.1 Val-Test distribution shift 정량 — KS p<1e-10, ATR ratio -27%, hourly return 2× (Phase 15b)
+- §8.2 exp027_rl 환경 의존성 정직 인정 — Env-v3 asym 1.955 vs Env-v4 asym 1.681. 환경 효과 > variant 효과. H5 가 사전 증거 supersede.
+- §8.3 단일 metric 한계 + multi-environment 권고 — 세 환경 동시 사용 표준 protocol (Val + CPCV + Test).
+- §8.4 행동경제학 → RL OOS 안전성 — 인간 표준 α=0.88/λ=2.25 vs RL best α=0.683/λ=3.303. ``더 강한 손실 회피'' 가 OOS 안전성에 유리.
+- §8.5 한계 5개 + future work — BTC 단일 / Test bull only / single slippage / DR 미적용 / 1M steps.
+
+### Results
+
+- 빌드 검증: `xelatex main_ko.tex` 3회 + bibtex → **42 페이지** (이전 38, +4)
+- `pdflatex main.tex` 3회 + bibtex → **44 페이지** (이전 40, +4)
+- §8 분량 ~13% 목표 정확 일치
+- 표 2개 (distribution shift, env dependence comparison), figure 1개 (menu_b_distribution_shift)
+- 본 논문 정직성 frame: H5 가 exp027_rl 사전 증거 supersede + B&H Calmar 비교 + 한계 5개 명시
+
+### Decision
+
+다음 작업 = §9 Conclusion (분량 비중 3%, 가장 짧은 §, 4 메인 메시지 + Future work). 사용자 명시적 "진행" 응답 후 시작.
+
+### 보류 아이디어
+
+- §8.4 의 인간 vs RL 매개변수 비교 차이가 흥미. 본 논문 abstract 또는 §1 contribution 에 한 줄 추가 검토.
+- §8.5 의 한계 5개를 §9 future work 와 1:1 mapping 검토 (현재는 §8.5 가 더 디테일 / §9 는 간단 bullet).
+

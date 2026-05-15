@@ -1929,11 +1929,243 @@ contribution이다.
 \section{논의}
 \label{sec:discussion}
 
-\textit{[TBD: 추후 작성. 서브 섹션:
-\S8.1 Val--Test 분포 이동의 정량 (KS p$<10^{-10}$, $-27\%$ variance),
-\S8.2 exp027\_rl 사전 증거(Env-v3 asym 1.955)의 환경 의존성 정직 인정,
-\S8.3 단일 metric winner의 한계,
-\S8.4 한계: BTC 단일 자산, Test 1 regime, single slippage level.]}
+본 절은 \S\ref{sec:pareto}--\S\ref{sec:oos}의 발견을 학술적으로 정리한다.
+다섯 가지 주제를 다룬다: (i) Val/Test distribution shift의 정량(\S\ref{sec:disc_shift}),
+(ii) exp027\_rl 사전 증거의 환경 의존성 정직 인정(\S\ref{sec:disc_env_dependence}),
+(iii) 단일 metric winner의 한계와 multi-environment 평가 권고
+(\S\ref{sec:disc_multi_env}), (iv) 행동경제학에서 RL OOS 안전성으로의 응용 차원
+(\S\ref{sec:disc_pt_safety}), 그리고 (v) 한계와 future work(\S\ref{sec:disc_limitations}).
+
+\subsection{Val--Test 분포 이동의 정량}
+\label{sec:disc_shift}
+
+\S\ref{sec:oos_policy_stability}는 모든 variant의 정책이 Val에서 Test로 이동할
+때 행동 자체는 거의 변하지 않음($\Delta \leq 5\%$)을 보였다. 그렇다면 \S\ref{sec:oos_gap}의
+큰 generalization gap의 원인은 \emph{시장 자체의 distribution shift}여야 한다.
+Phase 15b에서 두 partition의 시장 통계를 직접 비교했다.
+
+\begin{table}[h]
+\centering
+\caption{Val (2021--2023) vs Test (2024--2026) 시장 통계. Test가 \emph{낮은
+변동성 + 강한 상승 추세}의 분포로 통계적으로 다르다.}
+\begin{tabular}{lcccc}
+\toprule
+Metric & Val mean (std) & Test mean (std) & KS $p$ & Wasserstein dist. \\
+\midrule
+ATR ratio (variation) & $0.96\%$ ($0.51\%$) & $0.70\%$ ($0.23\%$) & $<10^{-10}$ & $0.00268$ \\
+Hourly log return & $1.4 \cdot 10^{-5}$ ($0.71\%$) & $2.9 \cdot 10^{-5}$ ($0.52\%$) & $<10^{-10}$ & $0.00097$ \\
+\bottomrule
+\end{tabular}
+\label{tab:disc_shift}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.95\textwidth]{menu_b_distribution_shift}
+\caption{Val(2021--2023, 파랑)과 Test(2024+, 주황) 시장의 ATR 비율 및 시간당
+log return의 KDE 분포. Test 분포가 Val 대비 좁고 평균 수익률이 양수 방향으로
+이동. KS p $< 10^{-10}$.}
+\label{fig:disc_shift}
+\end{figure}
+
+핵심 사실 두 가지:
+
+\paragraph{(i) 변동성 $-27\%$ 감소.}
+ATR 비율의 평균이 Val $0.96\%$ $\to$ Test $0.70\%$로 약 $27\%$ 감소했고 표준편차도
+$0.51\% \to 0.23\%$로 절반 이하로 축소되었다. 그리드 트레이딩은 본질적으로
+변동성 자체를 수익원으로 삼으므로(\S\ref{sec:related_grid}) 변동성 감소는 \emph{수익
+기회 감소}로 직결된다. Val의 high-volatility 시기에 학습된 정책이 low-volatility
+Test에서 약화되는 것은 자연스러운 결과이다.
+
+\paragraph{(ii) 평균 수익률 $\sim 2\times$ 증가.}
+시간당 log return의 평균이 Val에서 Test로 약 두 배(2024+의 강한 상승 추세) 증가했다.
+이는 grid trading 정책에 \emph{양면}으로 작용한다: 매수 후 매도가 더 잘
+체결되는(가격이 상승하면 sell 호가 fill 확률↑) 한편, 매수 후 가격이 더 멀어지면
+sell-side timing risk 또한 증가한다. \S\ref{sec:oos_mechanism}에서 보았듯 후자가
+\texttt{dsr}의 OOS 실패의 핵심이며, 짧은 holding(\texttt{pt})이 정확히 이
+risk를 회피하는 정책이다.
+
+KS $p < 10^{-10}$는 두 partition이 본질적으로 다른 시장 분포에서 추출된 표본임을
+의미한다. 일반적인 OOS 검증의 ``train/test 동일 분포'' 가정이 본 BTC 1시간봉
+데이터에서는 성립하지 않으며, 본 논문이 보고한 generalization gap은
+\emph{시뮬레이션 artifact가 아닌 실제 시장 distribution shift의 직접 산물}이다.
+
+\subsection{exp027\_rl 사전 증거의 환경 의존성}
+\label{sec:disc_env_dependence}
+
+\S\ref{sec:intro_motivation}와 \S\ref{sec:pareto_env_dependence}에서 짧게
+언급한 환경 의존성을 본 절에서 자세히 다룬다.
+
+본 논문의 동기에 있던 강한 사전 증거(2026년 4월 Phase 2 후기 관찰)는
+\citet{kahneman1979prospect}의 단순화 형태인 asymmetric reward($\beta=2.0$)가
+Env-v3(4D 절대 gap, 지정가 체결, 4개 절대 gap action) 환경에서 Test Sharpe
+$1.955$로 ATR Test $0.935$를 $+109\%$ 초과한 결과였다. 이 사전 증거에 기반한
+당시 가정은 ``asymmetric reward만으로 RL이 ATR을 명확히 초과한다''(시나리오 A)
+였다.
+
+그러나 본 논문은 canonical 환경을 \emph{Env-v4 (2D ATR 비례 + 지정가 체결)}로
+변경했다. 이 환경은 다음 이유로 학술적으로 더 정합적이다:
+\begin{itemize}[leftmargin=*]
+\item ATR 비례 공식이 시장 변동성을 격자 폭에 자연 반영(\S\ref{sec:phase1_mechanism}).
+\item 2D action 공간이 \texttt{aggressiveness}와 \texttt{profit\_target}의
+의미 분리를 명확히 한다(\S\ref{sec:mdp}).
+\item 지정가 체결이 favorable bias artifact 제거(\S\ref{sec:env_dynamics}).
+\end{itemize}
+
+Env-v4에서 동일 \texttt{asym} 변형을 Optuna 재튜닝($\beta=3.42$)하여 학습한
+결과 Val Sharpe $1.681$로, sym Sharpe $1.871$보다 \emph{낮다}.
+
+\begin{table}[h]
+\centering
+\caption{exp027\_rl(Env-v3)과 본 논문(Env-v4)의 asym variant 결과 비교. 환경
+의존성 효과가 reward variant 효과를 \emph{크게 초과}한다.}
+\begin{tabular}{lcccc}
+\toprule
+환경 & action 차원 & 격자 공식 & asym Sharpe & vs ATR \\
+\midrule
+Env-v3 (exp027\_rl) & 4D 절대 gap & 비-ATR & $1.955$ (Test) & $+109\%$ \\
+Env-v4 (본 논문) & 2D ATR 비례 & ATR 비례 & $1.681$ (Val) & $+22\%$ \\
+\midrule
+$\Delta$ & --- & --- & $-0.27$ & $-87$ pp \\
+\bottomrule
+\end{tabular}
+\label{tab:disc_env_dependence}
+\end{table}
+
+표 \ref{tab:disc_env_dependence}는 \emph{환경 변경에 의한 변화가 reward variant
+변경에 의한 변화보다 큼}을 보인다. 본 논문은 이 사실을 정직하게 인정한다:
+\begin{itemize}[leftmargin=*]
+\item Env-v3의 강한 \texttt{asym} 우위는 그 환경 특수성에 종속될 가능성이 크다.
+4D 절대 gap action은 RL에 격자 폭 결정의 더 큰 자유도를 제공하며,
+asymmetric reward가 그 자유도 위에서 conservative 정책을 학습시킬 여지가 컸다.
+\item Env-v4에서는 ATR 비례 공식이 \emph{대부분의 격자 폭 결정을 이미 수행}하므로
+RL의 자유도가 줄어든다(\S\ref{sec:phase1_negative}). 그 위에서 reward variant의
+효과는 risk profile dimension의 trade-off로 나타난다(\S\ref{sec:pareto}).
+\end{itemize}
+
+다만 본 논문의 진짜 contribution은 환경 의존성을 \emph{우회}한 발견이다:
+canonical Env-v4 위에서도 \texttt{pt}가 OOS robust임을 양 source 일관 $p<0.002$로
+정량 확인했다(\S\ref{sec:oos}). 즉 본 논문의 H5는 환경 변경 이전의 사전 증거를
+\emph{대체}하는 새 발견이며, 학술적 정직성을 유지하면서 contribution을 강화한다.
+
+\subsection{단일 metric Winner의 한계와 Multi-Environment 평가 권고}
+\label{sec:disc_multi_env}
+
+본 논문의 \S\ref{sec:oos_three_env_reversal} 표는 ``X variant가 best reward
+design''이라는 단일 metric 결론의 한계를 직접 드러낸다. Val에서는 \texttt{sym}이,
+CPCV에서는 \texttt{dsr}이, Test에서는 \texttt{pt}가 각각 1위이다. RL 트레이딩
+정책 평가의 \emph{어떤 환경을 baseline으로 사용했느냐}가 ``우월한 변형''의 결론을
+바꾼다.
+
+이는 \citet{henderson2018rlreproducibility}의 reproducibility 우려를 reward
+design 비교의 차원으로 확장한 결과이다. 단일 시드 변동성이 변형 차이를 가리는
+것과 같은 메커니즘으로, 단일 평가 환경이 변형 차이의 \emph{차원 자체}를 결정한다.
+실제로 본 논문은 \S\ref{sec:pareto_clusters}의 single-split Cohen's $d$ 패턴에서
+\S\ref{sec:cpcv_cluster}의 CPCV preservation, \S\ref{sec:oos_three_env_reversal}의
+세 환경 reversal까지의 분석을 통해, 평가 환경이 reward 변형 사이의 거리 metric
+자체를 변형하는 현상을 정량화했다.
+
+본 논문은 RL 트레이딩 연구의 \emph{표준 평가 절차로 세 환경 동시 사용을 권고}한다:
+
+\begin{enumerate}[leftmargin=*]
+\item \textbf{Single-split Val}: variant의 일반적 정책 행동과 baseline 우열의
+지표.
+\item \textbf{CPCV multi-split}: in-sample 다양화에서의 robust 측정. 단일 split의
+우위가 시기-특수성인지 일반화인지 구분.
+\item \textbf{Sealed Test}: distribution shift 환경에서 OOS 안전성. 여기서의
+1위가 실 운용 우선순위를 가진다.
+\end{enumerate}
+
+세 환경 모두에서 동일 variant가 1위라면 강한 monotone 우위(시나리오 A),
+환경별 다른 winner라면 본 논문의 시나리오 D(trade-off frontier)이다. 단일
+환경의 결과를 ``X variant가 best''로 발표하는 관행은 본 논문이 정량 확인한
+세 환경 reversal에 비추어 학술적으로 부정확하다.
+
+\subsection{행동경제학에서 RL OOS 안전성으로}
+\label{sec:disc_pt_safety}
+
+\S\ref{sec:oos_h5}의 H5 ($\texttt{pt}$의 OOS robust)는 행동경제학 응용의
+새로운 차원을 시사한다. \citet{kahneman1979prospect}의 prospect theory는
+원래 인간 의사결정의 위험 회피를 설명하는 모형이며, 매개변수의 인간 행동
+추정값은 $\alpha \approx 0.88$(약한 오목성)과 $\lambda \approx 2.25$(중간 손실
+회피)이다(\citealt{tversky1992cumulative}).
+
+본 논문에서 Optuna가 발견한 RL 정책 최적 매개변수는 $\alpha = 0.683$,
+$\lambda = 3.303$이며, 두 값 모두 인간 표준보다 \emph{더 극단적이다}:
+\begin{itemize}[leftmargin=*]
+\item $\alpha = 0.683 < 0.88$: \emph{더 강한 오목성}. 이익에 대한 한계 효용
+체감이 인간보다 빠름.
+\item $\lambda = 3.303 > 2.25$: \emph{더 강한 손실 회피}. 손실의 weighted
+강도가 인간보다 약 $47\%$ 큼.
+\end{itemize}
+
+해석하면, RL 정책이 BTC 그리드 트레이딩의 OOS robust 수익을 추구할 때 ``인간보다
+더 보수적인'' 효용 함수를 선택하는 것이 유리하다는 의미이다. 이는 \S\ref{sec:oos_mechanism}의
+``매우 짧은 holding(mean 1.4h)으로 sell-side timing risk 회피'' 행동의 정책적
+기반이며, 인간 트레이더가 종종 표현하는 ``profit-taking이 너무 빠른'' 행동
+패턴이 OOS 안전성 측면에서는 합리적임을 시사한다.
+
+이 관찰은 두 가지 학술적 함의를 가진다:
+\begin{itemize}[leftmargin=*]
+\item 행동경제학의 추정 매개변수는 인간 행동의 기술(descriptive)에 fit되며,
+\emph{최적 정책}을 위한 매개변수는 다를 수 있다.
+\item RL의 reward design에 행동경제학의 효용 함수를 직접 사용할 때, 인간
+표준값을 그대로 채택하지 말고 도메인 데이터로 hyperparameter 탐색을 권장한다.
+\end{itemize}
+
+본 논문의 H5는 ``Prospect theory의 RL reward 사용이 OOS robust 정책을 산출한다''는
+응용 수준의 결론을 양 source 일관 $p<0.002$로 정량 확인했다. 이는 본 논문이
+알기로는 행동경제학과 RL의 교차점에서 정량적으로 검증된 첫 OOS 안전성 결과이다.
+
+\subsection{한계와 Future Work}
+\label{sec:disc_limitations}
+
+본 논문의 발견은 다음 한계 위에서 성립한다.
+
+\paragraph{(1) 자산 범위 — BTC 단일.}
+본 논문은 BTC/USDT 1시간봉 단일 자산만 평가했다. ``\texttt{pt}의 OOS robust''가
+주식, 외환, 원자재 등 다른 자산군에서도 성립할지는 본 연구가 답하지 않는다.
+특히 자산별로 distribution shift 의 형태가 다르므로 (BTC 의 leverage cycle vs
+주식의 결산 발표 ATH 등), 인과 메커니즘의 일반화 검증이 필요하다.
+
+\paragraph{(2) Test regime — Bull market 단일.}
+Test partition (2024-01 -- 2026-04) 은 BTC 의 강한 상승장 (\$42K $\to$ \$75K,
+$+78\%$) 이다. \texttt{pt}의 OOS robust 가 bear (예: 2018) 또는 sideways
+(예: 2019) regime 에서도 성립할지 확인 안 되었다. 본 논문 메커니즘은 ``짧은
+holding 이 sell-side timing risk 를 회피한다''인데, bear 시장에선 hold 자체가
+손실 누적 위험이 더 크므로 다른 메커니즘이 작용할 수 있다.
+
+\paragraph{(3) Slippage 모델 — Single level 0.02\%.}
+\S\ref{sec:slippage}는 단일 슬리피지 수준만 평가했다. 0.005\%, 0.01\%, 0.05\%
+다단계 sensitivity 분석을 수행하면 \texttt{pt}의 OOS robust 가 슬리피지에
+얼마나 견고한지 정량 확인할 수 있다. 본 논문에선 시간 제약 상 single level
+선택 (Binance taker side worst case).
+
+\paragraph{(4) Domain Randomization (DR) 미적용.}
+학습 시 episode reset 시점에 슬리피지/fee/시작 시점을 randomize하는 DR 기법은
+OOS robust 정책 학습에 효과적이다. 본 논문은 DR을 적용하지 않은 ``naive''
+학습에서도 \texttt{pt}가 OOS robust임을 보였으나, DR 적용 시 다른 변형(\texttt{dsr})의
+OOS 실패가 회복될 가능성이 있다. Future work에서 검증해야 한다.
+
+\paragraph{(5) 학습 길이 — 1M steps.}
+모든 variant 의 학습 길이가 1M step (시드당 \,$\sim$\,약 4시간 CPU) 으로 동일하다.
+\S\ref{sec:ppo_stab}의 학습 후반 정책 붕괴 현상(\texttt{sym} best 550k $\to$
+final 1M Sharpe $1.97 \to 1.21$)에 비추어, 더 긴 학습이 결과를 바꿀 가능성이
+있다. 다만 본 논문은 best\_checkpoint 만 사용하므로 학습 길이의 직접 영향은
+제한적이다.
+
+\paragraph{Future work.}
+이상 다섯 한계에 대응하는 후속 연구 주제:
+\begin{itemize}[leftmargin=*]
+\item 본 논문 H5를 multi-asset (주식 ETF, 외환) 환경에서 검증.
+\item 다양한 regime (2018 bear, 2019 sideways)을 시뮬레이션 또는 historical
+test로 추가.
+\item DR + meta-learning 결합으로 \texttt{dsr}의 OOS 실패 회복 가능성 탐색.
+\item 본 논문은 PPO 단일 알고리즘만 사용. SAC, TD3 등 다른 actor-critic
+방법에서 같은 reward 변형 비교 — algorithm 효과의 분리.
+\item Prospect theory의 다른 매개변수($\alpha$, $\lambda$의 시간 가변, reference
+point의 history 의존)를 변형하여 OOS robust 정책의 매개변수 sensitivity 분석.
+\end{itemize}
 
 % ─── 9. Conclusion ───────────────────────────────────────────────────────────
 \section{결론}
