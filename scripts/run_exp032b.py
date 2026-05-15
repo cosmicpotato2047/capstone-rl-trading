@@ -67,13 +67,13 @@ def _append_csv(csv_path: Path, row: dict) -> None:
 
 def run_one(variant: str, seed: int, base_cfg: dict,
             df_train: pd.DataFrame, df_val: pd.DataFrame,
-            timesteps: int, csv_path: Path) -> dict:
+            timesteps: int, csv_path: Path, exp_tag: str = "exp032b") -> dict:
     """단일 (variant, seed) 학습 + 평가 → summary dict."""
     cfg = deepcopy(base_cfg)
-    log_dir = Path(f"experiments/exp032b_{variant}/seed_{seed}")
+    log_dir = Path(f"experiments/{exp_tag}_{variant}/seed_{seed}")
     cfg["training"]["seed"]            = seed
     cfg["training"]["log_dir"]         = str(log_dir)
-    cfg["training"]["experiment_name"] = f"exp032b_{variant}_seed{seed}"
+    cfg["training"]["experiment_name"] = f"{exp_tag}_{variant}_seed{seed}"
 
     summary_path = log_dir / "summary.yaml"
     if summary_path.exists():
@@ -139,6 +139,9 @@ def main() -> None:
                    help="summary CSV 경로")
     p.add_argument("--config-tmpl", default="config/exp032b_{variant}_config.yaml",
                    help="variant 별 config 경로 템플릿")
+    p.add_argument("--exp-tag", default="exp032b",
+                   help="log_dir prefix (예: exp032b, exp033). "
+                        "experiments/{exp_tag}_{variant}/seed_{seed} 에 저장")
     args = p.parse_args()
 
     csv_path = Path(args.csv)
@@ -164,7 +167,7 @@ def main() -> None:
             print(f"\n[{n_done}/{n_total}] {variant} seed={seed}")
             try:
                 run_one(variant, seed, base_cfg, df_train, df_val,
-                        args.timesteps, csv_path)
+                        args.timesteps, csv_path, exp_tag=args.exp_tag)
             except Exception as e:
                 print(f"  ERROR: {variant} seed={seed} 실패 - {e}")
                 import traceback; traceback.print_exc()

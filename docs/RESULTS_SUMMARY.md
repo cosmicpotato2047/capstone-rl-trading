@@ -353,6 +353,25 @@ Early stopping 발동 (100k peak 후 patience=6) → 400k 종료.
 
 > **두 cluster 분리는 reward 의 손실 비대칭 (asym β, pt λ) 이 정책의 거래 빈도를 직접 결정한 결과 (H3 강한 지지). DSR 의 hold rate 우위는 sliding window risk-adjusted return 의 메모리 구조가 정책의 holding 시간을 늘린 결과 — reward 형식 → 행동 → 결과 의 메커니즘 인과 사슬 정량 확인.**
 
+### exp033 — Slippage 0.02% Robustness (완료, 2026-05-15) — §7.1
+
+**40 runs × 1M = 40M steps** with slippage_rate=0.0002, 3h 47min.
+
+| Variant | exp033 Sharpe ± std | vs exp032b | Cohen's d | Slippage retention | vs ATR 1.505 |
+|---|---|---|---|---|---|
+| sym  | 1.658 ± 0.30 | -0.21 | -0.80 | 88.6% | +10% |
+| dsr  | 1.551 ± 0.26 | -0.26 | -1.10 | 85.7% | +3% |
+| asym | 1.478 ± 0.10 | -0.20 | -2.01 | 87.9% | -2% |
+| pt   | 1.459 ± 0.10 | -0.21 | -2.18 | 87.6% | -3% |
+
+**Cluster preservation 정량 입증**: within-cluster |d| 0.288 vs across-cluster |d| 0.630 → **ratio 2.19×** (exp032b 2.22× 와 거의 동일).
+
+MDD 거의 변화 없음 (Δ +0.01~+0.55%). Slippage 가 거래 패턴은 안 바꾸고 마진만 깎음.
+
+#### §7.1 메인 결론
+
+> Slippage 0.02% 도입 후 모든 variant 가 ~12% Sharpe 감쇠, 단 **cluster 구조는 정량적으로 보존** (ratio 2.19×). Conservative cluster (asym, pt) 가 ATR-no-slippage 아래로 떨어져 H2 weak 약화 (ATR-with-slippage 재평가 필요).
+
 ### 진행 예정
 
 | Exp | 목적 | 결과 | 논문 챕터 |
@@ -361,9 +380,9 @@ Early stopping 발동 (100k peak 후 patience=6) → 400k 종료.
 | exp031 | BC warm-start | (완료, 폐기) | §3.4 |
 | exp032a | Variant reward hyperparameter 튜닝 | (완료) | §3.5 |
 | exp032b | Full 4 variant 비교 | (완료, 시나리오 D) | §5 Pareto frontier |
-| exp032c | Mechanism analysis | **(완료, 위)** | **§6 Mechanism** |
-| **exp033** | **Slippage + DR** | **(다음)** | **§7.1 Robustness** |
-| exp034 | CPCV 6-fold + DSR | (대기) | §5, §7.2 |
+| exp032c | Mechanism analysis | (완료) | §6 Mechanism |
+| exp033 | Slippage 0.02% | **(완료, 위)** | **§7.1 Robustness** |
+| **exp034** | **CPCV 6-fold + DSR** | **(다음)** | **§7.2** |
 | exp035 | Test 봉인 해제 | (대기) | §7.3 |
 
 ### exp032b 예상 결과 (시나리오)
@@ -404,3 +423,4 @@ Early stopping 발동 (100k peak 후 patience=6) → 400k 종료.
 | 2026-05-15 | exp032a 결과 추가 (4 reward variant Optuna 튜닝): dsr 1.89 / pt 1.80 / asym 1.52 (200k single-seed) |
 | 2026-05-15 | **exp032b 결과 추가** (4 variant × 10 seeds × 1M, §5 메인): 시나리오 D — Pareto frontier in risk space, sym 1.87 / dsr 1.81 / asym 1.68 / pt 1.67 |
 | 2026-05-15 | **exp032c 결과 추가** (Mechanism Analysis, §6 메인): Policy distance ratio 2.22× (cluster 통계적 분리 입증), DSR hold rate 2~6×, H3 강한 지지 |
+| 2026-05-15 | **exp033 결과 추가** (Slippage 0.02% Robustness, §7.1): Cluster preservation ratio 2.19× ≈ exp032b 의 2.22×. 일률적 ~12% Sharpe 감쇠. asym/pt 가 ATR-no-slippage 아래로 marginal 하락. |

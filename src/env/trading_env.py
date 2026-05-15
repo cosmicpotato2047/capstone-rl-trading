@@ -92,6 +92,10 @@ class BTCGridTradingEnv(gym.Env):
         # ── 환경 파라미터 ──────────────────────────────────────
         self.start_capital: float  = self.cfg_env["initial_cash"]
         self.fee_rate: float       = self.cfg_env["transaction_cost"]
+        # exp033: slippage_rate (default 0 = 기존 환경, exp033 에서 0.0002 = 0.02%)
+        # _execute_buy 에선 fill_price * (1 + slippage_rate) 로 비싸게 체결,
+        # _execute_sell 에선 fill_price * (1 - slippage_rate) 로 싸게 체결.
+        self.slippage_rate: float  = float(self.cfg_env.get("slippage_rate", 0.0))
         self.n_buy_orders: int     = self.cfg_env["n_buy_orders"]
         self.n_splits: int         = self.cfg_env["n_splits"]
         # threshold_basis: "price"(현재가) or "avg_price"(평단가)
@@ -513,9 +517,12 @@ class BTCGridTradingEnv(gym.Env):
         if spend > self.cash:    # 부동소수점 오차 안전망
             return False
 
+        # slippage: 매수는 의도가보다 비싸게 체결 (불리)
+        effective_fill_price = fill_price * (1.0 + self.slippage_rate)
+
         fee       = spend * self.fee_rate
         net_spend = spend - fee  # 수수료 차감 후 실제 매수에 쓰이는 금액
-        buy_qty   = net_spend / fill_price
+        buy_qty   = net_spend / effective_fill_price
 
         # 평단가 가중평균 업데이트
         total_cost     = self.avg_price * self.holdings + fill_price * buy_qty
@@ -541,7 +548,10 @@ class BTCGridTradingEnv(gym.Env):
         if qty <= 0.0:
             return 0.0
 
-        proceeds = qty * fill_price
+        # slippage: 매도는 의도가보다 싸게 체결 (불리)
+        effective_fill_price = fill_price * (1.0 - self.slippage_rate)
+
+        proceeds = qty * effective_fill_price
         fee = proceeds * self.fee_rate
         self.cash += proceeds - fee
         self.holdings -= qty
