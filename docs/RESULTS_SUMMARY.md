@@ -266,22 +266,70 @@ Early stopping 발동 (100k peak 후 patience=6) → 400k 종료.
 | **dsr** | #1 | η=0.0352 (≈ 1/28h EMA) | **1.8883** | **+25%** |
 | pt | #18 | α=0.6825, λ=3.3029 | 1.8035 | +20% |
 
-→ **DSR 1위, PT 2위, asym 3위.** 단 200k single-seed 라 노이즈 큼. exp032b (1M × 5 seeds) 가 본 검증.
+→ **DSR 1위, PT 2위, asym 3위.** 단 200k single-seed 라 노이즈 큼. exp032b 가 본 검증.
 
 → 출력: `config/exp032b_{sym,asym,dsr,pt}_config.yaml` 4개 (exp032b 입력으로 사용)
 
+### exp032b — 4 Reward Variant × 10 Seeds 본 비교 (완료, 2026-05-15) — §5 메인
+
+**40 runs × 1M = 40M steps**, 3h 44min 소요.
+
+| Variant | Best Sharpe (10 seeds) | Final Sharpe | MDD (%) | Calmar | Trades | Return (%) |
+|---|---|---|---|---|---|---|
+| **sym**  | **1.871 ± 0.22** | 1.015 ± 0.43 | 3.27 ± 0.82 | 0.60 | 120 | 6.60 |
+| **dsr**  | 1.809 ± 0.21 | **1.204 ± 0.41** | 4.33 ± 1.70 | 0.47 | 117 | **7.40** |
+| asym | 1.681 ± 0.10 | 1.101 ± 0.27 | **2.28 ± 0.31** | **0.755** | 96 | 5.23 |
+| pt   | 1.667 ± 0.09 | 1.082 ± 0.18 | 2.31 ± 0.29 | 0.735 | 85 | 4.88 |
+| (ATR baseline) | (1.505) | — | (9.83) | (0.153) | (2,121) | (35.80) |
+
+**모든 4 variant 가 ATR baseline 을 best 기준 +11~24% 초과.** 단 4 metric 1위가 모두 다름.
+
+#### 두 클러스터 (Cohen's d 기반)
+
+- **Aggressive {sym, dsr}**: 높은 Sharpe + 높은 MDD + 많은 거래 (~120)
+- **Conservative {asym, pt}**: 낮은 Sharpe + **낮은 MDD** + 적은 거래 (~90), Calmar 1·2위
+- 그룹 내 Cohen's d ≈ 0.15~0.29 / 그룹 간 Cohen's d > 0.79
+
+#### Pairwise Cohen's d (best Sharpe)
+
+|  | sym | asym | dsr | pt |
+|---|---|---|---|---|
+| sym  | — | +1.10 | +0.29 | +1.19 |
+| asym | -1.10 | — | -0.79 | +0.15 |
+| dsr  | -0.29 | +0.79 | — | +0.89 |
+| pt   | -1.19 | -0.15 | -0.89 | — |
+
+#### 본 논문 §5 메인 결론 (시나리오 D — 사전 A/B/C 분기에 추가)
+
+> **Reward variant 의 영향은 단일 metric (Sharpe) 의 alpha source 가 아니라, risk profile dimension 의 trade-off 로 나타난다. 4 variant 는 두 cluster (aggressive: sym, dsr / conservative: asym, pt) 로 통계적으로 분리되며, Sharpe-MDD 평면에서 Pareto-like frontier 를 형성한다.**
+
+#### 가설 H1~H4 점검
+
+- **H1** (sym ≈ ATR): 부정 — sym best Sharpe 1.871 >> ATR 1.505
+- **H2 weak** (asym/dsr/pt > ATR): 지지 — 4 모두 ATR 초과
+- **H2 strong** (asym/dsr/pt > sym): **부분 부정** — dsr ≈ sym, asym/pt < sym
+- **H3** (selective entry → conservative): 지지 — asym/pt 거래 횟수 sym 대비 ~75%
+- **H4** (CPCV+Slippage 유지): exp033/034 에서 검증 예정
+
+#### exp027_rl 사전 증거와의 정합성
+
+- Env-v3 (4D 절대 gap, asym β=2.0): Test Sharpe 1.955 (ATR 0.935 대비 **+109%**)
+- Env-v4 (2D ATR 비례, asym β=3.42): Val Sharpe 1.681 (ATR 1.505 대비 **+12%**, sym 보다 낮음)
+
+→ **환경 의존성 (4D → 2D) 효과가 reward variant 효과보다 큼.** 본 논문 §8 Discussion 에서 정직한 인정.
+
 ### 진행 예정
 
-| Exp | 목적 | 결과 (예정) | 논문 챕터 |
+| Exp | 목적 | 결과 | 논문 챕터 |
 |---|---|---|---|
 | exp030 | PPO 학습 안정화 | (완료, 위) | §3.3 |
 | exp031 | BC warm-start | (완료, 폐기) | §3.4 |
 | exp032a | Variant reward hyperparameter 튜닝 | (완료, 위) | §3.5 |
-| **exp032b** | **Full 4 variant 비교 (메인)** | **Sharpe + Cohen's d + IQM + BEST + P(A>B)** | **§5 Positive finding** |
-| exp032c | Mechanism analysis | Counterfactual + SHAP + Mediation | §6 Mechanism |
-| exp033 | Slippage + DR | Sim2Real robust | §7.1 |
-| exp034 | CPCV 6-fold + DSR | 15 paths 분포 + DSR p-value | §5, §7.2 |
-| exp035 | Test 봉인 해제 | Final Sharpe / MDD / Calmar | §7.3 |
+| exp032b | Full 4 variant 비교 | **(완료, 시나리오 D)** | **§5 Pareto frontier** |
+| **exp032c** | **Mechanism analysis (왜 두 cluster?)** | (다음) | **§6 Mechanism** |
+| exp033 | Slippage + DR | (대기) | §7.1 |
+| exp034 | CPCV 6-fold + DSR | (대기) | §5, §7.2 |
+| exp035 | Test 봉인 해제 | (대기) | §7.3 |
 
 ### exp032b 예상 결과 (시나리오)
 
@@ -319,3 +367,4 @@ Early stopping 발동 (100k peak 후 patience=6) → 400k 종료.
 |---|---|
 | 2026-05-14 | 본 문서 신설. Phase 1~2 결과 종합 |
 | 2026-05-15 | exp032a 결과 추가 (4 reward variant Optuna 튜닝): dsr 1.89 / pt 1.80 / asym 1.52 (200k single-seed) |
+| 2026-05-15 | **exp032b 결과 추가** (4 variant × 10 seeds × 1M, §5 메인): 시나리오 D — Pareto frontier in risk space, sym 1.87 / dsr 1.81 / asym 1.68 / pt 1.67 |

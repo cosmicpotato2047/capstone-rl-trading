@@ -1,0 +1,13 @@
+best_mdd_pct: 7.637694736761148
+best_n_cycles: 48
+best_n_trades: 124
+best_return_pct: 12.294366904779375
+best_val_sharpe: 1.9131096808726429
+final_mdd_pct: 16.111563551795943
+final_n_cycles: 23
+final_n_trades: 82
+final_return_pct: 7.797818865998771
+final_val_sharpe: 0.8612967040023729
+seed: 44
+variant: dsr
+wallclock_sec: 367.9
