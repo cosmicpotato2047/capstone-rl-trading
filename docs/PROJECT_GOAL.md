@@ -48,6 +48,60 @@
 
 ---
 
+## 결과 시나리오 분기 (2026-05-15 갱신, 시나리오 D 확정)
+
+본 논문은 결과가 아래 어느 시나리오로 나오든 작성 가능한 RQ 구조를 채택. 사전에 4개 시나리오를 명시 등재하여 ex-post rationalization 을 회피한다.
+
+### 사전 분기 (검증 전 — 2026-05-14)
+
+- **시나리오 A (낙관, strong positive)**: asym/dsr/pt 가 sym 과 ATR 모두를 Cohen's d ≥ 0.5 로 유의하게 초과. → "Reward design이 RL 알파의 핵심 채널" thesis 직접 지지.
+- **시나리오 B (중립, interesting partial)**: variant 간 차이는 있으나 ATR 에는 못 미침. → "ATR 비례 공식이 강한 변동성 흡수력 보유" — Negative finding 확장.
+- **시나리오 C (비관, negative 확장)**: variant 간 차이 미미. → "Reward 형식 변형은 ATR 비례 공식 안에서 알파를 추가하지 못함" — Phase 1 발견의 강화.
+
+### 사후 분기 추가 (검증 후 — 2026-05-15, exp032b 본 검증)
+
+- **시나리오 D (다차원 trade-off, Pareto frontier)**: 4 variant 가 두 cluster {aggressive: sym, dsr / conservative: asym, pt} 로 통계적 분리. Sharpe/MDD/Calmar/Return 1위가 모두 다름. 단일 winner 없음. → "Reward design 의 영향은 단일 Sharpe alpha source 가 아니라 **risk profile dimension 의 trade-off**" — nuanced positive contribution.
+
+### 현재 확정 시나리오: **D**
+
+**근거** (exp032b, 40 runs × 1M steps, 2026-05-15):
+
+| Variant | Best Sharpe | MDD% | Calmar | Cluster |
+|---|---|---|---|---|
+| sym  | 1.871 ± 0.22 | 3.27 | 0.60 | aggressive |
+| dsr  | 1.809 ± 0.21 | 4.33 | 0.47 | aggressive |
+| asym | 1.681 ± 0.10 | 2.28 | 0.755 | conservative |
+| pt   | 1.667 ± 0.09 | 2.31 | 0.735 | conservative |
+| ATR  | 1.505 | 9.83 | 0.153 | — |
+
+- 4 variant 모두 ATR 을 +11~24% 초과 (H2 weak form 지지)
+- sym 이 Sharpe 1위 → H2 strong form ("variant > sym") **부분 부정**
+- 그룹 내 |Cohen's d| < 0.30 / 그룹 간 > 0.79 → 두 cluster 통계적 분리
+
+**가설 H1~H4 점검**:
+| 가설 | 결과 | 근거 |
+|---|---|---|
+| H1 (sym ≈ ATR) | 부정 | sym best 1.871 >> ATR 1.505 |
+| H2 weak (variant > ATR) | 지지 | 4 모두 ATR 초과 |
+| H2 strong (variant > sym) | 부분 부정 | dsr ≈ sym, asym/pt < sym |
+| H3 (selective entry) | 지지 | asym/pt 거래 ~75% of sym |
+| H4 (CPCV+Slippage robust) | 검증 예정 | exp033/034 |
+
+**exp027_rl 사전 증거의 환경 의존성 인정**:
+- Env-v3 (4D 절대 gap, asym β=2.0): Test Sharpe 1.955 (+109% vs ATR)
+- Env-v4 (2D ATR 비례, asym β=3.42): Val Sharpe 1.681 (+12% vs ATR, sym 보다 낮음)
+- → **환경 의존성 효과가 reward variant 효과보다 큼**. 본 논문 §8 Discussion 에서 정직한 인정.
+
+### Frame 결정
+
+본 논문 §5 메인 thesis (시나리오 D 위에서):
+
+> "**Reward variant 의 영향은 단일 metric (Sharpe) 의 alpha source 가 아니라, risk profile dimension 의 trade-off 로 나타난다. 4 variant 는 두 cluster (aggressive vs conservative) 로 통계적으로 분리되며, Sharpe-MDD 평면에서 Pareto-like frontier 를 형성한다. 단순 'X reward 가 best alpha' 결론보다 multi-dimensional trade-off 의 정직한 정량화가 본 논문의 contribution 이다.**"
+
+→ §5 는 "Pareto frontier discovery" 로, §6 (exp032c mechanism) 은 "왜 두 cluster?" 메커니즘 정량화로, §8 Discussion 은 exp027_rl 의 환경 의존성 정직 인정으로 구성.
+
+---
+
 ## 평가 방법론
 
 ### 메인 비교 단위
@@ -177,3 +231,4 @@
 |---|---|---|
 | 2026-05-14 (1차) | 본 문서 신설. RQ를 "RL이 고정 그리드 대비 우위?"에서 "Reward design이 RL 알파의 핵심 채널?" (단정문) 로 전환. 자산 확장 제외 결정. | 사용자와 합의 (2026-05-14 대화) |
 | 2026-05-14 (2차) | RQ를 단정문 → **열린 질문 형태로 수정**. 사전 증거(exp027_rl)는 가설 H1~H4의 정당성으로 유지하되, RQ 자체는 검증 결과에 따라 어느 쪽이든 살아남는 형태로. | 학술 컨벤션 준수 + 확증 편향 회피. 사용자 지적으로 수정. |
+| 2026-05-15 | **결과 시나리오 분기 섹션 신설**. 사전 시나리오 A/B/C 등재 + exp032b 본 검증 결과 시나리오 D (Pareto frontier) 사후 추가 + 현재 확정 시나리오 = D. 본 논문 §5 메인 thesis 갱신. | exp032b 결과 (40 runs × 1M, 두 cluster 발견). 시나리오 A 사전 증거 (exp027_rl Env-v3) 의 환경 의존성 정직 인정. |
