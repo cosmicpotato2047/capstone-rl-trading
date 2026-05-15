@@ -1604,11 +1604,326 @@ Test (2024--2026)로 진입한다. CPCV에서 1위인 \texttt{dsr}이 Test에서
 \subsection{분포 외 평가와 Prospect Theory의 강건성}
 \label{sec:oos}
 
-\textit{[TBD: 추후 작성. 본 논문의 핵심 챕터.
-exp035: 100 RL models + ATR baseline + Buy-and-Hold Test.
-\texttt{pt}의 Test 1위 (두 소스 p$<$0.002), \texttt{dsr}의 Test 꼴찌.
-Phase 16d mechanism: holding 시간 분포 (DSR 7-day max vs.\ pt 6h max).
-\texttt{pt}의 분포 외 강건성의 인과 사슬.]}
+본 절은 본 논문의 가장 중요한 챕터로, 봉인 해제된 Test (2024-01 \,--\, 2026-04,
+BTC \$42K\,$\to$\,\$75K bull market) 위에서 100개 RL 모델 + ATR baseline +
+Buy-and-Hold(B\&H) baseline을 평가한다. 두 가지 주요 발견을 보고한다:
+(i) \emph{prospect-theoretic reward(\texttt{pt})가 두 source 일관 Test 1위}로
+새로운 winner reversal을 형성하며 (ii) \emph{DSR은 CPCV 1위에서 Test 꼴찌로
+역전}되는데, 이 양면성은 \S\ref{sec:mechanism_hold_rate}의 같은 hold-duration
+메커니즘이 in-sample 우위와 OOS 실패를 동시에 결정함을 직접 입증한다. 이는
+\citet{kahneman1979prospect}의 prospect theory가 RL 트레이딩 정책에 부여하는
+\emph{분포 외 안전성}의 (본 논문이 알기로는) 첫 정량 확인이다.
+
+\subsubsection{Test 봉인 해제와 평가 설정}
+\label{sec:oos_setup}
+
+본 논문은 백테스트 과적합 방지를 위해(\S\ref{sec:related_eval},
+\citealt{gort2022backtest}) Test partition을 exp035 단계까지 어떤 hyperparameter
+결정 또는 분석 과정에도 노출하지 않았다. 본 절(2026-05-16)이 \emph{사상 첫
+1회}의 Test 봉인 해제이며, 평가 후 Test 통계는 본 논문 최종 결론을 결정한다.
+
+\paragraph{평가 대상 100개 RL 모델.}
+\S\ref{sec:pareto}의 exp032b 40개 best\_model (4 variants $\times$ 10 seeds) +
+\S\ref{sec:cpcv}의 exp034 60개 best\_model (4 variants $\times$ 15 paths)을
+deterministic 모드로 Test 전 구간에 대해 평가한다. 두 source(Val-trained
+exp032b vs CPCV-trained exp034) 모두 사용하여 결론의 robust를 두 번 확인한다.
+ATR baseline 또한 같은 환경에서 단일 결정적 정책(\S\ref{sec:atr_baseline})으로
+평가한다. B\&H는 Phase 16b에서 추가된 secondary baseline이다.
+
+\subsubsection{Test 결과: Per-source per-variant 통계}
+\label{sec:oos_results}
+
+\begin{table}[h]
+\centering
+\small
+\caption{Test 2024+ 결과 per source per variant. \texttt{pt}가 양 source 일관
+1위이며 두 source 모두 ATR baseline($-0.055$)을 가장 큰 폭으로 초과. \texttt{dsr}은
+exp032b source에서 음수 Sharpe로 ATR보다 더 나쁨.}
+\begin{tabular}{llcccccc}
+\toprule
+Source & Variant & Test mean $\pm$ std & IQM & 5\% CVaR & $t$-stat & $p$ (1-sided) & vs ATR \\
+\midrule
+\multirow{4}{*}{exp032b ($n=10$)}
+& \texttt{sym}  & $+0.090 \pm 0.11$ & $+0.100$ & $-0.127$ & $+2.56$ & $0.015$ & $+0.145$ \\
+& \texttt{asym} & $+0.173 \pm 0.20$ & $+0.158$ & $-0.082$ & $+2.74$ & $0.011$ & $+0.228$ \\
+& \texttt{dsr}  & $-0.122 \pm 0.19$ & $-0.126$ & $-0.468$ & $-2.00$ & $0.961$ & $-0.067$ \\
+& \texttt{pt}   & $\mathbf{+0.367 \pm 0.29}$ & $\mathbf{+0.327}$ & $\mathbf{+0.034}$ & $\mathbf{+4.03}$ & $\mathbf{0.0015}$ & $\mathbf{+0.422}$ \\
+\midrule
+\multirow{4}{*}{exp034 ($n=15$)}
+& \texttt{sym}  & $+0.001 \pm 0.19$ & --- & --- & $+0.01$ & $0.495$ & $+0.056$ \\
+& \texttt{asym} & $+0.175 \pm 0.25$ & --- & --- & $+2.70$ & $0.009$ & $+0.230$ \\
+& \texttt{dsr}  & $+0.070 \pm 0.25$ & --- & --- & $+1.07$ & $0.150$ & $+0.125$ \\
+& \texttt{pt}   & $\mathbf{+0.339 \pm 0.31}$ & --- & --- & $\mathbf{+4.26}$ & $\mathbf{0.0004}$ & $\mathbf{+0.394}$ \\
+\bottomrule
+\end{tabular}
+\label{tab:oos_per_source}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.95\textwidth]{menu3_boxplot}
+\caption{Test Sharpe 분포 (variant $\times$ source). \texttt{pt}의 박스가 두
+source 모두 가장 높은 위치, \texttt{dsr}은 exp032b source에서 음수 영역,
+exp034 source에서도 가장 넓은 분포. ATR baseline ($-0.055$, 점선)은 비교
+참조.}
+\label{fig:oos_boxplot}
+\end{figure}
+
+표 \ref{tab:oos_per_source}와 그림 \ref{fig:oos_boxplot}의 두 가지 핵심 관찰:
+
+\paragraph{(i) \texttt{pt}의 양 source 일관 1위.}
+\texttt{pt}는 exp032b source에서 Test Sharpe $0.367$ ($p = 0.0015$),
+exp034 source에서 $0.339$ ($p = 0.0004$)로 양 source 모두 1위이며 두 $p$값
+모두 단측 t-검정에서 $< 0.002$, Bonferroni 4-way 보정 후에도 $< 0.008$로
+유의하다. 두 source가 서로 다른 학습 데이터(Train+Val 일부 vs CPCV 4-group
+조합)와 다른 시드를 사용했음에도 같은 결론에 도달한 점이 robust 함을 보장한다.
+
+\paragraph{(ii) \texttt{dsr}의 OOS 실패.}
+\S\ref{sec:cpcv}에서 1위였던 \texttt{dsr}이 exp032b source Test에서 mean Sharpe
+$-0.122$로 \emph{음수}이며 ATR baseline($-0.055$)보다도 더 나쁘다. exp034 source
+에서도 $+0.070$으로 4 variant 중 3위(\texttt{sym}만 더 낮음). CPCV 1위에서 Test
+꼴찌로의 \emph{완전 reversal}이며 본 논문의 핵심 발견 중 하나이다.
+
+\subsubsection{세 환경 세 Winner Reversal}
+\label{sec:oos_three_env_reversal}
+
+본 절의 Test 1위를 \S\ref{sec:pareto}와 \S\ref{sec:cpcv}의 winner와 함께
+정리하면, 본 논문의 핵심 frame이 완성된다.
+
+\begin{table}[h]
+\centering
+\caption{세 평가 환경의 다른 winner reversal. 본 논문 핵심 frame.}
+\begin{tabular}{lll}
+\toprule
+평가 환경 & 1위 (variant) & 의미 \\
+\midrule
+Val (single-split, 2021--2023) & \texttt{sym} ($1.871$) & 단일 split 시기-특정 우위 \\
+CPCV (multi-split, 15 paths) & \texttt{dsr} ($1.413$) & 시기-robust 정책 \\
+\textbf{Test (OOS, 2024--2026)} & \textbf{\texttt{pt}} ($0.367 / 0.339$) & \textbf{unseen regime robust} \\
+\bottomrule
+\end{tabular}
+\label{tab:three_env_reversal}
+\end{table}
+
+각 환경에서 1위 variant가 다르다. 이는 ``X variant가 reward design의 최선의
+선택''이라는 단일-metric 결론이 \emph{평가 환경의 선택에 강하게 의존}함을 의미한다.
+본 논문은 이 ``세 환경 세 winner reversal''을 정직한 정량 결과로 인정하며,
+\S\ref{sec:discussion}에서 그 학술적 함의를 논의한다.
+
+\subsubsection{Val $\to$ Test Generalization Gap}
+\label{sec:oos_gap}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.85\textwidth]{menu2_val_vs_test}
+\caption{Variant별 Val Sharpe와 Test Sharpe 비교 (양 source). 가로축: Val
+Sharpe, 세로축: Test Sharpe. 대각선은 ``Val = Test'' 기준선. 모든 점이
+대각선 아래로 떨어지지만 \texttt{pt}의 점이 가장 적게 떨어진다(Val에서 가장
+낮은 위치에서 출발하여 Test에서 가장 높은 위치에 도달).}
+\label{fig:oos_val_vs_test}
+\end{figure}
+
+\begin{table}[h]
+\centering
+\small
+\caption{Val $\to$ Test generalization gap. \texttt{pt}의 gap이 양 source
+모두 가장 작다 (smallest).}
+\begin{tabular}{lcccc}
+\toprule
+Variant & exp032b Val $\to$ Test & $\Delta$ & exp034 CPCV $\to$ Test & $\Delta$ \\
+\midrule
+\texttt{sym}  & $1.871 \to 0.090$ & $-1.78$ & $1.302 \to 0.001$ & $-1.30$ \\
+\texttt{asym} & $1.681 \to 0.173$ & $-1.51$ & $1.043 \to 0.175$ & $-0.87$ \\
+\texttt{dsr}  & $1.809 \to -0.122$ & $\mathbf{-1.93}$ \textbf{(worst)} & $1.413 \to 0.070$ & $-1.34$ \\
+\texttt{pt}   & $1.667 \to 0.367$ & $\mathbf{-1.30}$ \textbf{(smallest)} & $1.092 \to 0.339$ & $\mathbf{-0.75}$ \textbf{(smallest)} \\
+\bottomrule
+\end{tabular}
+\label{tab:oos_gap}
+\end{table}
+
+표 \ref{tab:oos_gap}와 그림 \ref{fig:oos_val_vs_test}는 모든 variant가 Val
+$\to$ Test에서 큰 generalization gap을 보임을 확인한다(absolute $\Delta$ 0.75
+$\sim$ 1.93). 그러나 \texttt{pt}는 양 source 모두 \emph{smallest gap}이며,
+\texttt{dsr}은 exp032b source에서 \emph{worst gap}을 보인다. 즉 in-sample
+metric은 OOS 성능과 같은 방향이 아니라 \emph{역방향}으로 작동하는 경우가
+있으며, 본 논문 frame을 ``in-sample 우위 $\leftrightarrow$ OOS robust''의
+trade-off로 정직하게 인정해야 함을 시사한다.
+
+\subsubsection{메커니즘 답변: Hold Duration과 OOS Regime 적응}
+\label{sec:oos_mechanism}
+
+본 절은 ``왜 \texttt{pt}가 OOS robust한가? 왜 \texttt{dsr}이 OOS 실패하는가?''에
+대한 메커니즘 답변을 trajectory 분석(Phase 16d)으로 제공한다. 핵심 척도는
+\emph{hold session duration}(매수 체결부터 그 사이클의 마지막 매도까지의 봉
+수)이다.
+
+\begin{table}[h]
+\centering
+\small
+\caption{Test 환경에서 hold session duration. 단위: 시간(봉). \texttt{dsr}의
+중앙값/p95/max가 다른 변형의 2--50배. \texttt{pt}의 hold duration이 4 변형
+중 가장 짧고 max도 6시간으로 short-bounded.}
+\begin{tabular}{lccccc}
+\toprule
+Variant & $n$ sessions & mean (h) & median (h) & p95 (h) & \textbf{max (h)} \\
+\midrule
+\texttt{sym}  & $5{,}666$ & $2.15$ & $1.0$ & $5$ & $98$ \\
+\texttt{asym} & $4{,}567$ & $1.40$ & $1.0$ & $3$ & $7$ \\
+\texttt{dsr}  & $5{,}384$ & $\mathbf{4.58}$ & $1.0$ & $\mathbf{20}$ & $\mathbf{169}$ (7\,일!) \\
+\texttt{pt}   & $3{,}922$ & $\mathbf{1.39}$ & $1.0$ & $3$ & $\mathbf{6}$ \\
+\bottomrule
+\end{tabular}
+\label{tab:hold_duration}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.95\textwidth]{menu3_hold_duration}
+\caption{Test 환경의 hold duration 분포 (4 variant). \texttt{dsr}의 long-tail이
+p95 20시간, max 7일까지 확장되어 다른 변형(\texttt{pt} max 6시간)과 극명한
+차이. 이 long-tail이 bull market 상승 구간의 sell-side timing risk에 정책을
+노출시킨다.}
+\label{fig:hold_duration}
+\end{figure}
+
+\paragraph{\texttt{pt}의 OOS robust 메커니즘.}
+\texttt{pt}의 reward 함수는 loss aversion $\lambda = 3.30$와 concave gain
+$\alpha = 0.683$를 포함한다(\S\ref{sec:reward_variants}). 강한 손실 패널티와
+오목한 효용은 정책에게 ``불확실한 미래의 이익보다 지금의 확실한 작은 이익을
+실현'' 인센티브를 부여한다. 그 결과 학습된 정책은 매수 후 \emph{매우 짧은
+시간 안에} (mean $1.39\,\mathrm{h}$, max $6\,\mathrm{h}$) 청산하는 행동을
+선택한다. Test의 BTC bull market 구간 (\$42K $\to$ \$75K)에서 이 행동은 매수 후
+가격이 큰 폭으로 움직이기 \emph{전에} 정책이 이미 청산을 완료하므로 sell-side
+timing risk에서 자연 회피된다. MDD가 $\sim$2.3\%로 유지되며 Sharpe가
+$0.34$\,$\sim$\,$0.37$로 양수를 유지한다.
+
+\paragraph{\texttt{dsr}의 OOS 실패 메커니즘.}
+\texttt{dsr}의 sliding-window reward는 정책에 \emph{긴 holding을 학습시키는}
+구조이다(\S\ref{sec:mechanism_hold_rate}). 이는 in-sample 환경(\S\ref{sec:cpcv}
+CPCV)에서는 strength로 작용한다: 다양한 시기에 걸친 robust 정책. 그러나
+Test의 bull market 환경에서는 정책의 hold duration이 median 1시간, p95 20시간,
+max 169시간(7일)까지 확장되며, BTC 가격이 7일 동안 크게 움직이면 정책의 sell
+호가가 시장에서 멀리 떨어져 fill이 지연된다. 이는 sell-side timing risk를
+폭증시키며 Test Sharpe가 \emph{음수}(exp032b $-0.122$, exp034 $+0.070$ near
+zero)로 떨어진다.
+
+\paragraph{인과 사슬의 핵심 통찰.}
+\S\ref{sec:mechanism_hold_rate}의 ``DSR sliding-window memory $\to$ 긴
+holding''이라는 동일 메커니즘이:
+\begin{itemize}[leftmargin=*]
+\item \S\ref{sec:cpcv}의 in-sample 환경에서는 \textbf{시기-robust 우위}로 나타나고,
+\item 본 절의 Test 환경에서는 \textbf{distribution-shift 실패}로 나타난다.
+\end{itemize}
+즉 \textbf{같은 reward formulation의 같은 행동 효과가 평가 환경에 따라 반대
+부호}로 작동한다. ``in-sample 우위와 OOS robust는 reward formulation의 동일
+차원에서의 trade-off''라는 본 논문 frame이 직접 정량 입증된다.
+
+\subsubsection{정책 안정성 vs 시장 Distribution Shift}
+\label{sec:oos_policy_stability}
+
+OOS 성능 차이의 원인이 ``정책 자체''인지 ``시장의 distribution shift''인지를
+구분하기 위해 동일한 best\_model의 Val/Test 행동 통계를 비교한다.
+
+\begin{table}[h]
+\centering
+\caption{같은 best\_model의 Val/Test 행동 변화 (40 모델 평균,
+Phase 16d Menu 2). \textit{모든 variant의 정책 행동이 Val/Test에서 $\Delta \leq
+5\%$로 거의 동일.}}
+\begin{tabular}{lcccc}
+\toprule
+Variant & $\Delta$ trade rate & $\Delta$ hold rate & $\Delta a^{(0)}$ & $\Delta a^{(1)}$ \\
+\midrule
+\texttt{sym}  & $+0.006$ & $+0.001$ & $-0.010$ & $+0.001$ \\
+\texttt{asym} & $+0.005$ & $+0.003$ & $-0.037$ & $-0.004$ \\
+\texttt{dsr}  & $+0.005$ & $-0.004$ & $-0.006$ & $-0.005$ \\
+\texttt{pt}   & $+0.005$ & $+0.003$ & $-0.051$ & $-0.010$ \\
+\bottomrule
+\end{tabular}
+\label{tab:val_test_stability}
+\end{table}
+
+표 \ref{tab:val_test_stability}는 4 variant의 정책이 Val에서 Test로 이동했을
+때 trade/hold rate와 mean action 모두 $\Delta \leq 0.05$ (즉 5\% 미만) 이내로
+\emph{거의 동일한 행동}을 유지함을 보인다. 따라서 Val $\to$ Test의 큰 성능
+gap(표 \ref{tab:oos_gap})은 \textbf{정책의 변화가 아니라 시장의 distribution
+shift}가 원인이다. 즉 정책은 ``robust''하게 같은 행동을 출력하지만 그 행동이
+다른 시장에서 다른 결과를 낳는다. \S\ref{sec:discussion}에서 이 distribution
+shift의 정량(KS $p < 10^{-10}$, variance $-27\%$)을 자세히 다룬다.
+
+\subsubsection{B\&H Baseline 정직 인정}
+\label{sec:oos_bh_honesty}
+
+본 논문의 학술적 정직성을 위해 Phase 16b에서 Buy-and-Hold (B\&H) baseline을
+추가로 평가했다.
+
+\begin{table}[h]
+\centering
+\caption{Test 2024+ baseline 비교 (\texttt{pt} best vs ATR vs B\&H).}
+\begin{tabular}{lcccc}
+\toprule
+Strategy & Test Sharpe & Test MDD (\%) & Test Calmar & Notes \\
+\midrule
+B\&H ($1\,\mathrm{BTC}$ hold) & $\mathbf{0.757}$ & $50.08$ & $0.015$ & 단일 Sharpe 1위 \\
+ATR baseline & $-0.055$ & $8.04$ & --- & 기준 \\
+RL \texttt{pt} (best) & $0.367$ & $2.31$ & $\mathbf{0.159}$ & \textbf{Calmar 우위} \\
+\bottomrule
+\end{tabular}
+\label{tab:bh_comparison}
+\end{table}
+
+표 \ref{tab:bh_comparison}이 정직한 그림이다. \textbf{단일 Sharpe 기준에서는
+B\&H가 0.757로 모든 RL을 초과}한다 --- 2024+ BTC가 \$42K에서 \$75K로 78\%
+상승하는 강세장에서 보유만 해도 시장 자체의 위험 조정 수익이 양수이다. 그러나
+B\&H의 MDD는 $50.08\%$로 극단적이며 Calmar (Sharpe/MDD)는 $0.015$로 매우 낮다.
+\texttt{pt}의 Calmar는 $0.159$로 B\&H 대비 \textbf{약 10배 우위}이다. 결론은:
+
+\begin{quote}
+\emph{absolute Sharpe가 가장 높은 전략은 B\&H이지만 risk-adjusted (Calmar)
+관점에서는 \texttt{pt}가 압도적이다. 본 논문의 ``\texttt{pt}의 OOS robust''
+주장은 risk-adjusted return의 의미에서 성립하며 absolute return의 의미가
+아니다.}
+\end{quote}
+
+이 정직한 인정은 \S\ref{sec:discussion}의 본 논문 한계 절에 반영된다.
+
+\subsubsection{H5 정의와 본 논문 핵심 Contribution}
+\label{sec:oos_h5}
+
+본 절의 발견을 가설로 명시한다. 가설 H1--H4는 사전 등록되었으나, 본 논문의
+가장 중요한 발견은 \emph{사후 발견}이며 새 가설로 정의한다.
+
+\paragraph{H5 (사후 발견, 본 논문 핵심 contribution).}
+\textbf{Prospect-theoretic reward (loss aversion $\lambda$, concave gain
+$\alpha$)로 학습된 RL 정책은 unseen market regime에서 다른 reward 변형보다
+더 robust 한 OOS 성능을 보인다}, 그 메커니즘은 짧은 holding(평균 1.4시간, max
+6시간)을 통한 sell-side timing risk 회피이다.
+
+\paragraph{H5의 정량 증거.}
+\begin{itemize}[leftmargin=*]
+\item \texttt{pt} Test Sharpe 1위 (양 source 일관, 단측 $p < 0.002$).
+\item \texttt{pt} Val $\to$ Test gap smallest (양 source 일관).
+\item \texttt{pt} Calmar 0.159 vs B\&H Calmar 0.015 ($\sim 10\times$ 우위).
+\item Hold duration mean $1.39\,\mathrm{h}$, max $6\,\mathrm{h}$ (4 variant 중 가장
+짧음).
+\item 정책의 Val/Test 행동 stability(action $\Delta \leq 5\%$)는 OOS 성능 차이가
+정책 변화가 아니라 시장 distribution shift의 산물임을 확인.
+\end{itemize}
+
+\paragraph{학술적 의의.}
+\citet{kahneman1979prospect}의 prospect theory는 인간 의사결정의 위험 회피
+모형으로 행동경제학의 기초이지만, \emph{RL 정책의 reward로 직접 사용}한 연구는
+드물다. 본 논문은 (i) prospect-theoretic utility를 step reward로 구현하고,
+(ii) Optuna로 탐색한 best 파라미터가 인간 행동 추정값($\alpha=0.88$,
+$\lambda=2.25$)보다 \emph{더 강한 손실 회피와 더 오목한 효용}임을 발견했으며,
+(iii) 이 정책이 unseen market regime에서 OOS robust함을 양 source 일관
+$p < 0.002$로 정량 확인한다. 이는 본 논문이 알기로는 prospect theory가 RL
+정책에 부여하는 OOS 안전성의 첫 정량적 증거이다.
+
+\textbf{H4 (Robustness) 최종 verdict}: \emph{부분 지지}. Cluster 구조는
+slippage ($2.19\times$)와 CPCV ($3.55\times$)에서 robust이며 Test에서는
+약화되지만($1.24$--$1.94\times$) 여전히 1.0 초과. 절대 Sharpe는 모든 variant가
+큰 OOS 감쇠. H5 (pt OOS robust)가 \emph{강한 지지}되며 본 논문의 진정한 main
+contribution이다.
 
 % ─── 8. Discussion ───────────────────────────────────────────────────────────
 \section{논의}

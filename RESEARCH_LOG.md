@@ -4145,3 +4145,47 @@ PAPER_OUTLINE §7.2 매핑: exp034 (CPCV 6-fold, 15 paths) 결과. DSR variant r
 
 - 빌드 중 발견한 영문 §7.2.3 의 중복 `\end{tabular}` (수정 완료) 와 같은 사소한 LaTeX 오류 를 §9 작성 후 전체 다시 한 번 검토 (linter / 검사).
 
+---
+
+## 2026-05-16 — §7.3 Final OOS + pt OOS Robust 본문 작성 완료 (양 버전, 본 논문 핵심)
+
+### Objective
+
+PAPER_OUTLINE §7.3 매핑: exp035 (100 RL 모델 + ATR + B&H Test) + Phase 16b (B&H 정직 인정) + Phase 16d (hold duration mechanism). 본 논문의 진짜 contribution — H5 정의 및 정량 증거 + 세 환경 세 winner reversal frame 완성.
+
+### Changes
+
+| 파일 | 변경 |
+|---|---|
+| `reports/paper/main_ko.tex` | §7.3 TBD placeholder → 8 sub-subsection 본문 (~6 페이지) — 빌드 중 `\end tabular}` 1건 수정 |
+| `reports/paper/main.tex` | §7.3 TBD placeholder → 8 sub-subsection 본문 (~6 페이지) |
+
+### 8 sub-subsection 구조
+
+- §7.3.1 Test 봉인 해제 + 평가 설정 (100 RL 모델, CLAUDE.md 규칙 1 정당 해제)
+- §7.3.2 Per-source per-variant 결과 — pt 양 source 1위 (Sharpe 0.367/0.339, p<0.002), dsr 음수 reversal
+- §7.3.3 세 환경 세 winner reversal 표 — 본 논문 핵심 frame 완성 (Val sym / CPCV dsr / Test pt)
+- §7.3.4 Val→Test gap — pt smallest 양 source, dsr worst (exp032b -1.93)
+- §7.3.5 메커니즘 답변 (Phase 16d) — Hold duration 표: pt mean 1.4h max 6h vs dsr mean 4.58h max 169h (7일). 같은 메커니즘이 CPCV 우위 ↔ OOS 실패의 양면. "in-sample 우위 ↔ OOS robust trade-off" 정량 입증.
+- §7.3.6 정책 안정성 vs 시장 shift — Val/Test 행동 Δ<5%, 결과 차이는 distribution shift 산물
+- §7.3.7 B&H 정직 인정 — Test Sharpe 0.757 > 모든 RL, 단 Calmar pt 10× B&H 우위. "absolute Sharpe vs risk-adjusted" frame.
+- §7.3.8 H5 정의 + 학술적 의의 — Kahneman-Tversky (1979) prospect theory 의 RL OOS 안전성 첫 정량 확인. 인간 표준 α=0.88/λ=2.25 보다 더 강한 α=0.68/λ=3.30 의 RL 정책 선택.
+
+### Results
+
+- 빌드 검증: `xelatex main_ko.tex` 3회 + bibtex → **38 페이지** (이전 32, +6)
+- `pdflatex main.tex` 3회 + bibtex → **40 페이지** (이전 34, +6)
+- §7.3 분량 ~17% 목표 일치 (+6 페이지)
+- 표 5개 (per-source-per-variant / 3-env reversal / Val→Test gap / hold duration / Val-Test stability / B&H 비교), figure 3개 (menu3_boxplot, menu2_val_vs_test, phase16d/menu3_hold_duration)
+- **H5 (pt OOS robust) 정의 + 강한 정량 지지** 본 논문 진짜 main contribution
+- 세 환경 세 winner reversal frame 완성
+
+### Decision
+
+다음 작업 = §8 Discussion (분량 비중 13%, distribution shift KS p<1e-10, exp027_rl 환경 의존성, 한계). 사용자 명시적 "진행" 응답 후 시작.
+
+### 보류 아이디어
+
+- §7.3.5 의 ``같은 reward formulation 의 같은 행동 효과가 평가 환경에 따라 반대 부호'' 의 통찰을 §9 Conclusion 또는 abstract figure 캡션에 강조 - 본 논문 가장 핵심.
+- §7.3.7 B&H baseline 의 Calmar 22× 우위 frame 이 §8 한계 절에 reformulate 검토. ``RL pt 의 OOS robust 는 grid trading 의 risk-adjusted 의미에서이며, absolute return 의 의미가 아님'' 명시.
+
