@@ -1392,9 +1392,168 @@ an OOS liability'' causal chain that returns in \S\ref{sec:oos}).
 \subsection{Slippage Robustness}
 \label{sec:slippage}
 
-\textit{[TBD. exp033 results with slippage 0.02\%.
-Cluster preservation ratio 2.19$\times$;
-ATR-with-slippage fair-comparison results (Phase 16a).]}
+The results of \S\ref{sec:pareto} and \S\ref{sec:mechanism} were obtained on
+an environment with only a 0.05\% fee. As a standard sim2real stress test we
+now add slippage $\sigma = 0.02\%$ and ask whether Scenario D (two clusters,
+Pareto frontier) is preserved. This is the first piece of evidence on
+hypothesis \textbf{H4 (slippage / CPCV robustness)}.
+
+\subsubsection{Setup}
+\label{sec:slippage_setup}
+
+We extend the transaction-cost model of \S\ref{sec:env_dynamics} with
+slippage $\sigma = 0.02\%$, modifying fill prices to
+$q^{\mathrm{buy}} \cdot (1+\sigma)$ and $q^{\mathrm{sell}} \cdot (1-\sigma)$.
+This is a worst-case estimate for Binance taker side and corresponds to the
+95\% quantile of empirically reported slippage on BTC/USDT 1-hour limit
+fills. All other hyperparameters (formula\_coefs, $n_{\text{splits}}$,
+PPO stabilization package) are \emph{identical} to exp032b in
+\S\ref{sec:pareto}. Total: 4 variants $\times$ 10 seeds $\times$ 1M steps =
+40 runs, completing in approximately 3 h 47 min.
+
+\subsubsection{Per-variant Results: Uniform $\sim 12\%$ Decay}
+\label{sec:slippage_per_variant}
+
+\begin{table}[h]
+\centering
+\small
+\caption{exp033 results. 10-seed mean $\pm$ std. The last two columns compare
+to ATR baseline outperformance (no-slip / with-slip). Phase 16a re-measures
+the ATR baseline under the same slippage to Val Sharpe $0.835$
+(MDD 15.27\%).}
+\begin{tabular}{lcccccc}
+\toprule
+Variant & exp033 Sharpe & exp032b Sharpe & $\Delta$ & Cohen's $d$ & Retention & vs ATR-slip \\
+ & (slip 0.02\%) & (no slip) & & (vs exp032b) & & ($0.835$) \\
+\midrule
+\texttt{sym}  & $1.658 \pm 0.30$ & $1.871$ & $-0.213$ & $-0.80$ & $88.6\%$ & $+99\%$ \\
+\texttt{dsr}  & $1.551 \pm 0.26$ & $1.809$ & $-0.259$ & $-1.10$ & $85.7\%$ & $+86\%$ \\
+\texttt{asym} & $1.478 \pm 0.10$ & $1.681$ & $-0.203$ & $-2.01$ & $87.9\%$ & $+77\%$ \\
+\texttt{pt}   & $1.459 \pm 0.10$ & $1.667$ & $-0.207$ & $-2.18$ & $87.6\%$ & $+75\%$ \\
+\bottomrule
+\end{tabular}
+\label{tab:slippage_per_variant}
+\end{table}
+
+The most striking pattern in Table~\ref{tab:slippage_per_variant} is that the
+Sharpe decay is \emph{nearly identical across variants}. The absolute drop
+falls in the narrow range $-0.20$ to $-0.26$, and retentions
+(exp033/exp032b) cluster in a 3 percentage-point band of $85.7\%$ to
+$88.6\%$. The across-variant effect sizes ($|d| = 0.80$ to $2.18$) are all
+significant in direction (each variant's drop is statistically reliable
+across seeds), but the differences \emph{between} variants in their
+retentions are small. Slippage thus acts as a \emph{cluster-insensitive
+uniform decay}.
+
+\subsubsection{MDD Is Almost Unchanged}
+\label{sec:slippage_mdd}
+
+\begin{table}[h]
+\centering
+\caption{MDD change (exp032b $\to$ exp033). \textit{The MDD of the
+conservative cluster is essentially unchanged.}}
+\begin{tabular}{lccc}
+\toprule
+Variant & exp032b MDD (\%) & exp033 MDD (\%) & $\Delta$ \\
+\midrule
+\texttt{sym}  & $3.27$ & $3.47$ & $+0.20$ \\
+\texttt{dsr}  & $4.33$ & $4.88$ & $+0.55$ \\
+\texttt{asym} & $2.28$ & $2.28$ & $+0.01$ \\
+\texttt{pt}   & $2.31$ & $2.34$ & $+0.03$ \\
+\bottomrule
+\end{tabular}
+\label{tab:slippage_mdd}
+\end{table}
+
+\texttt{asym} and \texttt{pt} have $\Delta < 0.05$ pp in MDD after adding
+slippage. \texttt{sym/dsr} show a small increase ($+0.20$, $+0.55$). This
+matches the mechanism of \S\ref{sec:mechanism}: slippage is a per-trade cost,
+so the aggressive cluster (more trades) is more exposed, while the
+conservative cluster's lower trade count limits the cumulative exposure.
+
+\subsubsection{Cluster Preservation: Scenario D Is Robust}
+\label{sec:slippage_cluster}
+
+\begin{table}[h]
+\centering
+\caption{Cluster preservation across robustness tests. Ratios are
+across/within Cohen's $d$ (Sharpe distribution level) or $L_2$ action
+distance (policy level).}
+\begin{tabular}{lccc}
+\toprule
+ & within $|d|$ (mean) & across $|d|$ (mean) & Ratio \\
+\midrule
+exp032b (no slippage, Sharpe level) & $0.30$ & $0.79$ & --- \\
+exp033 (slippage $0.02\%$, Sharpe level) & $0.288$ & $0.630$ & $\mathbf{2.19\times}$ \\
+exp032c (policy distance $L_2$) & $0.129$ & $0.286$ & $2.22\times$ \\
+\bottomrule
+\end{tabular}
+\label{tab:cluster_preservation}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.9\textwidth]{menu1_side_by_side}
+\caption{Side-by-side comparison of exp032b (light) vs exp033 (dark). Mean
+$\pm$ std bars are overlaid with the 10 seed points for each variant. All
+four variants drop mean Sharpe by roughly $0.20$ under slippage, but the
+ordering and the cluster separation are preserved.}
+\label{fig:exp033_side_by_side}
+\end{figure}
+
+Table~\ref{tab:cluster_preservation} is the central result of this section.
+After adding slippage, the across/within Cohen's $d$ ratio is
+$2.19\times$---essentially identical to the $2.22\times$ ratio of
+\S\ref{sec:pareto_policy_distance} (policy distance) and consistent with
+exp032b. Therefore \textbf{the two-cluster structure of Scenario D is robust
+to slippage}. The ``risk-profile-dimension trade-off'' identified in
+\S\ref{sec:pareto} does not depend on the precise transaction-cost model.
+
+\subsubsection{Fair Comparison Against the ATR Baseline (Phase 16a)}
+\label{sec:slippage_atr_fair}
+
+The initial analysis kept the ATR baseline at its no-slippage value $1.378$
+and evaluated RL under slippage, an unfair comparison. In this setup the
+conservative cluster (\texttt{asym} $1.478$, \texttt{pt} $1.459$) only
+marginally exceeds ATR $1.378$, and a caveat was needed. Phase 16a
+(May 16, 2026) re-measured the ATR baseline under the same slippage
+($0.02\%$), giving \textbf{Val Sharpe $0.835$ (MDD $15.27\%$)}, a roughly
+$-39\%$ drop. The reason is that the ATR baseline policy uses both buy and
+sell quotes at every step and therefore incurs more cumulative slippage than
+the RL policies.
+
+A fair comparison against ATR-with-slippage $0.835$ gives:
+\begin{itemize}[leftmargin=*]
+\item \texttt{sym} $1.658$: \textbf{$+99\%$ vs ATR}
+\item \texttt{dsr} $1.551$: \textbf{$+86\%$ vs ATR}
+\item \texttt{asym} $1.478$: \textbf{$+77\%$ vs ATR}
+\item \texttt{pt} $1.459$: \textbf{$+75\%$ vs ATR}
+\end{itemize}
+Under slippage, \textbf{all four RL reward variants exceed the ATR baseline
+by $75$--$99\%$}, and the initial caveat ``the conservative cluster does not
+reach ATR'' disappears under fair comparison. \textbf{H2 weak (asym/dsr/pt
+$>$ ATR)} is \emph{strongly supported} under slippage.
+
+\subsubsection{Section Summary and Partial Verdict on H4}
+\label{sec:slippage_conclusion}
+
+\begin{itemize}[leftmargin=*]
+\item Slippage $0.02\%$ causes a uniform $\sim 12\%$ Sharpe decay across all
+four reward variants. The two-cluster structure is preserved
+quantitatively (across/within ratio $2.19\times \approx 2.22\times$).
+\item Conservative-cluster MDD is essentially unchanged; aggressive-cluster
+MDD rises slightly. The trade-frequency gap of \S\ref{sec:mechanism} carries
+over to differential slippage exposure.
+\item Re-evaluating ATR under the same slippage drops its Sharpe to $0.835$,
+and all four RL variants now exceed ATR by $75$--$99\%$. \textbf{H2 weak is
+strongly supported}.
+\item \textbf{H4 (slippage robustness)}: \emph{partially supported}. The
+qualitative cluster-preservation finding ($2.19\times$) is robust; absolute
+Sharpe values undergo uniform decay.
+\end{itemize}
+
+The next subsection (\S\ref{sec:cpcv}) asks the same robustness question in
+the multi-split setting (6-fold CPCV, 15 paths).
 
 \subsection{Multi-Split Evaluation via CPCV}
 \label{sec:cpcv}

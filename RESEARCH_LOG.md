@@ -4066,3 +4066,43 @@ PAPER_OUTLINE §6 매핑: exp032c 1.04M step trajectory 분석 → reward 형식
 - §6.3 의 DSR mechanism 설명 (EWMA 분모 + signal-to-noise) 이 §3.4 의 DSR 정식 정의에서 forward-reference 가능. §3.4 에 짧은 ``§6에서 행동 효과 분석'' note 추가 검토.
 - §6.6 의 4단계 인과 box 가 본 논문의 핵심 시각화. abstract figure 후보 (현재 phase15 menu_c) 대신 §6 인과 box 와 menu_c 두 figure 후보 비교 검토 (§9 작성 시).
 
+---
+
+## 2026-05-16 — §7.1 Slippage Robustness 본문 작성 완료 (양 버전)
+
+### Objective
+
+PAPER_OUTLINE §7.1 매핑: exp033 (slippage 0.02%) + Phase 16a (ATR-with-slippage 재평가) 결과. cluster preservation 2.19× ≈ exp032b 2.22× 확인 + ``conservative cluster ATR 도달 못함'' caveat 청소.
+
+### Changes
+
+| 파일 | 변경 |
+|---|---|
+| `reports/paper/main_ko.tex` | §7.1 TBD placeholder → 6 sub-subsection 본문 (~2 페이지) |
+| `reports/paper/main.tex` | §7.1 TBD placeholder → 6 sub-subsection 본문 (~3 페이지) |
+
+### 6 sub-subsection 구조
+
+- §7.1.1 실험 설정 (Binance taker side worst case, 4 variants × 10 seeds × 1M)
+- §7.1.2 Per-variant 결과 — Sharpe retention 85.7~88.6% (일률적 감쇠)
+- §7.1.3 MDD 거의 변화 없음 — conservative Δ<0.05pp, aggressive Δ 미세 증가 (slippage = per-trade cost 메커니즘 정합)
+- §7.1.4 Cluster preservation — 2.19× ≈ exp032b 2.22× ≈ exp032c policy distance 2.22×. 시나리오 D robust.
+- §7.1.5 ATR-with-slippage 공정 비교 (Phase 16a) — ATR Sharpe 0.835 → 4 RL variant 모두 +75~99% 초과. **caveat 청소**, H2 weak 강한 지지.
+- §7.1.6 본 절 결론 + H4 부분 verdict
+
+### Results
+
+- 빌드 검증: `xelatex main_ko.tex` 3회 + bibtex → **29 페이지** (이전 27, +2)
+- `pdflatex main.tex` 3회 + bibtex → **31 페이지** (이전 28, +3)
+- §7.1 분량 ~7% 목표 일치
+- 표 3개 (per-variant retention, MDD 변화, cluster preservation), figure 1개 (menu1_side_by_side)
+- H2 weak 강한 지지, H4 부분 지지 (cluster 보존)
+
+### Decision
+
+다음 작업 = §7.2 CPCV 평가 (분량 비중 10%, exp034 결과, DSR reversal 1위). 사용자 명시적 "진행" 응답 후 시작.
+
+### 보류 아이디어
+
+- §7.1.5 의 ``conservative cluster ATR 도달 못함'' 초기 caveat 의 historical narrative 가 흥미. 본 논문 §8 에 ``honesty section'' 으로 활용 가능 (caveat 발견 → Phase 16a 추가 분석 → 청소 의 시간순 frame).
+
