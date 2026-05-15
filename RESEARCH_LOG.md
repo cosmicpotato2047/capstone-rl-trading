@@ -3629,6 +3629,94 @@ Figure: `reports/exp032c_figures/menu1_pareto_scatter.png` — §5 메인 figure
 - `reports/exp035_figures/menu1_per_source.csv` — raw statistics
 - `reports/exp035_analysis.md` — 분석 요약
 
+---
+
+## 2026-05-16 — Phase 15 완료 (Significance + Distribution Shift + 종합 Figures)
+
+### Objective
+
+본 논문 §5~§7.3 결과를 통합한 final analysis: (A) Bootstrap significance, (B) Val vs Test 분포 shift 정량, (C) 세 환경 종합 figure.
+
+### Changes
+
+| 파일 | 변경 |
+|---|---|
+| `scripts/analyze_phase15.py` | 신설 — 3-menu 통합 분석 |
+
+### Results
+
+#### Menu A — Bootstrap P(RL_distribution > ATR_scalar)
+
+ATR reference: Val 1.505 (single-split), Test -0.055 (measured)
+
+| Variant | Val (n=10) | Slippage (n=10) | CPCV (n=15) | Test exp032b (n=10) | Test exp034 (n=15) |
+|---|---|---|---|---|---|
+| sym  | **1.000** | 0.966 | 0.048 | **1.000** | 0.878 |
+| asym | **1.000** | 0.190 | <0.001 | **1.000** | **1.000** |
+| dsr  | **1.000** | 0.709 | 0.168 | 0.125 | 0.973 |
+| pt   | **1.000** | 0.060 | 0.001 | **1.000** | **1.000** |
+
+**해석**:
+- **Val (모든 variant ATR 100% 초과)** — 시나리오 D in-sample 확인
+- **Slippage** — ATR-no-slippage 비교 (caveat) — 약화 in conservative cluster
+- **CPCV** — ATR Val 1.505 ref (caveat: ATR per-path 미측정) — 통계적으로 모두 ATR 미달, 단 zero 모두 초과 (exp034 DSR p<0.001)
+- **Test (양 source 일관)** — pt + asym 모두 ATR Test 100% 초과. **dsr exp032b 0.125 = OOS 실패의 정량 증거**
+
+#### Menu B — Val vs Test distribution shift (statistical)
+
+| Metric | Val mean (std) | Test mean (std) | KS p | Wasserstein |
+|---|---|---|---|---|
+| ATR ratio (volatility) | 0.96% (0.51%) | 0.70% (0.23%) | **<1e-10** | 0.00268 |
+| hourly log return | 1.4e-5 (0.71%) | 2.9e-5 (0.52%) | **<1e-10** | 0.00097 |
+
+**해석**: Test (BTC bull market) 가 Val (2021-2023 mix) 보다:
+- **변동성 27% 감소** (낮은 ATR ratio)
+- **평균 수익률 2배** (지속 bull trend)
+- KS p < 1e-10 → 두 distribution **통계적으로 매우 다름**
+
+→ §8 Discussion 의 generalization gap 핵심 quantification: **distribution shift 가 grid trading 정책의 OOS 성능 감쇠의 직접 원인**.
+
+#### Menu C — Three-environment 종합 Figure
+
+**4-panel boxplot**: Val 2021-2023 → CPCV 15 paths → Test exp032b → Test exp034.
+
+→ **Winner reversal 시각적으로 명확**: Val sym → CPCV dsr → Test pt
+→ **본 논문 §5/§7 통합 메인 figure (abstract figure 후보)**.
+
+### Decision
+
+Phase 15 사실상 완료. 본 논문 모든 실험 + 분석 + figures 준비됨. 다음 = Phase 16 (논문 작성).
+
+**본 논문 figure inventory** (7개):
+1. §5 Pareto: `reports/exp032c_figures/menu1_pareto_scatter.png`
+2. §5/§6 Cluster: `reports/exp032c_figures/menu5_policy_distance.png`
+3. §6 Behavior: `reports/exp032c_figures/menu4_behavior_per_regime.png`
+4. §7.1 Slippage: `reports/exp033_figures/menu1_side_by_side.png`
+5. §7.2 CPCV: `reports/exp034_figures/menu3_boxplot.png`
+6. §7.3 OOS: `reports/exp035_figures/menu2_val_vs_test.png`
+7. **종합 ★**: `reports/phase15_figures/menu_c_three_env.png` (abstract figure)
+
+추가로 `reports/phase15_figures/menu_b_distribution_shift.png` — §8 Discussion.
+
+### Figures
+
+- `reports/phase15_figures/menu_c_three_env.png` — **본 논문 abstract figure**
+- `reports/phase15_figures/menu_b_distribution_shift.png` — Val vs Test KDE overlay (§8)
+- `reports/phase15_figures/menu_a_significance.csv` — raw P values
+
+### 보류 아이디어
+
+- **각 figure 폰트/색상 polish**: 본 논문 본문 작성하면서 inline 수정. 별도 단계 불필요.
+- **추가 publication style 변환**: TeX/seaborn-context 적용. 시간 큼 + 결과는 markdown 변환 충분.
+- **Mediation analysis (reward → behavior → outcome)**: §6 보강 후보. 필요 시 논문 작성 중 추가.
+
+### 산출물
+
+- `experiments/phase15_significance.csv` (15a raw, 20 rows)
+- `reports/phase15_figures/{menu_a_significance.csv, menu_b_distribution_shift.{png,csv}, menu_c_three_env.png}`
+- `reports/phase15_analysis.md`
+- `scripts/analyze_phase15.py`
+
 ### 보류 아이디어
 
 - **pt 의 Test 우위 메커니즘 분석**: trajectory 수집 + behavior comparison (Test 환경에서 정책 차이) → §8 Discussion 보강. ~2시간.
