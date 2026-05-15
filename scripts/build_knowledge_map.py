@@ -12,8 +12,45 @@
 from __future__ import annotations
 
 import json
+import urllib.request
 from pathlib import Path
 from datetime import datetime
+
+
+# ------------------------------------------------------------------
+# 0. 외부 라이브러리 (오프라인 동작을 위해 인라인 임베드)
+# ------------------------------------------------------------------
+
+VENDOR_LIBS = [
+    (
+        "vis-network.min.js",
+        "https://cdn.jsdelivr.net/npm/vis-network@9.1.9/standalone/umd/vis-network.min.js",
+    ),
+    (
+        "marked.min.js",
+        "https://cdn.jsdelivr.net/npm/marked@11.1.0/marked.min.js",
+    ),
+]
+
+
+def ensure_vendor(vendor_dir: Path) -> dict[str, str]:
+    """vendor/ 에 라이브러리 캐시. 없으면 다운로드. 반환: filename → content."""
+    vendor_dir.mkdir(parents=True, exist_ok=True)
+    libs: dict[str, str] = {}
+    for fname, url in VENDOR_LIBS:
+        p = vendor_dir / fname
+        if not p.exists():
+            print(f"[download] {url}")
+            try:
+                urllib.request.urlretrieve(url, p)
+            except Exception as e:
+                raise RuntimeError(
+                    f"빌드에 필요한 라이브러리 다운로드 실패: {url}\n"
+                    f"인터넷 연결 확인 후 재시도하거나, 수동으로 다음 파일을 받아두세요: {p}\n"
+                    f"원본 에러: {e}"
+                )
+        libs[fname] = p.read_text(encoding="utf-8")
+    return libs
 
 
 # ------------------------------------------------------------------
@@ -529,10 +566,18 @@ def build_graph_data() -> tuple[list[dict], list[dict]]:
 # 9. HTML 빌드
 # ------------------------------------------------------------------
 
+def _safe_for_inline_script(js_source: str) -> str:
+    """script 태그 안에 인라인할 때 </script> 시퀀스만 escape."""
+    return js_source.replace("</script", "<\\/script")
+
+
 def build_html() -> str:
     repo_root = Path(__file__).resolve().parent.parent
     notes_dir = repo_root / "docs" / "study" / "rl_finance"
+    vendor_dir = repo_root / "scripts" / "vendor"
+
     note_bodies = load_note_bodies(notes_dir)
+    libs = ensure_vendor(vendor_dir)
 
     nodes, edges = build_graph_data()
 
@@ -555,7 +600,11 @@ def build_html() -> str:
     # </script> 충돌 방지
     payload_json = payload_json.replace("</", "<\\/")
 
-    html = HTML_TEMPLATE.replace("__PAYLOAD__", payload_json)
+    html = HTML_TEMPLATE
+    # 라이브러리는 큰 텍스트라 replace 대신 placeholder 위치에 직접 삽입
+    html = html.replace("__VIS_NETWORK_JS__", _safe_for_inline_script(libs["vis-network.min.js"]))
+    html = html.replace("__MARKED_JS__", _safe_for_inline_script(libs["marked.min.js"]))
+    html = html.replace("__PAYLOAD__", payload_json)
     return html
 
 
@@ -569,8 +618,8 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BTC RL 그리드 트레이딩 — 중간 보고서 (자료 조사 ↔ 실험 설계 지식 지도)</title>
-<script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/marked@11.1.0/marked.min.js"></script>
+<script>__VIS_NETWORK_JS__</script>
+<script>__MARKED_JS__</script>
 <style>
   :root {
     --blue-dark:   #1565C0;
@@ -927,7 +976,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 </div>
 
 <footer class="site-footer">
-  중간 보고서 자료 · 단일 HTML self-contained · 노트 본문 27개 인라인 임베드 · vis-network + marked.js (CDN)
+  중간 보고서 자료 · 단일 HTML self-contained (오프라인 동작) · 노트 본문 27개 + vis-network + marked.js 모두 인라인 임베드
 </footer>
 
 <!-- 노트 모달 -->

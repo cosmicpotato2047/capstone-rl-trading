@@ -32,3 +32,6 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+
+# Build cache: vendored JS libs for knowledge_map.html (inlined into output)
+scripts/vendor/
