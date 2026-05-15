@@ -5,10 +5,10 @@ exp032c Step 1: 40 모델 (4 variants x 10 seeds) 을 Val 위에서 평가하며
                 step-level trajectory 를 parquet 으로 저장.
 
 각 step row:
-    variant, seed, step_idx, val_idx (df_val 의 원본 index),
+    variant, seed, step_idx, val_idx (df_eval 의 원본 index),
     state_0..6 (7D obs), action_0, action_1 (raw [0,1]),
     reward, equity, cash, holdings, n_trades,
-    price (df_val close), atr_ratio, trend_short, trend_long
+    price (df_eval close), atr_ratio, trend_short, trend_long
 
 산출: experiments/exp032c_trajectories.parquet
 """
@@ -32,10 +32,10 @@ VARIANTS = ["sym", "asym", "dsr", "pt"]
 SEEDS    = [42, 43, 44, 45, 46, 47, 48, 49, 50, 51]
 
 
-def eval_one(variant: str, seed: int, df_train: pd.DataFrame, df_val: pd.DataFrame,
+def eval_one(variant: str, seed: int, df_train: pd.DataFrame, df_eval: pd.DataFrame,
              best_or_final: str = "best") -> pd.DataFrame:
-    """단일 (variant, seed) 의 best_model 을 Val 전체 단일 episode 로 평가하며
-    step trajectory 를 DataFrame 으로 반환."""
+    """단일 (variant, seed) 의 best_model 을 df_eval (Val 또는 Test) 전체 단일 episode 로
+    평가하며 step trajectory 를 DataFrame 으로 반환."""
     cfg_path = f"config/exp032b_{variant}_config.yaml"
     cfg = load_config(cfg_path)
 
@@ -44,11 +44,11 @@ def eval_one(variant: str, seed: int, df_train: pd.DataFrame, df_val: pd.DataFra
     cfg["training"]["max_episode_steps"] = None
 
     model_path = f"experiments/exp032b_{variant}/seed_{seed}/{best_or_final}_model"
-    agent = PPOAgent.load(model_path, cfg, df_train, df_val)
+    agent = PPOAgent.load(model_path, cfg, df_train, df_eval)
     model = agent.model
 
-    # 평가용 env (df_val 사용)
-    env = BTCGridTradingEnv(df_val, cfg)
+    # 평가용 env (df_eval 사용 - Val 또는 Test)
+    env = BTCGridTradingEnv(df_eval, cfg)
 
     rows = []
     obs, _ = env.reset()
@@ -61,7 +61,7 @@ def eval_one(variant: str, seed: int, df_train: pd.DataFrame, df_val: pd.DataFra
         prev_step = env.current_step
         obs_next, reward, terminated, truncated, info = env.step(a)
 
-        # df_val 원본 인덱스 (prev_step 의 row 정보)
+        # df_eval 원본 인덱스 (prev_step 의 row 정보)
         row = {
             "variant": variant,
             "seed":    seed,
@@ -77,14 +77,14 @@ def eval_one(variant: str, seed: int, df_train: pd.DataFrame, df_val: pd.DataFra
         row["cash"]     = float(info["cash"])
         row["holdings"] = float(info["holdings"])
         row["n_trades"] = int(info["n_trades"])
-        # market context (df_val 의 원본 raw 값 — z-score 이전)
-        if "volatility_raw" in df_val.columns:
-            row["atr_ratio"] = float(df_val.iloc[prev_step]["volatility_raw"])
+        # market context (df_eval 의 원본 raw 값 — z-score 이전)
+        if "volatility_raw" in df_eval.columns:
+            row["atr_ratio"] = float(df_eval.iloc[prev_step]["volatility_raw"])
         else:
             row["atr_ratio"] = float("nan")
         for col in ["trend_short", "trend_long", "close"]:
-            if col in df_val.columns:
-                row[col] = float(df_val.iloc[prev_step][col])
+            if col in df_eval.columns:
+                row[col] = float(df_eval.iloc[prev_step][col])
 
         rows.append(row)
         obs = obs_next
@@ -102,6 +102,8 @@ def main():
     p.add_argument("--model", choices=["best", "final"], default="best",
                    help="best_model.zip 또는 final_model.zip 사용")
     p.add_argument("--out", default="experiments/exp032c_trajectories.parquet")
+    p.add_argument("--eval-data", default="data/processed/btc_val.parquet",
+                   help="평가용 parquet (default: btc_val). Test 위 평가는 btc_test.parquet")
     args = p.parse_args()
 
     out_path = Path(args.out)
@@ -112,8 +114,8 @@ def main():
     print(f"  out: {out_path}\n")
 
     df_train = pd.read_parquet("data/processed/btc_train.parquet")
-    df_val   = pd.read_parquet("data/processed/btc_val.parquet")
-    print(f"  train: {len(df_train):,}rows | val: {len(df_val):,}rows\n")
+    df_eval  = pd.read_parquet(args.eval_data)
+    print(f"  train: {len(df_train):,}rows | eval ({args.eval_data}): {len(df_eval):,}rows\n")
 
     t0 = time.time()
     all_dfs = []
@@ -124,7 +126,7 @@ def main():
             n_done += 1
             tt = time.time()
             try:
-                df = eval_one(variant, seed, df_train, df_val, args.model)
+                df = eval_one(variant, seed, df_train, df_eval, args.model)
                 all_dfs.append(df)
                 print(f"  [{n_done}/{n_total}] {variant} seed={seed}: "
                       f"{len(df):,} steps, final eq {df['equity'].iloc[-1]:,.0f} "

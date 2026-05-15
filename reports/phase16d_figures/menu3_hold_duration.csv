@@ -1,0 +1,5 @@
+variant,n_sessions,mean_duration_h,median_duration_h,p95_duration_h,max_duration_h
+sym,5666,2.1450758912813273,1.0,5.0,98.0
+asym,4567,1.396759360630611,1.0,3.0,7.0
+dsr,5384,4.577823179791976,1.0,20.0,169.0
+pt,3922,1.3906170321264661,1.0,3.0,6.0

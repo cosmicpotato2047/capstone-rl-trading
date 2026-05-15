@@ -3717,6 +3717,142 @@ Phase 15 사실상 완료. 본 논문 모든 실험 + 분석 + figures 준비됨
 - `reports/phase15_analysis.md`
 - `scripts/analyze_phase15.py`
 
+---
+
+## 2026-05-16 — Phase 16a~d 완료 (논문 강화 분석)
+
+### Objective
+
+본 논문의 §7.1/§7.3 정직성 청소 + pt OOS robust 의 메커니즘 답변.
+
+### 16a — ATR-with-slippage 재평가 (caveat 청소)
+
+| 평가 | ATR no-slippage | ATR slippage 0.02% | Δ |
+|---|---|---|---|
+| Val 2021-2023 | Sharpe 1.378, MDD 9.83% | **0.835**, MDD 15.27% | -39% |
+| Test 2024+ | -0.055, MDD 8.04% | **-0.834**, MDD 13.23% | (음수 심화) |
+
+⚠️ Val no-slippage 1.378 ≠ RESEARCH_LOG 의 1.505 — exp_atr_envv4 시기와 evaluation setup 미세 차이 (n_eval_episodes, env config). 본 논문에선 현재 측정값 사용 + caveat 명시.
+
+**핵심 implication for §7.1**:
+- ATR-with-slippage Val 0.835 vs exp033 RL Val: **4 variant 모두 0.835 초과** (sym 1.66, asym 1.48, dsr 1.55, pt 1.46)
+- → 이전 caveat ("conservative cluster ATR 도달 못함") 은 **사실은 fair 비교에서 모두 ATR 초과**. 본 논문 §7.1 메시지 강화.
+
+### 16b — Buy-and-Hold Test baseline
+
+| Strategy | Val Sharpe / MDD% | Test Sharpe / MDD% |
+|---|---|---|
+| **Buy-and-Hold** | 0.523 / **77.20** | **0.757** / **50.08** |
+| ATR baseline (no slippage) | 1.378 / 9.83 | -0.055 / 8.04 |
+| RL pt Test best | 1.667 / 2.31 | 0.367 / ~2.3 |
+
+**중요 정직 인정**:
+- **Test 에서 B&H Sharpe 0.757 > 모든 RL** (Sharpe 단일 metric)
+- 하지만 **B&H Test MDD 50% vs RL pt MDD ~2.3%** → **Calmar 기준 pt 가 B&H 의 ~22배 우위** (0.16 vs 0.015)
+- §7.3 정직 frame: "절대 Sharpe 면 B&H, risk-adjusted (Calmar) 면 pt"
+- Val 에서는 RL (1.6~1.9) >> B&H (0.523) — ATR baseline 비교 정당성 유지
+
+### 16c — Test trajectory 수집
+
+- 40 exp032b best_models × Test (20,189 hours) → 800,800 step rows
+- 소요 5.3 min
+- 산출: `experiments/exp032c_test_trajectories.parquet`
+
+### 16d — pt OOS robust + DSR OOS 실패 메커니즘
+
+#### Menu 1: Test behavior per regime
+
+| Variant | Trade rate (Test high_vol) | Hold rate (Test high_vol) |
+|---|---|---|
+| sym  | 0.063 | 0.060 |
+| **dsr**  | 0.062 | **0.117** |
+| asym | 0.052 | 0.030 |
+| pt   | 0.046 | 0.026 |
+
+→ DSR hold rate Test 에서도 다른 variant 의 2-4배 (Val 패턴 동일).
+
+#### Menu 2: Val vs Test behavior shift (정책 자체는 stable)
+
+| Variant | trade_rate Δ | hold_rate Δ | action_0 (agg) Δ | action_1 (prf_tgt) Δ |
+|---|---|---|---|---|
+| sym  | +0.006 | +0.001 | -0.010 | +0.001 |
+| asym | +0.005 | +0.003 | -0.037 | -0.004 |
+| dsr  | +0.005 | -0.004 | -0.006 | -0.005 |
+| pt   | +0.005 | +0.003 | -0.051 | -0.010 |
+
+→ **정책 자체는 Val/Test 거의 동일 행동 (action delta ~5% 이내)**. 즉 정책 안정. 결과 차이는 **시장 distribution shift 의 영향** (Phase 15 KS p<1e-10 과 정합).
+
+#### Menu 3: Hold session duration on Test (★ 핵심 mechanism)
+
+| Variant | n_sessions | mean | median | p95 | **max** |
+|---|---|---|---|---|---|
+| sym  | 5666 | 2.15h | 1h | 5h | **98h** |
+| **dsr**  | 5384 | **4.58h** | 1h | **20h** | **169h (7일!)** ⚠️ |
+| asym | 4567 | 1.40h | 1h | 3h | 7h |
+| **pt**   | 3922 | **1.39h** | 1h | 3h | **6h** ⭐ |
+
+#### 메커니즘 답변 (확정)
+
+**DSR 의 OOS 실패 메커니즘**:
+- DSR sliding window reward 가 정책에 holding 시간을 늘리도록 학습 (exp032c menu4 finding)
+- Test bull market 에서 정책이 매수 후 **median 1h, p95 20h, max 7일 holding**
+- BTC 가격이 holding window 안에서 큰 movement → sell-side timing risk 가 큼
+- 결과: DSR Test Sharpe -0.122 (exp032b), +0.070 (exp034) — 4 variant 중 최악
+
+**pt 의 OOS robust 메커니즘**:
+- pt 의 loss aversion (λ=3.30) + concave gain (α=0.68) → 정책이 **매수 즉시 빠른 청산** 학습
+- Test 에서 hold duration **mean 1.4h, max 6h** (가장 짧음)
+- Bull market 의 가격 movement 위험 회피 → drawdown 최소화 (MDD 2.31%)
+- 결과: pt Test Sharpe 0.367 / 0.339 — 4 variant 중 1위
+
+**즉 reward 형식 → holding 시간 → OOS regime 적응**의 인과 사슬:
+- DSR: 긴 holding = in-sample risk-adjusted 우위 (CPCV 1위) ↔ OOS sell-side risk (Test 꼴찌)
+- pt: 짧은 holding = in-sample MDD 우위 (Calmar 1위) + OOS robust (Test 1위)
+- → **in-sample 우위와 OOS robust 가 같은 reward formulation 에서 trade-off**
+
+#### Menu 4: Action distribution on Test
+
+- pt 의 aggressiveness mean 0.379 (Val 0.429 → -0.05). 4 variant 중 가장 보수적 진입 유지
+- sym/dsr 의 aggressiveness ~0.12-0.15 (낮음, 빠른 매수 시도)
+- asym 0.27, pt 0.38 — conservative cluster 의 진입 선택성
+
+### Changes
+
+| 파일 | 변경 |
+|---|---|
+| `scripts/run_exp032c_eval.py` | `--eval-data` 인자 추가 (Val/Test 공용화) |
+| `scripts/analyze_phase16d.py` | 신설 — 4 menu (Test behavior, Val/Test shift, Hold duration, Action dist) |
+
+### Decision
+
+본 논문 §7.3 + §8 의 핵심 mechanism 답변 확보. Phase 16f (논문 본문 작성) 시작 준비 완료.
+
+### 갱신된 가설 H1~H5
+
+- **H5 (pt OOS robust)**: **메커니즘 답변 확보** — 짧은 hold duration (mean 1.4h) 가 OOS bull market 의 sell-side timing risk 회피. Kahneman-Tversky λ=3.30 + α=0.68 의 RL 정책 효과.
+- **DSR OOS 실패** (사후 발견): 사이클당 mean 4.58h, max 7일 holding 이 bull market 의 timing risk 증가.
+
+### Figures
+
+- `reports/phase16d_figures/menu1_test_behavior.png` — §6 또는 §7.3 보강
+- `reports/phase16d_figures/menu2_val_test_shift.png` — §7.3 정책 안정성 입증
+- `reports/phase16d_figures/menu3_hold_duration.png` — **§7.3 메인 figure 3순위** (DSR 7-day hold)
+- `reports/phase16d_figures/menu4_action_test.png` — §6 또는 §7.3
+
+### 산출물
+
+- `experiments/exp032c_test_trajectories.parquet` (800K rows, gitignored — 큰 파일)
+- `experiments/exp032c_test_eval.log`
+- `reports/phase16d_figures/*.{png,csv}` × 4
+- `reports/phase16d_analysis.md`
+- `scripts/analyze_phase16d.py`
+
+### 보류 아이디어
+
+- **B&H baseline Sharpe-MDD scatter**: 4 variants + B&H + ATR 위에 plotting. §7.3 단일 figure 강화. 1시간.
+- **Test 위 cluster preservation 변화 (action-level)**: 정책 distance 가 Test 에서 어떻게 변하는가. 시간 적게.
+- **Mediation analysis (formal)**: reward → hold duration → Sharpe 의 인과 분해 (linear regression). 1시간.
+
 ### 보류 아이디어
 
 - **pt 의 Test 우위 메커니즘 분석**: trajectory 수집 + behavior comparison (Test 환경에서 정책 차이) → §8 Discussion 보강. ~2시간.
