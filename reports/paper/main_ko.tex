@@ -1442,9 +1442,164 @@ robust 질문을 다룬다.
 \subsection{CPCV 다중 split 평가}
 \label{sec:cpcv}
 
-\textit{[TBD: 추후 작성. exp034: 6-fold CPCV 15 paths.
-DSR p$<$0.001 (Bonferroni 4-way 보정), \texttt{dsr} variant reversal 1위
-(1.413, 5\% CVaR 0.890), Cluster ratio 3.55$\times$.]}
+\S\ref{sec:slippage}는 단일 Val 분할(2021--2023)에서 슬리피지 stress test를
+다루었다. 본 절은 평가의 두 번째 축으로 \emph{시간 분할 다양화}를 도입한다.
+\citet{lopezdeprado2018advances}의 Combinatorial Purged Cross-Validation
+(CPCV)을 적용하여 train과 test 사이 누설을 차단한 15개의 train/test path를
+생성하고 4 변형을 동일 조건에서 비교한다. 본 절의 핵심 발견은
+\textbf{단일 분할의 winner 가 CPCV에서 reversal 된다}는 점, 그리고
+\textbf{cluster 구조가 multi-split에서 더 또렷이 분리된다}는 점이다.
+
+\subsubsection{실험 설정}
+\label{sec:cpcv_setup}
+
+Train과 Val 구간(2017-10 \,--\, 2023-12, 약 54{,}087 봉)을 시간 순서로 6개
+group으로 분할하며 각 group은 약 9{,}014 봉($\approx$ 12.5개월)이다.
+$\binom{6}{2} = 15$가지의 (train\,4\,groups, test\,2\,groups) 조합을 생성하며
+각 조합당 train은 약 36{,}000 봉($\approx$ 4.1년), test는 약 18{,}000 봉
+($\approx$ 2년)이다. 시간 누설을 방지하기 위해 train 중 test 경계의
+$\pm 168\,\mathrm{h}$ (1주)를 \emph{purge}로 제외한다(state 변수의 168봉
+rolling window 길이와 정합). 총 학습량 $4 \times 15 \times 1\,\mathrm{seed} \times
+1\mathrm{M} = 60$M steps, 약 5시간 27분 소요.
+
+\subsubsection{Per-variant CPCV 통계}
+\label{sec:cpcv_per_variant}
+
+\begin{table}[h]
+\centering
+\small
+\caption{CPCV 6-fold, 15 paths의 variant별 Sharpe 통계. ATR baseline 대비 단측
+t-검정 (\citealt{henderson2018rlreproducibility}의 권고에 따라 IQM과 5\% CVaR
+보고). 모든 $p$값은 Bonferroni 4-way 보정 후에도 $< 0.004$.}
+\begin{tabular}{lcccccc}
+\toprule
+Variant & SR mean $\pm$ std & IQM & 5\% CVaR & (min, max) & $t$-stat & $p$ (one-sided) \\
+\midrule
+\texttt{sym}  & $1.302 \pm 0.475$ & $1.282$ & $0.579$ & $(0.58, 2.05)$ & $10.61$ & $2.2 \cdot 10^{-8}$ \\
+\texttt{dsr}  & $\mathbf{1.413 \pm 0.378}$ & $\mathbf{1.433}$ & $\mathbf{0.890}$ & $(0.89, 1.90)$ & $\mathbf{14.49}$ & $4.0 \cdot 10^{-10}$ \\
+\texttt{asym} & $1.043 \pm 0.474$ & $0.954$ & $0.503$ & $(0.50, 1.92)$ & $8.52$ & $3.3 \cdot 10^{-7}$ \\
+\texttt{pt}   & $1.093 \pm 0.510$ & $1.010$ & $0.503$ & $(0.50, 2.04)$ & $8.29$ & $4.5 \cdot 10^{-7}$ \\
+\bottomrule
+\end{tabular}
+\label{tab:cpcv_per_variant}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.85\textwidth]{menu3_boxplot}
+\caption{CPCV 15 path의 variant별 Sharpe 분포 boxplot. 박스는 IQR, 가운데
+선은 중앙값, 수염은 1.5 IQR. \texttt{dsr}이 중앙값과 5\% CVaR 모두 가장 높고
+분포가 가장 좁다(std 0.378). \texttt{asym/pt}는 IQR이 0.5\,$\sim$\,1.5로 더 넓고
+중앙값이 낮다. ATR baseline의 Val Sharpe $1.378$는 비교 참조선.}
+\label{fig:cpcv_boxplot}
+\end{figure}
+
+표 \ref{tab:cpcv_per_variant}와 그림 \ref{fig:cpcv_boxplot}의 핵심 관찰:
+
+\paragraph{(i) 모든 변형이 ATR을 통계적으로 초과.}
+4 variant 모두 $p < 4 \times 10^{-7}$ 단측 t-검정으로 ATR baseline 대비 초과를
+달성한다. Bonferroni 4-way 보정 후에도 모두 $p < 0.004$로 유의하다. 또한
+\citet{lopezdeprado2014dsr}의 Deflated Sharpe Ratio 기준에서도 4 변형 모두
+유의(\texttt{sym}, \texttt{dsr}의 DSR $z$가 numeric stability를 유지하며
+모두 $z > 14$). 따라서 단순 평균에서의 차이가 백테스트 시도 횟수 보정 후에도
+``진짜 알파''임이 확인된다.
+
+\paragraph{(ii) DSR variant가 CPCV 1위로 reversal.}
+\texttt{dsr}이 mean Sharpe $1.413$, IQM $1.433$, 5\% CVaR $0.890$ 세 metric
+모두에서 1위이며 표준편차가 가장 작다($0.378$ vs 다른 변형의 $0.47$\,$\sim$\,$0.51$).
+$t$-stat $14.49$로 다른 변형의 $8.3$\,$\sim$\,$10.6$을 큰 폭으로 초과. CPCV
+환경에서 \texttt{dsr}이 \emph{가장 일관되고 가장 안전한 정책}이다.
+
+\subsubsection{Winner Reversal: 평가 방법이 변형 순위를 결정한다}
+\label{sec:cpcv_reversal}
+
+\S\ref{sec:pareto}와 본 절의 결과를 직접 비교하면 명확한 reversal이 드러난다:
+
+\begin{table}[h]
+\centering
+\caption{단일 분할 (\S\ref{sec:pareto}, Val 2021--2023)과 multi-split
+(본 절, CPCV 15 paths)의 winner reversal.}
+\begin{tabular}{lcc}
+\toprule
+Metric & exp032b 1위 (Val) & exp034 1위 (CPCV) \\
+\midrule
+Best Sharpe & \texttt{sym} ($1.871$) & \texttt{dsr} ($1.413$) \\
+Sharpe std (안정성) & \texttt{asym/pt} ($0.10$) & \texttt{dsr} ($0.378$) \\
+5\% CVaR & --- (single point) & \texttt{dsr} ($0.890$) \\
+\bottomrule
+\end{tabular}
+\label{tab:cpcv_reversal}
+\end{table}
+
+단일 Val 분할에서 \texttt{sym}이 best Sharpe 1위였던 결과(\S\ref{sec:pareto_per_variant})
+가 CPCV에서는 \texttt{dsr}로 reversal된다. 단일 metric ``X variant가 best''의
+결론이 \emph{평가 방법의 선택}에 의존한다는 정직한 발견이다. 본 논문은 이
+reversal을 \S\ref{sec:oos}에서 다시 한 번 (CPCV $\to$ Test) 확인하며,
+\textbf{세 환경에서 세 다른 winner가 나타나는} 본 논문의 핵심 frame을 완성한다.
+
+\subsubsection{Cluster Preservation: Multi-split에서 더 또렷}
+\label{sec:cpcv_cluster}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.85\textwidth]{menu2_heatmap}
+\caption{4 variant $\times$ 15 path Sharpe heatmap. 각 cell은 한 (variant, path)의
+Sharpe. 행 우측의 mean이 표 \ref{tab:cpcv_per_variant}의 SR mean과 일치.
+\texttt{dsr} 행이 어두운 색(높은 Sharpe)이 일관, \texttt{asym/pt}는 path 간
+편차가 크다.}
+\label{fig:cpcv_heatmap}
+\end{figure}
+
+표 \ref{tab:cluster_preservation_cpcv}는 \S\ref{sec:slippage_cluster}의 cluster
+preservation 표를 CPCV 결과로 확장한다.
+
+\begin{table}[h]
+\centering
+\caption{Cluster preservation 비교 (\S\ref{sec:slippage_cluster} 표 확장).
+\textit{CPCV에서 within-cluster 차이가 크게 줄어 cluster 분리가 가장 또렷.}}
+\begin{tabular}{lccc}
+\toprule
+ & within $|d|$ & across $|d|$ & Ratio \\
+\midrule
+exp032b (no slippage, Val 2021--2023) & $0.30$ & $0.79$ & --- \\
+exp033 (slippage $0.02\%$, Val) & $0.288$ & $0.630$ & $2.19\times$ \\
+\textbf{exp034 (CPCV 15 paths)} & $\mathbf{0.179}$ & $\mathbf{0.636}$ & $\mathbf{3.55\times}$ \\
+\midrule
+exp032c (policy distance $L_2$) & $0.129$ & $0.286$ & $2.22\times$ \\
+\bottomrule
+\end{tabular}
+\label{tab:cluster_preservation_cpcv}
+\end{table}
+
+across-cluster $|d|$는 $0.79 \to 0.636$로 약간 감소하나, within-cluster $|d|$가
+$0.30 \to 0.179$로 더 크게 감소한다. 결과 비율 $3.55\times$는 \S\ref{sec:slippage}의
+$2.19\times$를 크게 초과하며 \S\ref{sec:pareto}의 동일 클러스터 구조가
+\emph{multi-split 환경에서 오히려 더 강하게 표현}됨을 의미한다. 같은 클러스터의
+정책들은 다양한 시간 분할에서 일관되게 비슷하고, 다른 클러스터와는 항상 분리된다.
+
+\subsubsection{메커니즘 해석과 H4 Verdict}
+\label{sec:cpcv_mechanism}
+
+\texttt{dsr}의 CPCV reversal 1위는 \S\ref{sec:mechanism_hold_rate}의 메커니즘과
+직접 연결된다. DSR의 sliding-window memory는 정책이 더 긴 holding(다른 변형의
+2--6배)을 학습하도록 유도하며, 긴 holding은 단일 분할의 특정 시장 시기에 대한
+의존을 감소시키고 \emph{다양한 시간 시기에 걸쳐 robust한 정책 행동}을
+산출한다. CPCV의 15개 path는 BTC 2017--2023의 다양한 시장 레짐(2018 bear,
+2019 sideways, 2020 COVID, 2021 ATH, 2022 crash, 2023 recovery)을 골고루
+포함하므로, 시기-의존성이 약한 정책이 path 평균에서 우위를 보이게 된다.
+DSR의 reward formulation이 정확히 이러한 시기-robust 정책을 학습시키는 구조를
+가진다는 것이 본 논문의 메커니즘 가설이며 본 절의 결과로 정량 지지된다.
+
+\textbf{H4 (CPCV 강건성) verdict}: \emph{강한 지지}. 4 variant 모두 Bonferroni
+보정 후 $p < 0.004$로 ATR 초과, cluster preservation ratio가 $2.19\times \to
+3.55\times$로 강화. \textbf{H2 strong (asym/dsr/pt $>$ sym)} 재해석: 단일 분할
+metric으로는 \texttt{sym}이 우위였으나 multi-split metric에서는 \texttt{dsr}이
+우위 --- ``reward design의 효과는 평가 방법에 따라 다른 차원에서 드러난다''.
+
+다음 절(\S\ref{sec:oos})은 본 논문의 마지막이자 가장 엄격한 환경인 봉인 해제된
+Test (2024--2026)로 진입한다. CPCV에서 1위인 \texttt{dsr}이 Test에서도 1위를
+유지하는지, 혹은 또 다른 reversal이 나타나는지가 본 논문 본격 OOS 검증의 핵심
+질문이다.
 
 \subsection{분포 외 평가와 Prospect Theory의 강건성}
 \label{sec:oos}

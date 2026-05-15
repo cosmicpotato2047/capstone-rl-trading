@@ -1558,10 +1558,178 @@ the multi-split setting (6-fold CPCV, 15 paths).
 \subsection{Multi-Split Evaluation via CPCV}
 \label{sec:cpcv}
 
-\textit{[TBD. exp034: 6-fold CPCV 15 paths.
-DSR $p<0.001$ (Bonferroni 4-way correction);
-\texttt{dsr} reversal to 1\textsuperscript{st}
-(1.413, 5\% CVaR 0.890); cluster preservation ratio 3.55$\times$.]}
+\S\ref{sec:slippage} stress-tested a single Val partition (2021--2023) under
+slippage. This subsection adds the second axis of evaluation: \emph{temporal
+split diversification}. We apply the Combinatorial Purged Cross-Validation
+(CPCV) of \citet{lopezdeprado2018advances} to generate 15 train/test paths
+with leakage purging, and compare the four variants under identical
+conditions. Two main findings emerge: \textbf{the single-split winner
+reverses under CPCV}, and \textbf{the two-cluster structure is even more
+pronounced under multi-split evaluation}.
+
+\subsubsection{Setup}
+\label{sec:cpcv_setup}
+
+The Train and Val ranges (2017-10 \,--\, 2023-12, about 54{,}087 bars) are
+split chronologically into six groups of approximately 9{,}014 bars each
+($\approx$ 12.5 months). All $\binom{6}{2} = 15$ (train\,4\,groups,
+test\,2\,groups) combinations are generated; each gives about 36{,}000 bars
+($\approx$ 4.1 years) of training and 18{,}000 bars ($\approx$ 2 years) of
+test. To prevent temporal leakage, $\pm 168\,\mathrm{h}$ (1 week) on either
+side of each test boundary is \emph{purged} from training (matching the
+168-bar rolling window of the state variables). Total training cost is
+$4 \times 15 \times 1\,\text{seed} \times 1\mathrm{M} = 60$M steps,
+completed in approximately 5 h 27 min.
+
+\subsubsection{Per-Variant CPCV Statistics}
+\label{sec:cpcv_per_variant}
+
+\begin{table}[h]
+\centering
+\small
+\caption{Per-variant Sharpe statistics from 6-fold CPCV, 15 paths. The
+single-sided $t$-test is against the ATR baseline. Following
+\citet{henderson2018rlreproducibility}, we also report IQM and 5\% CVaR. All
+$p$-values remain $< 0.004$ after Bonferroni 4-way correction.}
+\begin{tabular}{lcccccc}
+\toprule
+Variant & SR mean $\pm$ std & IQM & 5\% CVaR & (min, max) & $t$-stat & $p$ (one-sided) \\
+\midrule
+\texttt{sym}  & $1.302 \pm 0.475$ & $1.282$ & $0.579$ & $(0.58, 2.05)$ & $10.61$ & $2.2 \cdot 10^{-8}$ \\
+\texttt{dsr}  & $\mathbf{1.413 \pm 0.378}$ & $\mathbf{1.433}$ & $\mathbf{0.890}$ & $(0.89, 1.90)$ & $\mathbf{14.49}$ & $4.0 \cdot 10^{-10}$ \\
+\texttt{asym} & $1.043 \pm 0.474$ & $0.954$ & $0.503$ & $(0.50, 1.92)$ & $8.52$ & $3.3 \cdot 10^{-7}$ \\
+\texttt{pt}   & $1.093 \pm 0.510$ & $1.010$ & $0.503$ & $(0.50, 2.04)$ & $8.29$ & $4.5 \cdot 10^{-7}$ \\
+\bottomrule
+\end{tabular}
+\label{tab:cpcv_per_variant}
+\end{table}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.85\textwidth]{menu3_boxplot}
+\caption{Boxplot of Sharpe distributions across the 15 CPCV paths per
+variant. Boxes are IQR; the center line is the median; whiskers extend to
+1.5$\,\times\,$IQR. \texttt{dsr} has the highest median and 5\% CVaR and the
+tightest spread (std 0.378). \texttt{asym/pt} are wider (IQR
+$0.5$\,--\,$1.5$) with lower medians. The ATR baseline Val Sharpe $1.378$
+serves as a comparison reference.}
+\label{fig:cpcv_boxplot}
+\end{figure}
+
+Two observations follow from Table~\ref{tab:cpcv_per_variant} and
+Figure~\ref{fig:cpcv_boxplot}.
+
+\paragraph{(i) All four variants statistically exceed ATR.}
+Each variant achieves $p < 4 \times 10^{-7}$ in a single-sided $t$-test
+against the ATR baseline, and all four remain significant ($p < 0.004$) after
+Bonferroni 4-way correction. The Deflated Sharpe Ratio of
+\citet{lopezdeprado2014dsr} also flags all four as significant (\texttt{sym}
+and \texttt{dsr} have stable DSR $z > 14$ values). The Sharpe differences
+thus represent ``real'' alpha that survives multiple-testing correction.
+
+\paragraph{(ii) DSR reverses to first place under CPCV.}
+\texttt{dsr} leads on mean Sharpe ($1.413$), IQM ($1.433$), and 5\% CVaR
+($0.890$), with the smallest standard deviation ($0.378$ vs $0.47$--$0.51$
+for the others). Its $t$-statistic of $14.49$ substantially exceeds the
+$8.3$--$10.6$ range of the other variants. Under CPCV, \texttt{dsr} is the
+\emph{most consistent and safest} policy.
+
+\subsubsection{Winner Reversal: The Evaluation Method Picks the Winner}
+\label{sec:cpcv_reversal}
+
+Comparing \S\ref{sec:pareto} and this section reveals a clear reversal:
+
+\begin{table}[h]
+\centering
+\caption{Single-split (\S\ref{sec:pareto}, Val 2021--2023) vs multi-split
+(this section, CPCV 15 paths) winners.}
+\begin{tabular}{lcc}
+\toprule
+Metric & exp032b winner (Val) & exp034 winner (CPCV) \\
+\midrule
+Best Sharpe & \texttt{sym} ($1.871$) & \texttt{dsr} ($1.413$) \\
+Sharpe std (stability) & \texttt{asym/pt} ($0.10$) & \texttt{dsr} ($0.378$) \\
+5\% CVaR & --- (single point) & \texttt{dsr} ($0.890$) \\
+\bottomrule
+\end{tabular}
+\label{tab:cpcv_reversal}
+\end{table}
+
+\texttt{sym}'s single-split best-Sharpe lead from
+\S\ref{sec:pareto_per_variant} reverses to \texttt{dsr} under CPCV. The
+single-metric conclusion ``variant X is best'' \emph{depends on the
+evaluation method}. We will see this reversal once more (CPCV $\to$ Test) in
+\S\ref{sec:oos}, completing the paper's central frame of \textbf{three
+different winners across three evaluation environments}.
+
+\subsubsection{Cluster Preservation: Sharper under Multi-split}
+\label{sec:cpcv_cluster}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.85\textwidth]{menu2_heatmap}
+\caption{4 variants $\times$ 15 paths Sharpe heatmap. Each cell is a
+single (variant, path) Sharpe; the right margin gives the row mean (matching
+Table~\ref{tab:cpcv_per_variant}). The \texttt{dsr} row is consistently dark
+(high Sharpe), while \texttt{asym/pt} show larger path-to-path variance.}
+\label{fig:cpcv_heatmap}
+\end{figure}
+
+Table~\ref{tab:cluster_preservation_cpcv} extends the cluster preservation
+table of \S\ref{sec:slippage_cluster} with CPCV.
+
+\begin{table}[h]
+\centering
+\caption{Cluster preservation comparison (extension of
+\S\ref{sec:slippage_cluster}). \textit{Within-cluster $|d|$ shrinks under
+CPCV, so the cluster separation is the sharpest in this setting.}}
+\begin{tabular}{lccc}
+\toprule
+ & within $|d|$ & across $|d|$ & Ratio \\
+\midrule
+exp032b (no slippage, Val 2021--2023) & $0.30$ & $0.79$ & --- \\
+exp033 (slippage $0.02\%$, Val) & $0.288$ & $0.630$ & $2.19\times$ \\
+\textbf{exp034 (CPCV 15 paths)} & $\mathbf{0.179}$ & $\mathbf{0.636}$ & $\mathbf{3.55\times}$ \\
+\midrule
+exp032c (policy distance $L_2$) & $0.129$ & $0.286$ & $2.22\times$ \\
+\bottomrule
+\end{tabular}
+\label{tab:cluster_preservation_cpcv}
+\end{table}
+
+Across-cluster $|d|$ drops slightly ($0.79 \to 0.636$), but within-cluster
+$|d|$ drops more ($0.30 \to 0.179$). The resulting $3.55\times$ ratio
+substantially exceeds the $2.19\times$ of \S\ref{sec:slippage} and indicates
+that the cluster structure of \S\ref{sec:pareto} is in fact \emph{more
+strongly expressed under multi-split evaluation}. Policies in the same
+cluster behave consistently across diverse temporal splits, while remaining
+distinct from policies in the opposite cluster.
+
+\subsubsection{Mechanism Interpretation and H4 Verdict}
+\label{sec:cpcv_mechanism}
+
+The CPCV reversal of \texttt{dsr} to first place ties directly to the
+mechanism of \S\ref{sec:mechanism_hold_rate}. The DSR sliding-window memory
+trains the policy to hold positions 2--6$\times$ longer than the other
+variants, and longer holding reduces the policy's dependence on the specific
+market regime of a single split. The 15 CPCV paths span the major BTC market
+regimes of 2017--2023 (the 2018 bear, 2019 sideways, 2020 COVID crash, 2021
+ATH, 2022 crash, 2023 recovery), so a regime-insensitive policy wins on the
+path-average. The DSR reward formulation produces exactly such a regime-robust
+policy, and this section provides the quantitative evidence.
+
+\textbf{Verdict on H4 (CPCV robustness)}: \emph{strongly supported}. All four
+variants exceed ATR after Bonferroni correction ($p < 0.004$), and the
+cluster preservation ratio strengthens from $2.19\times$ to $3.55\times$.
+\textbf{H2 strong (asym/dsr/pt $>$ sym)} now requires reinterpretation: under
+single-split metrics \texttt{sym} leads, but under multi-split metrics
+\texttt{dsr} leads --- ``the effect of reward design appears along different
+dimensions depending on the evaluation method.''
+
+The next subsection (\S\ref{sec:oos}) enters the most stringent and final
+environment of the paper: the unsealed Test (2024--2026). The central question
+of out-of-sample validation is whether the CPCV-1st \texttt{dsr} retains its
+lead on Test, or whether yet another reversal appears.
 
 \subsection{Out-of-Sample Evaluation and Prospect Theory's Robustness}
 \label{sec:oos}

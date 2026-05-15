@@ -4106,3 +4106,42 @@ PAPER_OUTLINE §7.1 매핑: exp033 (slippage 0.02%) + Phase 16a (ATR-with-slippa
 
 - §7.1.5 의 ``conservative cluster ATR 도달 못함'' 초기 caveat 의 historical narrative 가 흥미. 본 논문 §8 에 ``honesty section'' 으로 활용 가능 (caveat 발견 → Phase 16a 추가 분석 → 청소 의 시간순 frame).
 
+---
+
+## 2026-05-16 — §7.2 CPCV Multi-Split Evaluation 본문 작성 완료 (양 버전)
+
+### Objective
+
+PAPER_OUTLINE §7.2 매핑: exp034 (CPCV 6-fold, 15 paths) 결과. DSR variant reversal 1위 + cluster preservation 3.55× 강화 + Val sym → CPCV dsr winner reversal frame.
+
+### Changes
+
+| 파일 | 변경 |
+|---|---|
+| `reports/paper/main_ko.tex` | §7.2 TBD placeholder → 5 sub-subsection 본문 (~3 페이지) |
+| `reports/paper/main.tex` | §7.2 TBD placeholder → 5 sub-subsection 본문 (~3 페이지) — 빌드 중 중복 `\end{tabular}` 1건 수정 |
+
+### 5 sub-subsection 구조
+
+- §7.2.1 실험 설정 (CPCV 6-fold, 15 paths, purge ±168h, 60 runs × 1M)
+- §7.2.2 Per-variant CPCV 통계 — 4 variant 모두 Bonferroni 보정 후 p<0.004, DSR 1위 (SR 1.413, IQM 1.433, 5% CVaR 0.890, std 0.378)
+- §7.2.3 Winner reversal — Val sym (1.871) → CPCV dsr (1.413). 평가 방법이 winner 결정. §7.3 의 두 번째 reversal forward-reference.
+- §7.2.4 Cluster preservation — within 0.179 / across 0.636 → **3.55×** (exp032b 의 2.22× 보다 또렷). 같은 cluster 정책이 multi-split 에서 일관.
+- §7.2.5 메커니즘 해석 + H4 verdict — DSR sliding-window → 긴 holding → 시기-robust 정책 → CPCV path average 우위. §6 mechanism 인과 사슬 강화. **H4 강한 지지**.
+
+### Results
+
+- 빌드 검증: `xelatex main_ko.tex` 3회 + bibtex → **32 페이지** (이전 29, +3)
+- `pdflatex main.tex` 3회 + bibtex → **34 페이지** (이전 31, +3)
+- §7.2 분량 ~10% 목표 일치
+- 표 3개 (per-variant CPCV, reversal 비교, cluster preservation 확장), figure 2개 (menu3_boxplot, menu2_heatmap)
+- Bonferroni 4-way correction, DSR* test 인용 (Lopez de Prado 2014/2018)
+
+### Decision
+
+다음 작업 = §7.3 Final OOS — pt 의 OOS robust (분량 비중 17%, 본 논문 진짜 contribution). 사용자 명시적 "진행" 응답 후 시작.
+
+### 보류 아이디어
+
+- 빌드 중 발견한 영문 §7.2.3 의 중복 `\end{tabular}` (수정 완료) 와 같은 사소한 LaTeX 오류 를 §9 작성 후 전체 다시 한 번 검토 (linter / 검사).
+
