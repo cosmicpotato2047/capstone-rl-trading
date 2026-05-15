@@ -1,0 +1,11 @@
+best_mdd_pct: 2.173483970532289
+best_n_cycles: 31
+best_n_trades: 66
+best_return_pct: 5.902286854293237
+best_sharpe: 1.1284967928441743
+path_id: 3
+test_groups: '[0, 4]'
+test_n: 18028
+train_n: 35555
+variant: pt
+wallclock_sec: 425.8
