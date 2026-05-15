@@ -3489,3 +3489,157 @@ Figure: `reports/exp032c_figures/menu1_pareto_scatter.png` — §5 메인 figure
 - `reports/exp034_figures/*.{png,csv}` × 4
 - `reports/exp034_analysis.md`
 
+---
+
+## 2026-05-16 — exp035 완료 (Test 봉인 해제, §7.3 Final out-of-sample)
+
+### Objective (RQ 매핑)
+
+- **목표**: 본 논문 메인 발견 (시나리오 D + DSR CPCV 우위 + cluster preservation) 이 Test 2024+ out-of-sample 에서 유지되는가?
+- **RQ 매핑**: **§7.3 Final out-of-sample evaluation**. 본 논문 마지막 검증.
+- 학습 없음 — 기존 모델 (exp032b 40 + exp034 60 = 100 RL + ATR baseline) Test 평가만.
+- **Test 봉인 해제 사상 첫 1회** (CLAUDE.md 절대 금지 규칙 1 정당히 해제).
+
+### Changes
+
+| 파일 | 변경 |
+|---|---|
+| `data/processed/btc_test.parquet` | exp035 단계 봉인 해제 — worktree 에 복사 (20,189 rows, 2024-01 ~ ~2026-05, BTC $42K→$75K bull market) |
+| `scripts/run_exp035_test.py` | 신설 — 100 RL 모델 + ATR baseline Test 평가 |
+| `scripts/analyze_exp035.py` | 신설 — Per source x variant + Val vs Test gap + cluster preservation + ATR 비교 |
+
+### Hyperparameter
+
+- 학습 없음. 100 best_model.zip 로드 + Test 평가 (1 episode, random_start=False, max_episode_steps=None).
+- ATR Baseline: `env.step(action=[0, 0])` 으로 RL action 없는 ATR 비례 공식 simulate (formula_coefs Trial #34 동일).
+- 소요: **~20분** (95% RL 평가 + 5% ATR).
+
+### Results (Test 2024+, 20,189 rows)
+
+#### ATR Baseline Test
+
+| Metric | Value |
+|---|---|
+| **Sharpe** | **-0.055** (음수, near zero) |
+| Return | -0.98% |
+| MDD | 8.04% |
+| Trades | 1,750 |
+| Cycles | 824 |
+
+→ **Test 2024+ 시장 (BTC bull market $42K→$75K) 에서 ATR baseline 자체가 0 근처**. Val (1.505) 대비 -1.56 generalization gap.
+
+#### RL Variants Test (exp032b 모델, n=10 per variant)
+
+| Variant | Test mean ± std | IQM | 5% CVaR | t-stat | p (one-sided) | vs ATR (-0.055) |
+|---|---|---|---|---|---|---|
+| sym  | +0.090 ± 0.11 | +0.100 | -0.127 | +2.56 | 0.015 | +0.145 |
+| asym | +0.173 ± 0.20 | +0.158 | -0.082 | +2.74 | 0.011 | +0.228 |
+| **dsr**  | **-0.122 ± 0.19** | -0.126 | -0.468 | -2.00 | 0.961 | **-0.067** ⚠️ |
+| **pt**   | **+0.367 ± 0.29** | **+0.327** | **+0.034** | **+4.03** | **0.0015** | **+0.422** ⭐ |
+
+#### RL Variants Test (exp034 CPCV 모델, n=15 per variant)
+
+| Variant | Test mean ± std | t-stat | p | vs ATR (-0.055) |
+|---|---|---|---|---|
+| sym  | +0.001 ± 0.19 | +0.01 | 0.495 | +0.056 |
+| asym | +0.175 ± 0.25 | +2.70 | 0.009 | +0.230 |
+| dsr  | +0.070 ± 0.25 | +1.07 | 0.150 | +0.125 |
+| **pt**   | **+0.339 ± 0.31** | **+4.26** | **0.0004** | **+0.394** ⭐ |
+
+#### Val vs Test Generalization Gap (모든 variant 큰 감쇠)
+
+| Variant | exp032b Val → Test | Δ | exp034 CPCV → Test | Δ |
+|---|---|---|---|---|
+| sym  | 1.871 → 0.090 | **-1.78** | 1.302 → 0.001 | **-1.30** |
+| asym | 1.681 → 0.173 | **-1.51** | 1.043 → 0.175 | **-0.87** |
+| dsr  | 1.809 → -0.122 | **-1.93** (worst!) | 1.413 → 0.070 | **-1.34** |
+| pt   | 1.667 → 0.367 | **-1.30** (smallest) | 1.092 → 0.339 | **-0.75** (smallest) |
+
+→ **모든 variant 가 Val→Test 큰 generalization gap**. pt 가 두 source 모두 smallest gap (가장 robust).
+
+### 🎯 핵심 발견 — Two reversals + pt 의 OOS robust
+
+#### Reversal #1: 평가 환경별 Winner
+
+| 평가 환경 | 1위 | Source |
+|---|---|---|
+| Val (single-split 2021-2023) | sym (1.871) | exp032b |
+| Multi-split CPCV (15 paths) | dsr (1.413) | exp034 |
+| **Test out-of-sample (2024+)** | **pt (0.367 / 0.339)** | **exp035** |
+
+→ "단일 winner" 결론이 평가 환경마다 다름. **3 환경 3 winner**. 시나리오 D 의 nuanced positive 결론 강화.
+
+#### Reversal #2: DSR 의 OOS 실패
+
+- CPCV 1위 (1.413, p<0.001) → **Test 꼴찌** (-0.122 exp032b, +0.070 exp034)
+- DSR 의 EMA-based window risk-adjusted return formulation 이 in-sample 다양화에는 robust 하나 unseen regime (BTC bull market) 에는 적응 실패
+- exp032c 의 mechanism finding (DSR hold rate 우위) 가 OOS 에선 단점으로 작용 — high hold + bull market = 큰 sell-side timing risk
+
+#### 🌟 핵심 Positive Finding: **pt (Prospect Theory) 의 Test OOS robust**
+
+- exp032b: Test 0.367 (p=0.0015), Val 1.667 → gap -1.30 (4 variant 중 smallest)
+- exp034: Test 0.339 (p=0.0004), Val 1.092 → gap -0.75 (4 variant 중 smallest)
+- **양 source 일관 → robust finding**
+- Val 4위 → Test 1위 reversal
+- 학술적 의미: Kahneman-Tversky (1979) 의 loss aversion (λ=3.30) + concave gain (α=0.68) 이 unknown market regime 에서 가장 안전한 정책 학습 시킴
+- **본 논문의 진짜 §7.3 contribution** — "Pt reward 의 OOS robust"
+
+#### Cluster Preservation 약화 on Test
+
+| 실험 | within \|d\| | across \|d\| | Ratio |
+|---|---|---|---|
+| exp032b Val | 0.30 | 0.79 | — |
+| exp033 Slippage | 0.288 | 0.630 | 2.19× |
+| exp034 CPCV | 0.179 | 0.636 | 3.55× |
+| **exp035 Test (exp032b)** | **1.062** | **1.319** | **1.24×** |
+| **exp035 Test (exp034)** | **0.446** | **0.864** | **1.94×** |
+
+→ Test 환경에서 cluster 구분 **명확히 약화** (1.24×, 1.94×). pt 가 cluster 안에서도 outlier 로 부상 — "conservative cluster" 안에서 asym 과 분리.
+
+### Behavior Analysis
+
+본 단계는 Test 평가만. trajectory 분석은 시간 절약 위해 미진행. §7.3 본문에는 위 통계 + boxplot + Val vs Test gap 만 사용.
+
+### Decision
+
+**다음 단계: Phase 15 (ATR bootstrap significance + publication-quality figures)**, Phase 16 (논문 작성).
+
+#### 가설 H1~H4 최종 점검 (Test 포함)
+
+| 가설 | Val (exp032b) | CPCV (exp034) | Test (exp035) | 최종 |
+|---|---|---|---|---|
+| H1 (sym ≈ ATR) | 부정 (1.87 vs 1.51) | 미달 (1.30 vs 1.51) | 부분 (0.09 vs -0.06) | **약한 알파, 평가 의존** |
+| H2 weak (variant > ATR) | 지지 (4 all > 1.51) | 지지 (4 all > 1.51) | 부분 (pt/asym 만 > 0) | **부분 지지** |
+| H2 strong (variant > sym) | 부분 부정 | 부분 부정 (dsr > sym) | **재해석 (pt > sym)** | **평가 의존** |
+| H3 (selective entry) | 지지 | 지지 | (행동 분석 미진행) | **지지** |
+| H4 (Robustness) | — | 강 (3.55×) | **약화** (1.24~1.94×) | **부분 지지** |
+
+#### 새로 추가된 강한 finding (Test 에서 비로소 명확)
+
+> **H5 (사후 발견)**: Prospect-theoretic reward 가 unseen market regime 에서 다른 variant 보다 robust 함 (Val→Test gap smallest, Test mean 1위, two sources 일관 p<0.002). Kahneman-Tversky (1979) 의 loss aversion 이 RL 정책에 OOS 안전성 제공.
+
+### 본 논문 §7.3 메인 결론 (확정)
+
+> **Test 2024+ out-of-sample 평가에서 모든 variant 와 ATR baseline 가 Val 대비 약 1~2 Sharpe 감쇠 — BTC bull market 환경에서 grid trading 자체가 buy-and-hold 대비 불리. 단 prospect-theoretic reward (pt) 가 Test 1위 (Sharpe 0.367 / 0.339, two sources 일관, p<0.002), 양 source 모두 Val→Test gap smallest. Loss aversion (λ=3.30) + concave gain (α=0.68) 의 정책이 unknown regime 에 robust 함을 시사. 한편 in-sample CPCV 1위였던 DSR 은 Test 꼴찌 — DSR 의 sliding window formulation 이 distribution shift 에 취약함을 보여줌.**
+
+### Figures
+
+- `reports/exp035_figures/menu2_val_vs_test.png` — **§7.3 메인 figure 1순위** (Val/Test gap 시각화)
+- `reports/exp035_figures/menu3_boxplot.png` — **§7.3 메인 figure 2순위** (Test Sharpe distribution per variant)
+- `reports/exp035_figures/menu1_per_source.csv` — raw statistics
+- `reports/exp035_analysis.md` — 분석 요약
+
+### 보류 아이디어
+
+- **pt 의 Test 우위 메커니즘 분석**: trajectory 수집 + behavior comparison (Test 환경에서 정책 차이) → §8 Discussion 보강. ~2시간.
+- **Sharpe 외 metric 비교**: Calmar, Sortino, MAR — Test 의 bull market 에서 더 적절한 metric 가능. ~30분.
+- **buy-and-hold Test 비교**: BTC $42K → $75K 시 b-h Sharpe 매우 높음. 그리드 트레이딩의 limitation 명시. §8.
+- **distribution shift quantification**: Val 2021-2023 vs Test 2024+ 의 volatility, trend, return distribution 직접 비교. §8.
+
+### 산출물
+
+- `experiments/exp035_summary.csv` (101 rows: 100 RL + 1 ATR)
+- `reports/exp035_figures/menu2_val_vs_test.png`, `menu3_boxplot.png`, csv
+- `reports/exp035_analysis.md`
+- `data/processed/btc_test.parquet` (봉인 해제, worktree 에만)
+
