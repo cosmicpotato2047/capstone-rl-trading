@@ -379,12 +379,337 @@ single dimension of reward-variant comparison.
 \section{Method}
 \label{sec:method}
 
-\textit{[TBD. Subsections:
-\S3.1 MDP (State 7D, Action 2D, ATR-proportional formula);
-\S3.2 trading-env mechanics (cycles, fee, slippage);
-\S3.3 four reward variants + Optuna tuning (exp032a);
-\S3.4 PPO stabilization (target\_kl, ent annealing);
-\S3.5 evaluation protocol (Val / CPCV / Test).]}
+\subsection{MDP Formulation}
+\label{sec:mdp}
+
+We cast single-asset dynamic grid trading on the BTC/USDT 1-hour series as a
+finite-horizon Markov decision process $\mathcal{M} = (\mathcal{S},
+\mathcal{A}, P, R, \gamma)$. An episode runs for 720 hours (30 days) starting
+from a randomly chosen step within the training/validation range, and each
+step $t$ corresponds to a 1-hour price bar.
+
+\paragraph{State $\mathcal{S} \subset \mathbb{R}^7$.}
+The observation $\mathbf{s}_t = (s_t^{(0)}, \ldots, s_t^{(6)})$ couples market
+and portfolio state:
+
+\begin{align}
+s_t^{(0)} &= \log\!\left(p_t \,\big/\, \overline{p}_{t, 168}\right) &&
+\text{(price vs.\ 1-week mean)} \\
+s_t^{(1)} &= \frac{\bar{p}^{\mathrm{avg}}_t - p_t}{\bar{p}^{\mathrm{avg}}_t} &&
+\text{(divergence from average cost)} \\
+s_t^{(2)} &= \frac{h_t \cdot p_t}{C_0} &&
+\text{(holdings value / capital)} \\
+s_t^{(3)} &= \frac{c_t}{C_0} &&
+\text{(cash ratio)} \\
+s_t^{(4)} &= \frac{\mathrm{ATR}_{168}(p)}{p_t} &&
+\text{(volatility)} \\
+s_t^{(5)} &= \frac{p_t - p_{t-72}}{p_{t-72}} &&
+\text{(short-term trend, 3d)} \\
+s_t^{(6)} &= \frac{p_t - p_{t-720}}{p_{t-720}} &&
+\text{(long-term trend, 30d)}
+\end{align}
+
+Here $p_t$ is the bar close, $\bar{p}^{\mathrm{avg}}_t$ is the average cost of
+the current position (set to 0 when no position is held, in which case
+$s_t^{(1)}$ is also 0), $h_t$ is the BTC quantity, $c_t$ the cash balance, and
+$C_0 = 10{,}000$ USDT is the initial capital. $\mathrm{ATR}_{168}$ is the
+Average True Range \citep{wilder1978atr} computed over a 168-bar (1-week)
+window, and $\overline{p}_{t,168}$ is the corresponding simple moving average.
+All components are pre-normalized by a 168-bar rolling z-score computed on the
+training set and clipped to $[-5, 5]$.
+
+\paragraph{Action $\mathcal{A} = [0,1]^2$.}
+At each step the policy emits a continuous 2D action $\mathbf{a}_t =
+(a_t^{(0)}, a_t^{(1)})$. The first coordinate $a_t^{(0)}$ (\emph{aggressiveness})
+controls two buy limit orders, and $a_t^{(1)}$ (\emph{profit target}) controls
+two sell limit orders. We avoid a discrete buy/sell/hold action space because
+fine-grained grid width adjustment and volatility adaptation are most naturally
+expressed in continuous values; discretization would artificially limit the
+expressiveness of the action space.
+
+\paragraph{ATR-proportional grid formula.}
+Grid widths and positions are determined through volatility-normalized action
+coordinates. With $r_t = \mathrm{ATR}_{168}(p) / p_t$, current price $p_t$, and
+average cost $\bar{p}^{\mathrm{avg}}_t$,
+\begin{align}
+g^{\mathrm{buy\_hi}}_t  &= r_t \cdot (A_b + B_b \cdot a_t^{(0)}) \\
+g^{\mathrm{buy\_lo}}_t  &= r_t \cdot (C_b + D_b \cdot a_t^{(0)}) \\
+g^{\mathrm{sell\_mkt}}_t &= r_t \cdot (A_s + B_s \cdot a_t^{(1)}) \\
+g^{\mathrm{sell\_cost}}_t &= r_t \cdot (C_s + D_s \cdot a_t^{(1)})
+\end{align}
+Quote prices:
+\begin{equation}
+q^{\mathrm{buy\_hi}}_t = p_t (1 - g^{\mathrm{buy\_hi}}_t), \quad
+q^{\mathrm{buy\_lo}}_t = p_t (1 - g^{\mathrm{buy\_lo}}_t)
+\end{equation}
+\begin{equation}
+q^{\mathrm{sell\_mkt}}_t = p_t (1 + g^{\mathrm{sell\_mkt}}_t), \quad
+q^{\mathrm{sell\_cost}}_t = \bar{p}^{\mathrm{avg}}_t (1 + g^{\mathrm{sell\_cost}}_t)
+\end{equation}
+The coefficients $\{A_b, B_b, C_b, D_b, A_s, B_s, C_s, D_s\}$ are fixed
+environment constants, with values reported in \S\ref{sec:atr_baseline}. Only
+the \texttt{sell\_cost} quote is anchored at the average cost; the choice
+explicitly exposes ``break-even recovery'' to the policy.
+
+\paragraph{Reward.}
+The baseline (\texttt{sym}, symmetric) form is the 1-step PnL ratio:
+\begin{equation}
+r_t^{\mathrm{sym}} = \frac{E_t - E_{t-1}}{C_0}, \quad
+E_t = c_t + h_t \cdot p_t
+\end{equation}
+Transaction fees are already deducted from $c_t$ inside
+\texttt{\_execute\_buy} and \texttt{\_execute\_sell}, so no separate subtraction
+appears in the reward. All four reward variants in this paper are defined as
+functions of $r_t^{\mathrm{sym}}$ and detailed in \S\ref{sec:reward_variants}.
+
+\subsection{Trading-Environment Dynamics}
+\label{sec:env_dynamics}
+
+This subsection details order execution, the cycle definition, and the
+transaction-cost model.
+
+\paragraph{Limit-order execution.}
+Fill decisions for the four quotes use the next bar's high/low
+$(p^{\mathrm{H}}_{t+1}, p^{\mathrm{L}}_{t+1})$:
+\begin{equation}
+\begin{aligned}
+&p^{\mathrm{L}}_{t+1} \leq q^{\mathrm{buy\_hi}}_t  \Rightarrow
+\text{fill at $q^{\mathrm{buy\_hi}}_t$} \\
+&p^{\mathrm{L}}_{t+1} \leq q^{\mathrm{buy\_lo}}_t  \Rightarrow
+\text{fill at $q^{\mathrm{buy\_lo}}_t$} \\
+&p^{\mathrm{H}}_{t+1} \geq q^{\mathrm{sell\_mkt}}_t \Rightarrow
+\text{fill at $q^{\mathrm{sell\_mkt}}_t$} \\
+&p^{\mathrm{H}}_{t+1} \geq q^{\mathrm{sell\_cost}}_t \Rightarrow
+\text{fill at $q^{\mathrm{sell\_cost}}_t$}
+\end{aligned}
+\end{equation}
+When both buy and sell quotes are filled in the same bar we apply a
+\emph{sell-first} rule, prioritizing inventory liquidation. The fill price is
+the \emph{quote price itself}, not the next-bar extreme. Filling at the
+next-bar extreme injects favorable bias into the simulation; we therefore
+discarded an earlier ``next\_low/next\_high'' execution rule and use only the
+limit-order rule throughout this paper.
+
+\paragraph{Cycle definition.}
+A cycle starts when the \emph{first buy fills while holdings = 0} and ends
+when subsequent sells return holdings to 0. Multiple partial buys/sells can
+occur inside a single cycle, and the cycle return is
+$\mathrm{cycle\_pnl} = (c_{\text{end}} - c_{\text{start}}) / c_{\text{start}}$.
+At the start of each cycle, the slot size used for the cycle is set:
+\begin{equation}
+\text{slot\_size}_{\text{cycle}} =
+\frac{c_{\text{start}}}{n_{\text{splits}}}, \quad
+\text{order\_size} = \frac{\text{slot\_size}}{n_{\text{buy\_orders}}}
+\end{equation}
+We use $n_{\text{splits}}=2$ and $n_{\text{buy\_orders}}=2$ (the best values
+from Phase 2 Optuna Trial \#34). \texttt{threshold\_basis} is fixed to
+\texttt{avg\_price}, meaning the ``liquidate all'' detection uses the average
+cost.
+
+\paragraph{Transaction-cost model.}
+Transaction costs are set to \emph{0.05\% per side} (Binance maker fee). On a
+buy, the filled quantity is $\Delta h = \text{order\_size} \cdot (1 - f) / q$
+and the cash change is $\Delta c = -\text{order\_size}$, so the fee is already
+reflected in $c_t$. In \S\ref{sec:slippage} (exp033) we add an additional
+slippage $\sigma = 0.02\%$ that modifies fill prices to
+$q^{\mathrm{buy}} \cdot (1 + \sigma)$ and $q^{\mathrm{sell}} \cdot (1 - \sigma)$.
+Slippage is not applied to the base environment and appears only in the
+robustness analysis.
+
+\subsection{ATR Baseline}
+\label{sec:atr_baseline}
+
+The comparison baseline \emph{shares the environment and grid formula} with
+our RL policies but determines actions via a rule. Concretely, the ATR
+baseline reuses the grid formulas of \S\ref{sec:mdp} for $g^{\mathrm{buy\_hi}},
+g^{\mathrm{buy\_lo}}, g^{\mathrm{sell\_mkt}}, g^{\mathrm{sell\_cost}}$ with all
+RL action degrees of freedom \emph{zeroed} ($a_t^{(0)} = a_t^{(1)} = 0$, so
+that the $B_b, D_b, B_s, D_s$ terms drop and the grid widths are fixed
+time-independent constants determined entirely by $A_b, C_b, A_s, C_s$). The
+coefficient values come from Phase 2 Optuna Trial \#34:
+
+\begin{table}[h]
+\centering
+\caption{Grid coefficients of the ATR baseline (Phase 2, Optuna Trial \#34).}
+\begin{tabular}{lcclcc}
+\toprule
+Coef. & Value & Role & Coef. & Value & Role \\
+\midrule
+$A_b$ & 1.665 & buy\_hi base width & $A_s$ & 0.285 & sell\_mkt base width \\
+$C_b$ & 6.070 & buy\_lo base width & $C_s$ & 1.951 & sell\_cost base width \\
+$B_b$ & 1.748 & buy\_hi action sensitivity & $B_s$ & 1.950 & sell\_mkt action sens.\ \\
+$D_b$ & 18.683 & buy\_lo action sensitivity & $D_s$ & 7.500 & sell\_cost action sens.\ \\
+\bottomrule
+\end{tabular}
+\label{tab:atr_coefs}
+\end{table}
+
+The ATR baseline yields Val Sharpe $1.378$ without slippage,\footnote{In the
+early RESEARCH\_LOG (May 14, 2026) we recorded $1.505$; the value was
+re-measured to $1.378$ after the Phase 16a unification of the evaluation
+setup ($n_{\text{eval\_episodes}}$, env config synchronization). We use
+$1.378$ throughout the paper.} dropping to $0.835$ when slippage of $0.02\%$
+is added.
+
+\subsection{Four Reward Variants}
+\label{sec:reward_variants}
+
+We now define the four reward variants that form the principal comparison unit
+of this paper. All are expressed as functions of $x_t := r_t^{\mathrm{sym}} =
+(E_t - E_{t-1}) / C_0$ and differ \emph{only} in functional form; the state,
+action, ATR grid, and fee model are otherwise identical.
+
+\paragraph{(i) Symmetric (\texttt{sym}).}
+\begin{equation}
+r_t^{\mathrm{sym}} = x_t = \frac{E_t - E_{t-1}}{C_0}
+\end{equation}
+No hyperparameter. Baseline of this paper.
+
+\paragraph{(ii) Asymmetric (\texttt{asym}).}
+\begin{equation}
+r_t^{\mathrm{asym}} =
+\begin{cases}
+x_t & \text{if } x_t \geq 0 \\
+\beta \cdot x_t & \text{if } x_t < 0
+\end{cases}, \quad \beta > 1
+\end{equation}
+A first-order approximation of a risk-averse utility, weighting losses by
+$\beta$. An Optuna 30-trial $\times$ 200k-step search over the range
+$[1.0, 4.0]$ to maximize Val Sharpe selected the best $\beta = 3.420$.
+
+\paragraph{(iii) Differential Sharpe Ratio (\texttt{dsr}).}
+The formulation of \citet{moody2001dsr}. Given an EWMA decay rate $\eta$,
+online estimates of the first and second return moments evolve as
+\begin{align}
+A_t &= A_{t-1} + \eta \, (x_t - A_{t-1}) \\
+B_t &= B_{t-1} + \eta \, (x_t^2 - B_{t-1}) \\
+\Delta A_t &= x_t - A_{t-1}, \quad \Delta B_t = x_t^2 - B_{t-1}
+\end{align}
+The DSR step reward is the differential of the on-line Sharpe estimator
+$\hat{S}_t = A_t / \sqrt{B_t - A_t^2}$:
+\begin{equation}
+r_t^{\mathrm{dsr}} =
+\frac{B_{t-1} \, \Delta A_t - \tfrac{1}{2} A_{t-1} \, \Delta B_t}
+     {(B_{t-1} - A_{t-1}^2)^{3/2}}
+\end{equation}
+A 30-trial Optuna search over $[1/720, 1/24]$ (log-uniform) selected the best
+$\eta = 0.0352 \approx 1/28\,\text{h}$, an EWMA window of approximately
+1.2~days.
+
+\paragraph{(iv) Prospect-theoretic (\texttt{pt}).}
+The utility function of \citet{kahneman1979prospect} and
+\citet{tversky1992cumulative} applied directly as a step reward:
+\begin{equation}
+r_t^{\mathrm{pt}} =
+\begin{cases}
+\mathrm{sgn}(x_t) \, |x_t|^{\alpha} & \text{if } x_t \geq 0 \\
+-\lambda \, |x_t|^{\alpha} & \text{if } x_t < 0
+\end{cases}, \quad 0 < \alpha \leq 1, \quad \lambda \geq 1
+\end{equation}
+$\alpha < 1$ encodes the concavity of the utility (diminishing marginal
+utility of gains), and $\lambda > 1$ encodes loss aversion. The standard
+values from \citet{tversky1992cumulative}, fitted to human behavior, are
+$\alpha = 0.88$ and $\lambda = 2.25$. The Val-Sharpe-maximizing values for our
+RL policy, however, are $\alpha = 0.683$ and $\lambda = 3.303$, found by
+Optuna 30 trials over $\alpha \in [0.5, 1.0]$ and $\lambda \in [1.0, 4.0]$.
+The fact that RL prefers a \emph{more concave} utility and \emph{stronger
+loss aversion} than the human standard is consistent with the mechanism in
+\S\ref{sec:mechanism} and the OOS robustness reported in \S\ref{sec:oos}.
+
+\paragraph{Optuna search summary.}
+For each of the three variants \texttt{asym}, \texttt{dsr}, \texttt{pt} we ran
+30 trials $\times$ 200k steps using a TPE sampler
+\citep{akiba2019optuna} (seed=42, MedianPruner with
+$n_{\text{startup}}=5$). The total training cost was $3 \times 30 \times
+200\text{k} = 18$M steps, taking approximately 2 hours on a Windows 11
+CPU with $n_{\text{envs}}=4$. \texttt{sym} has no hyperparameter and skips
+this stage.
+
+\subsection{PPO Training and the Stabilization Package}
+\label{sec:ppo_stab}
+
+Policy training uses PPO \citep{schulman2017ppo} from stable-baselines3
+\citep{raffin2021sb3}. Standard PPO hyperparameters
+($\gamma=0.99$, $\lambda_{\mathrm{GAE}}=0.95$, clip
+$\epsilon=0.2$, $v_f$ coef $=0.5$, gradient clip $=0.5$, MLP policy
+$[64, 64]$, batch=256, $n_{\text{epochs}}=10$, $n_{\text{steps}}=4096$,
+$n_{\text{envs}}=4$) follow stable-baselines3 defaults. To mitigate the
+reward sparsity of our environment (the per-step reward is near 0 when no
+fill occurs) and the late-stage policy collapse observed in Phase 2
+(exp020--022), we add the following \emph{stabilization package} (exp030):
+
+\begin{enumerate}[leftmargin=*]
+\item \textbf{Learning-rate linear decay}: $\alpha_t$ linearly decays from
+$3 \times 10^{-4}$ to $1 \times 10^{-5}$ over training. This bounds the size
+of late-stage policy updates and dampens post-best collapse.
+\item \textbf{Entropy coefficient annealing}: $c_{\text{ent}}$ linearly anneals
+from $0.01$ to $0.001$, ensuring sufficient initial exploration while
+encouraging convergence to a near-deterministic policy late in training.
+\item \textbf{Target KL early stop}: $\text{target\_kl}=0.02$ measures the KL
+divergence after each minibatch update and aborts the update for that batch if
+the threshold is exceeded, preventing PPO from making myopic large policy
+changes.
+\item \textbf{Best-model checkpoint}: Val Sharpe is evaluated every 50k steps
+($n_{\text{eval\_episodes}}=5$) and the weights at the best Val Sharpe are
+saved separately, providing protection against late-stage collapse.
+\end{enumerate}
+
+The package was developed in exp030 (with \texttt{sym} reward) and produced
+Val Sharpe best $1.974$ at step 550k, falling to final $1.209$ at step 1M.
+Because the collapse pattern after step 700k persists despite the package,
+\emph{all evaluations in this paper use the best checkpoint}; the final model
+is never used.
+
+\subsection{Evaluation Protocol}
+\label{sec:eval_protocol}
+
+We use \emph{three evaluation environments concurrently}. The data partition
+is strict time-order to prevent leakage:
+
+\begin{table}[h]
+\centering
+\caption{Data partition.}
+\begin{tabular}{lll}
+\toprule
+Partition & Range & Bars (approx.) \\
+\midrule
+Train & 2017-08-17 \,--\, 2020-12-31 & $\sim$30{,}000 \\
+Val (single-split) & 2021-01-01 \,--\, 2023-12-31 & $\sim$26{,}000 \\
+Test (sealed) & 2024-01-01 \,--\, 2026-04 & $\sim$20{,}000 \\
+\bottomrule
+\end{tabular}
+\label{tab:data_split}
+\end{table}
+
+\paragraph{Val (single-split).}
+The main comparison environment of \S\ref{sec:pareto}. For each reward variant
+we train 10 seeds $\times$ 1M steps and evaluate the best\_model on the entire
+Val range with $n_{\text{eval\_episodes}}=5$, producing per-seed
+Sharpe/MDD/Calmar/trade-count/return.
+
+\paragraph{CPCV 6-fold.}
+The multi-split environment of \S\ref{sec:cpcv}. Following
+\citet{lopezdeprado2018advances}, we apply 6-fold Combinatorial Purged
+Cross-Validation \emph{inside the Train partition}, producing
+$\binom{6}{2}=15$ paths (each consisting of 5 months of training plus
+1 month of evaluation). A 1-week purge gap between train and evaluation folds
+prevents information leakage. We execute 4 variants $\times$ 15 paths $\times$
+1 seed = 60 runs.
+
+\paragraph{Test (unsealed).}
+The OOS environment of \S\ref{sec:oos}. For honesty, following
+\citet{gort2022backtest}, Test was \emph{kept sealed from any search or
+hyperparameter decision} until exp035 (May 16, 2026). After unsealing, we
+evaluate 100 RL models (4 variants $\times$ multi-seed/seed-pair) along with
+the ATR baseline and Buy-and-Hold on Test.
+
+\paragraph{Statistical tests.}
+All pairwise comparisons report Cohen's $d$ and bootstrap $\mathrm{P}(A > B)$
+($10^4$ resamples). Single-sided t-tests against ATR on CPCV use Bonferroni
+4-way correction along with the Deflated Sharpe Ratio test of
+\citet{lopezdeprado2014dsr}. To report evaluation variability and distributional
+skew, we follow \citet{henderson2018rlreproducibility} and add IQM
+(Interquartile Mean) and 5\% CVaR as secondary metrics.
 
 % ─── 4. Phase 1 Negative Finding ─────────────────────────────────────────────
 \section{Phase 1: Policy Saturation under Symmetric Reward}
