@@ -2355,12 +2355,85 @@ OOS-robust policies.
 \section{Conclusion}
 \label{sec:conclusion}
 
-\textit{[TBD. Four main messages:
-(1) Pareto-frontier trade-off;
-(2) winner reversal across evaluation environments;
-(3) OOS robustness of Prospect Theory;
-(4) in-sample advantage $\neq$ OOS robustness.
-Future work: multi-asset, additional regimes, DR, meta-RL.]}
+This paper quantitatively compared four reward variants
+(\texttt{sym}, \texttt{asym}, \texttt{dsr}, \texttt{pt}) for BTC/USDT 1-hour
+grid trading (Env-v4) across three evaluation environments: \emph{single-split
+Val}, \emph{6-fold CPCV with 15 paths}, and the \emph{unsealed Test 2024+}.
+The paper makes four main claims.
+
+\paragraph{(1) The effect of reward design appears as a risk-profile
+trade-off (Pareto frontier; \S\ref{sec:pareto}).}
+All four variants exceed the ATR baseline, but no single winner exists. The
+four variants partition statistically into two clusters \{\texttt{sym},
+\texttt{dsr}\} (aggressive) and \{\texttt{asym}, \texttt{pt}\} (conservative)
+(within $|d|<0.30$, across $|d|>0.79$; policy distance ratio 2.22$\times$),
+forming a Pareto-like frontier on the Sharpe--MDD plane. Our contribution is
+the honest multi-dimensional quantification, in place of the simpler
+``variant X gives the best alpha'' single-metric conclusion.
+
+\paragraph{(2) The single-metric winner differs by evaluation environment
+(three environments, three winners;
+\S\ref{sec:cpcv_reversal}, \S\ref{sec:oos_three_env_reversal}).}
+On Val, \texttt{sym} leads ($1.871$); on CPCV, \texttt{dsr} leads ($1.413$);
+on Test, \texttt{pt} leads ($0.367 / 0.339$ across both sources at $p<0.002$).
+Evaluation environment selection determines which variant is ``the best
+reward design''---an extension of \citet{henderson2018rlreproducibility}'s
+reproducibility concern from seed variance to reward comparison. We
+recommend a standard \emph{three-environment evaluation protocol} for RL
+trading studies.
+
+\paragraph{(3) Prospect theory produces OOS-robust policies (H5;
+\S\ref{sec:oos_h5}).}
+An RL policy trained with the \citet{kahneman1979prospect} prospect-theoretic
+utility ($\alpha=0.683, \lambda=3.303$) is consistently first on the unseen
+Test bull market across two sources ($p<0.002$, smallest Val$\to$Test gap).
+The mechanism is short holding (mean $1.4$\,h, max $6$\,h), avoiding
+sell-side timing risk---directly verified by trajectory analysis
+(\S\ref{sec:oos_mechanism}). To our knowledge, this is the first
+quantitative demonstration that behavioral-economics prospect theory confers
+OOS safety on RL policies. A side finding is that
+\emph{stronger loss aversion and stronger concavity} than the human-fit
+values ($\alpha=0.88, \lambda=2.25$) favors the RL policy, suggesting the
+practical recommendation that ``do not adopt human-estimated behavioral
+parameters in RL; re-tune them on domain data.''
+
+\paragraph{(4) In-sample diversification does not guarantee OOS consistency
+(\S\ref{sec:oos_mechanism}).}
+The CPCV-1st \texttt{dsr} drops to last with negative Sharpe on Test
+(exp032b source $-0.122$). The same mechanism of DSR's sliding-window memory
+that produces \emph{long holdings} is a strength under in-sample
+diversification but a weakness under the OOS bull market, where sell-side
+timing risk surges. That is, \emph{the same behavioral effect of the same
+reward formulation flips sign across evaluation environments}. The
+``in-sample advantage $\leftrightarrow$ OOS robustness'' trade-off is itself
+a dimension along which reward formulations differ.
+
+\subsection*{Future Work}
+
+Five directions responding to the limitations of \S\ref{sec:disc_limitations}:
+\begin{itemize}[leftmargin=*]
+\item \textbf{Multi-asset verification}: re-test H5 on equity ETFs (S\&P 500
+sectors), FX major pairs, and commodities (gold/oil). Distribution-shift
+forms differ across assets; the question is whether
+\texttt{pt}'s short-holding mechanism generalizes.
+\item \textbf{Additional regimes}: extend Test to the 2018 bear, 2019
+sideways, and potential 2025+ sideways periods. Broaden ``OOS robust'' from
+``bull only'' to ``all regimes.''
+\item \textbf{Domain Randomization (DR)}: train with randomized
+slippage/fee/start times and ask whether \texttt{dsr}'s OOS failure
+recovers, and whether the already-robust \texttt{pt} gains additional
+margin.
+\item \textbf{Meta-RL and continuous reward learning}: learn a meta-policy
+that adapts $(\alpha, \lambda)$ online based on environment signals. H5
+verifies that ``one-shot'' prospect parameters are OOS robust, but
+time-varying parameters may be more robust in nonstationary environments.
+\item \textbf{Other RL algorithms}: this paper used PPO alone. Replicate
+the reward-variant comparison on SAC, TD3, IMPALA to separate algorithm
+effects from reward effects.
+\end{itemize}
+
+The code and data of this work are released at
+\url{https://github.com/cosmicpotato2047/capstone-rl-trading}.
 
 % ─── References ──────────────────────────────────────────────────────────────
 \bibliographystyle{plainnat}

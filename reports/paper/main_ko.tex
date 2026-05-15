@@ -2171,12 +2171,75 @@ point의 history 의존)를 변형하여 OOS robust 정책의 매개변수 sensi
 \section{결론}
 \label{sec:conclusion}
 
-\textit{[TBD: 추후 작성. 4개 메인 메시지:
-(1) Pareto 프론티어 trade-off,
-(2) 평가 환경별 winner reversal,
-(3) Prospect Theory의 OOS 강건성,
-(4) In-sample 우위 $\neq$ OOS 강건성.
-Future work: multi-asset, regime, DR, meta-RL.]}
+본 논문은 BTC/USDT 1시간봉 그리드 트레이딩 환경(Env-v4) 위에서 4가지 reward 변형
+(\texttt{sym}, \texttt{asym}, \texttt{dsr}, \texttt{pt})의 효과를 \emph{단일 분할
+Val} + \emph{CPCV 6-fold 15 paths} + \emph{봉인 해제 Test 2024+}의 세 환경에서
+정량 비교했다. 다음 네 가지가 본 논문의 메인 메시지이다.
+
+\paragraph{(1) Reward variant의 영향은 risk profile dimension의 trade-off로
+나타난다 (Pareto frontier; \S\ref{sec:pareto}).}
+4 variant 모두 ATR 베이스라인을 초과하나, 단일 winner는 없다. 4 variant는
+두 클러스터 \{\texttt{sym}, \texttt{dsr}\} (aggressive)와 \{\texttt{asym},
+\texttt{pt}\} (conservative)로 통계적으로 분리되어 (within $|d|<0.30$,
+across $|d|>0.79$, policy distance 비율 2.22$\times$) Sharpe--MDD 평면에서
+Pareto-유사 frontier를 형성한다. 단순 ``X reward가 best alpha''의 single-metric
+결론보다 multi-dimensional trade-off의 정직한 정량화가 본 논문의 contribution이다.
+
+\paragraph{(2) 단일 metric winner는 평가 환경별로 다르다 (세 환경 세 winner
+reversal; \S\ref{sec:cpcv_reversal}, \S\ref{sec:oos_three_env_reversal}).}
+Val에서는 \texttt{sym} ($1.871$), CPCV에서는 \texttt{dsr} ($1.413$), Test에서는
+\texttt{pt} ($0.367 / 0.339$ 양 source 일관 $p<0.002$)가 1위이다. 평가 환경
+선택이 ``우월한 reward design''의 결론을 바꾼다는 사실은
+\citet{henderson2018rlreproducibility}의 reproducibility 우려를 reward 비교
+차원으로 확장한 결과이다. 본 논문은 RL 트레이딩 연구의 표준 평가 프로토콜로
+\emph{세 환경 동시 사용}을 권고한다.
+
+\paragraph{(3) Prospect Theory가 OOS robust 정책을 산출한다 (H5; \S\ref{sec:oos_h5}).}
+\citet{kahneman1979prospect}의 prospect theory를 RL reward로 직접 사용한
+정책($\alpha=0.683, \lambda=3.303$)이 unseen Test bull market에서 양 source
+일관 1위($p<0.002$, Val$\to$Test gap smallest)임을 정량 확인했다. 메커니즘은
+\emph{짧은 holding}(mean $1.4$\,h, max $6$\,h)을 통한 sell-side timing risk
+회피이며, trajectory 분석으로 직접 입증되었다(\S\ref{sec:oos_mechanism}).
+본 논문이 알기로는 행동경제학의 prospect theory가 RL 정책에 부여하는 OOS 안전성의
+첫 정량 결과이다. 또한 인간 표준값($\alpha=0.88, \lambda=2.25$)보다
+\emph{더 강한 손실 회피와 더 오목한 효용}이 RL 정책에는 유리하다는 부수적 발견은
+``인간 행동 추정값을 RL에 그대로 채택하지 말고 도메인 데이터로 재튜닝하라''는
+실용 권고로 이어진다.
+
+\paragraph{(4) In-sample 다양화의 우위가 OOS 일관성을 보장하지 않는다
+(\S\ref{sec:oos_mechanism}).}
+CPCV에서 1위였던 \texttt{dsr}이 Test에서는 음수 Sharpe (exp032b source $-0.122$)로
+꼴찌가 된다. DSR의 sliding-window memory가 정책에 \emph{긴 holding}을 학습시키는
+동일 메커니즘이 in-sample 다양화 환경에서는 강점, OOS bull market에서는 sell-side
+timing risk 폭증으로 약점이 된다. 즉 \emph{같은 reward formulation의 같은 행동
+효과가 평가 환경에 따라 반대 부호로 작동}한다. ``in-sample 우위 $\leftrightarrow$
+OOS robust''라는 trade-off 자체가 reward formulation 선택의 한 차원으로
+정량 확인된 셈이다.
+
+\subsection*{Future Work}
+
+본 논문의 5개 한계(\S\ref{sec:disc_limitations})에 대응하는 후속 연구 방향:
+\begin{itemize}[leftmargin=*]
+\item \textbf{Multi-asset 검증}: H5를 주식 ETF (S\&P 500 sector), FX 메이저
+페어, 원자재(금/원유) 환경에서 검증. distribution shift의 형태가 자산별로 다른
+가운데 \texttt{pt}의 짧은-holding 메커니즘이 일반화되는지 정량 측정.
+\item \textbf{추가 regime 검증}: BTC 2018 bear, 2019 sideways, 2025+의 가능한
+횡보 시기로 Test를 확장. ``OOS robust''의 정의를 bull-only에서 모든 regime으로
+확장.
+\item \textbf{Domain Randomization (DR) 통합}: 학습 시 slippage/fee/시작 시점을
+randomize하는 DR 기법으로 \texttt{dsr}의 OOS 실패가 회복되는지 검증. naive
+학습에서 OOS robust인 \texttt{pt}가 DR 학습에서 추가 우위를 보일지도 확인.
+\item \textbf{Meta-RL과 continuous reward learning}: 환경 신호로 reward 매개변수
+($\alpha, \lambda$)를 online 적응하는 meta-policy. 본 논문 H5는 ``one-shot''
+prospect parameter가 OOS robust임을 확인했으나, 시변 환경에서 adaptive parameter가
+더 robust할 가능성.
+\item \textbf{다른 RL 알고리즘}: 본 논문은 PPO 단일 알고리즘. SAC, TD3, IMPALA
+등 다른 actor-critic 방법에서 reward 변형 비교를 반복하여 algorithm 효과와
+reward 효과의 분리.
+\end{itemize}
+
+본 논문의 코드와 데이터, 학습 결과는
+\url{https://github.com/cosmicpotato2047/capstone-rl-trading} 에서 공개한다.
 
 % ─── References ──────────────────────────────────────────────────────────────
 \bibliographystyle{plainnat}
