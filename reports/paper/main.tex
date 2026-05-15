@@ -841,10 +841,273 @@ becomes the principal channel through which RL adds value.
 \section{Pareto Frontier and Scenario D}
 \label{sec:pareto}
 
-\textit{[TBD. exp032b results:
-4 variants $\times$ 10 seeds, pairwise statistics, Pareto scatter,
-two-cluster discovery, hypothesis H1--H3 evaluation,
-Scenario D confirmation.]}
+This section presents the first main finding of this paper: the
+\emph{Pareto-like frontier structure of the four reward variants}. Training
+each of the four reward forms defined in \S\ref{sec:reward_variants} for
+10 seeds $\times$ 1M steps on the canonical environment (Env-v4) places the
+40 resulting policies in two clusters that form a trade-off frontier in the
+Sharpe--MDD plane rather than collapsing onto a single winner. None of the
+three pre-registered scenarios (A/B/C) matches this outcome, so we define an
+ex-post scenario ``D'' as the honest summary, and it forms the starting point
+for the multi-dimensional quantification of the rest of the paper.
+
+\subsection{Experimental Setup}
+\label{sec:pareto_setup}
+
+We train each of the four variants of \S\ref{sec:reward_variants} with 10
+seeds (42--51). PPO settings and the stabilization package follow
+\S\ref{sec:ppo_stab} verbatim; hyperparameters for \texttt{asym}, \texttt{dsr},
+and \texttt{pt} are the Optuna bests from \S\ref{sec:reward_variants}
+($\beta=3.42$, $\eta=0.0352$, $\alpha=0.683$, $\lambda=3.303$). \texttt{sym}
+has no hyperparameter. The total training cost is $4 \times 10 \times 1\mathrm{M}
+= 40$M steps, completed in approximately 3 hours 44 minutes on a Windows 11
+CPU ($n_{\text{envs}}=4$).
+
+Evaluation uses the best\_checkpoint for each seed on the single-split Val
+window (2021--2023) of \S\ref{sec:eval_protocol}. Metrics are best Val Sharpe,
+final Val Sharpe (Val Sharpe at the 1M step), MDD, Calmar, trade count, and
+cumulative return. The gap between best and final Val Sharpe is a proxy for
+late-stage policy stability.
+
+\subsection{Per-Variant Results: Four Different Metric Winners}
+\label{sec:pareto_per_variant}
+
+Table~\ref{tab:pareto_metrics} reports the 10-seed mean $\pm$ standard
+deviation for the six metrics.
+
+\begin{table}[h]
+\centering
+\small
+\caption{exp032b results. 10 seeds $\times$ 1M steps, evaluated on Val. The
+ATR baseline is a single deterministic policy so it has no std.
+\textbf{Bold} indicates per-metric leaders.}
+\begin{tabular}{lcccccc}
+\toprule
+Variant & Best Sharpe & Final Sharpe & MDD (\%) & Calmar & Trades & Return (\%) \\
+\midrule
+\texttt{sym}  & $\mathbf{1.871 \pm 0.22}$ & $1.015 \pm 0.43$ & $3.27 \pm 0.82$ &
+$0.60$ & $\mathbf{120}$ & $6.60$ \\
+\texttt{dsr}  & $1.809 \pm 0.21$ & $\mathbf{1.204 \pm 0.41}$ & $4.33 \pm 1.70$ &
+$0.47$ & $117$ & $\mathbf{7.40}$ \\
+\texttt{asym} & $1.681 \pm 0.10$ & $1.101 \pm 0.27$ & $\mathbf{2.28 \pm 0.31}$ &
+$\mathbf{0.755}$ & $96$ & $5.23$ \\
+\texttt{pt}   & $1.667 \pm 0.09$ & $1.082 \pm 0.18$ & $2.31 \pm 0.29$ &
+$0.735$ & $85$ & $4.88$ \\
+\midrule
+ATR baseline & $1.378$ & --- & $9.83$ & $0.153$ & $2{,}121$ & $35.80$ \\
+\bottomrule
+\end{tabular}
+\label{tab:pareto_metrics}
+\end{table}
+
+Two key observations follow.
+
+\paragraph{(i) All four variants exceed the ATR baseline.}
+Best Val Sharpe values range from $+21\%$ (\texttt{sym}) to $+21\%$ (\texttt{pt})
+relative to ATR ($1.378$), and all are statistically significant
+(per-variant bootstrap 95\% CI lower bound exceeds 1.5). This contrasts
+qualitatively with the ``RL = Fixed $[1.0, 0.0]$'' result of
+\S\ref{sec:phase1_negative}, and we attribute the difference to environment
+normalization (limit-order execution) and the stabilization package
+(\S\ref{sec:ppo_stab}). The fact that even \texttt{sym} clearly exceeds ATR
+\textbf{rejects H1 (sym RL $\approx$ ATR)}.
+
+\paragraph{(ii) Four different metric leaders.}
+\texttt{sym} leads on best Sharpe, \texttt{dsr} leads on final Sharpe and
+cumulative return, \texttt{asym} leads on MDD and Calmar, and \texttt{pt}
+sits a hair behind \texttt{asym} on all metrics. There is no single winner;
+the choice of metric determines which variant is ``best.'' This is a
+multi-dimensional trade-off structure, and \textbf{H2 strong (asym/dsr/pt $>$
+sym) is partially rejected}.
+
+\subsection{Pareto Frontier Visualization}
+\label{sec:pareto_scatter}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.85\textwidth]{menu1_pareto_scatter}
+\caption{Scatter of the 40 policies (4 variants $\times$ 10 seeds) in the
+Sharpe--MDD plane. The horizontal axis is best Val Sharpe (higher better) and
+the vertical axis is MDD (lower better). \texttt{sym}/\texttt{dsr} cluster in
+the \emph{aggressive} region of high Sharpe + high MDD;
+\texttt{asym}/\texttt{pt} cluster in the \emph{conservative} region of
+moderate Sharpe + low MDD. The ATR baseline sits at $(1.378, 9.83)$ in the
+same plane and is Pareto-dominated by every RL policy.}
+\label{fig:pareto_scatter}
+\end{figure}
+
+Figure~\ref{fig:pareto_scatter} plots the 40 policies' $(\text{Sharpe},
+\text{MDD})$ coordinates color-coded by reward variant. Two features stand out.
+
+First, within each variant the 10-seed points are tightly grouped:
+\texttt{asym} and \texttt{pt} have std $\approx 0.10$ (std/mean $\approx 6\%$),
+indicating strong seed robustness for the conservative variants; \texttt{sym}
+and \texttt{dsr} have std $\approx 0.22$, slightly more spread.
+
+Second, the point sets for \texttt{sym} and \texttt{dsr} \emph{largely
+overlap}, and so do those for \texttt{asym} and \texttt{pt}, but the two pairs
+hardly overlap with each other. The visual point-level separation is
+quantified statistically in the next subsection.
+
+\subsection{Statistical Separation of the Two Clusters}
+\label{sec:pareto_clusters}
+
+Pairwise Cohen's $d$ on best Val Sharpe and the bootstrap $\mathrm{P}(A > B)$
+($10^4$ resamples) appear in Tables~\ref{tab:pareto_cohens_d} and
+\ref{tab:pareto_p_a_gt_b}.
+
+\begin{table}[h]
+\centering
+\caption{Pairwise Cohen's $d$ (best Sharpe, row$-$col). $|d|<0.3$ is a
+``small effect''; $|d|>0.8$ is a ``large effect.'' Within-cluster cells with
+$|d|<0.3$ and across-cluster cells with $|d|>0.8$ are bolded.}
+\begin{tabular}{lcccc}
+\toprule
+ & \texttt{sym} & \texttt{asym} & \texttt{dsr} & \texttt{pt} \\
+\midrule
+\texttt{sym}  & ---   & $+\mathbf{1.10}$ & $+0.29$ & $+\mathbf{1.19}$ \\
+\texttt{asym} & $-\mathbf{1.10}$ & ---   & $-0.79$ & $+0.15$ \\
+\texttt{dsr}  & $-0.29$ & $+0.79$ & ---   & $+\mathbf{0.89}$ \\
+\texttt{pt}   & $-\mathbf{1.19}$ & $-0.15$ & $-\mathbf{0.89}$ & ---   \\
+\bottomrule
+\end{tabular}
+\label{tab:pareto_cohens_d}
+\end{table}
+
+\begin{table}[h]
+\centering
+\caption{Pairwise $\mathrm{P}(\text{row} > \text{col})$ on best Sharpe
+($10^4$ bootstrap resamples). Values near 1 indicate dominance by the row
+variant; 0.5 indicates equivalence.}
+\begin{tabular}{lcccc}
+\toprule
+ & \texttt{sym} & \texttt{asym} & \texttt{dsr} & \texttt{pt} \\
+\midrule
+\texttt{sym}  & ---   & $0.998$ & $0.746$ & $0.999$ \\
+\texttt{asym} & $0.003$ & ---   & $0.031$ & $0.634$ \\
+\texttt{dsr}  & $0.254$ & $0.968$ & ---   & $0.984$ \\
+\texttt{pt}   & $0.001$ & $0.363$ & $0.018$ & ---   \\
+\bottomrule
+\end{tabular}
+\label{tab:pareto_p_a_gt_b}
+\end{table}
+
+The pattern in Table~\ref{tab:pareto_cohens_d} is decisive.
+\begin{itemize}[leftmargin=*]
+\item \textbf{Within cluster}: \texttt{sym} vs \texttt{dsr} $|d| = 0.29$,
+\texttt{asym} vs \texttt{pt} $|d| = 0.15$. Both are ``small effects.''
+\item \textbf{Across cluster}: \texttt{sym} vs \texttt{asym} $|d| = 1.10$,
+\texttt{sym} vs \texttt{pt} $|d| = 1.19$, \texttt{dsr} vs \texttt{asym}
+$|d| = 0.79$, \texttt{dsr} vs \texttt{pt} $|d| = 0.89$. All four pairs have
+$|d| > 0.79$.
+\end{itemize}
+
+Hence the four variants statistically partition into:
+\[
+\underbrace{\{\texttt{sym}, \texttt{dsr}\}}_{\text{aggressive}}
+\quad \text{vs.} \quad
+\underbrace{\{\texttt{asym}, \texttt{pt}\}}_{\text{conservative}}
+\]
+
+\subsection{Policy Distance: Confirmation at the Action Level}
+\label{sec:pareto_policy_distance}
+
+The statistics above describe separation at the level of Sharpe distributions.
+To check whether the clustering also exists at the \emph{policy-action}
+level, we deterministically rolled out each of the 40 best\_models across the
+entire Val range, recorded their action time series, and computed the average
+$L_2$ action distance between each variant pair (averaged over 10 seeds per
+variant).
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.65\textwidth]{menu5_policy_distance}
+\caption{Pairwise policy distance matrix for the four variants. Each cell is
+the mean $L_2$ action distance between two variants' policies. Diagonal
+entries are 0; darker shading indicates closer policies.}
+\label{fig:policy_distance}
+\end{figure}
+
+The off-diagonal values in Figure~\ref{fig:policy_distance}:
+\begin{itemize}[leftmargin=*]
+\item \textbf{Within cluster}: \texttt{sym} vs \texttt{dsr} $= 0.123$,
+\texttt{asym} vs \texttt{pt} $= 0.134$. Mean $= 0.129$.
+\item \textbf{Across cluster}: \texttt{sym} vs \texttt{asym} $= 0.209$,
+\texttt{sym} vs \texttt{pt} $= 0.326$, \texttt{dsr} vs \texttt{asym} $= 0.256$,
+\texttt{dsr} vs \texttt{pt} $= 0.353$. Mean $= 0.286$.
+\end{itemize}
+
+The \textbf{across/within} ratio is $0.286 / 0.129 = \mathbf{2.22\times}$:
+policies within the same cluster are 2.22$\times$ closer to one another (in
+action space) than policies across clusters. The Sharpe-level cluster
+structure thus aligns with the behavior-level cluster structure.
+
+\subsection{Confirming Scenario D and Hypothesis Evaluation}
+\label{sec:pareto_scenario_d}
+
+To evaluate results without ex-post rationalization, we pre-registered the
+following scenario branches.
+
+\begin{itemize}[leftmargin=*]
+\item \textbf{Scenario A (optimistic)}: asym/dsr/pt exceed both sym and ATR
+with Cohen's $d \geq 0.5$. Directly supports ``reward design is a principal
+channel of RL alpha.''
+\item \textbf{Scenario B (neutral)}: variants differ but none exceeds ATR.
+``The ATR-proportional formula absorbs volatility'' --- an extension of the
+negative finding.
+\item \textbf{Scenario C (pessimistic)}: variants are indistinguishable.
+``Reward reformulation adds no alpha'' --- a strengthening of the Phase 1
+finding.
+\end{itemize}
+
+Our results fit none of the pre-registered branches. All four variants
+exceed ATR (rejecting B), but there is no single winner (rejecting the
+optimistic A's ``asym/dsr/pt lead'' form), and the variants are not
+indistinguishable (rejecting C, given the two statistically separated
+clusters). We therefore define an ex-post scenario \textbf{D (Pareto frontier /
+multi-dimensional trade-off)}:
+
+\begin{quote}
+\emph{The four reward variants do not differ as a single-metric alpha source
+but as a \textbf{trade-off along risk-profile dimensions}, forming a
+Pareto-like frontier on the Sharpe--MDD plane. The two clusters
+(\{\texttt{sym}, \texttt{dsr}\} and \{\texttt{asym}, \texttt{pt}\}) are
+consistently identified both at the level of Sharpe distributions
+(within-cluster $|d|<0.30$, across-cluster $|d|>0.79$) and at the level of
+policy actions (distance ratio 2.22$\times$).}
+\end{quote}
+
+Per-hypothesis verdicts at this point in the paper:
+\begin{itemize}[leftmargin=*]
+\item \textbf{H1 (sym RL $\approx$ ATR)}: \textbf{rejected}. \texttt{sym}'s
+best Sharpe $1.871$ exceeds ATR $1.378$ with $|d| > 0.6$
+(per-variant t-test $p < 10^{-3}$).
+\item \textbf{H2 weak (asym/dsr/pt $>$ ATR)}: \textbf{supported}. All four
+variants exceed ATR; the conservative cluster additionally wins MDD/Calmar.
+\item \textbf{H2 strong (asym/dsr/pt $>$ sym)}: \textbf{partially rejected}.
+\texttt{dsr} is statistically indistinguishable from \texttt{sym} (within
+cluster), and \texttt{asym/pt} have lower Sharpe than \texttt{sym}.
+\item \textbf{H3 (selective entry $\to$ conservative)}: \textbf{supported}.
+The conservative cluster has approximately $75\%$ of \texttt{sym}'s trade
+count (\texttt{asym} 96, \texttt{pt} 85 vs.\ \texttt{sym} 120). The full
+mechanism is quantified in \S\ref{sec:mechanism}.
+\end{itemize}
+
+\subsection{Environment Dependence of the exp027\_rl Prior Evidence}
+\label{sec:pareto_env_dependence}
+
+Part of the motivation for this paper was the strong \texttt{asym}
+($\beta=2.0$) advantage observed in late Phase 2 (April 2026). On Env-v3
+(4D absolute-gap, limit-order execution), the \texttt{asym} RL policy
+reached Test Sharpe $1.955$, $+109\%$ above ATR Test $0.935$. On our
+canonical Env-v4 (2D ATR-proportional, Optuna-retuned $\beta=3.42$),
+\texttt{asym}'s Val Sharpe is $1.681$, \emph{below} \texttt{sym}'s $1.871$.
+The strong prior \texttt{asym} advantage thus \emph{does not reproduce}.
+This indicates that the environment configuration (action dimensionality,
+grid formula form) has a larger effect than the reward variant. We honestly
+acknowledge this environment dependence in \S\ref{sec:discussion}. The main
+conclusion of this section (Scenario D, the Pareto frontier) holds
+independently and is statistically established on canonical Env-v4.
 
 % ─── 6. Mechanism Quantification ─────────────────────────────────────────────
 \section{Mechanism Quantification}
