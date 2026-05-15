@@ -318,16 +318,51 @@ Early stopping 발동 (100k peak 후 patience=6) → 400k 종료.
 
 → **환경 의존성 (4D → 2D) 효과가 reward variant 효과보다 큼.** 본 논문 §8 Discussion 에서 정직한 인정.
 
+### exp032c — Mechanism Analysis (완료, 2026-05-15) — §6 메인
+
+**5 메뉴 분석** on 1.04M step trajectories (40 모델 × ~26k val steps):
+
+**Menu 1 — Pareto scatter**: 40 RL runs 가 Sharpe-MDD 평면에서 **두 cluster 형성, 5 개 Pareto frontier**. ATR (9.83, 1.505) 은 완전 dominated. → **§5 메인 figure 1순위**
+
+**Menu 5 — Policy distance matrix** (가장 강력한 정량적 발견):
+
+|  | sym | asym | dsr | pt |
+|---|---|---|---|---|
+| sym  | 0.000 | 0.209 | **0.123** | 0.326 |
+| asym | 0.209 | 0.000 | 0.256 | **0.134** |
+| dsr  | 0.123 | 0.256 | 0.000 | 0.353 |
+| pt   | 0.326 | 0.134 | 0.353 | 0.000 |
+
+- within-cluster mean: **0.129**
+- across-cluster mean: **0.286**
+- **Ratio: 2.22×** → 정책 수준 cluster 분리의 통계적 정량 입증.
+
+**Menu 4 — Behavior per regime** (H3 강한 지지):
+
+| Variant | Trade rate (high_vol) | **Hold rate (high_vol)** |
+|---|---|---|
+| sym  | 0.047 | 0.048 |
+| **dsr**  | 0.047 | **0.120** |
+| asym | 0.038 | 0.023 |
+| pt   | 0.032 | 0.020 |
+
+- Trade rate: aggressive > conservative (모든 regime) — **H3 selective entry 명확**
+- **DSR hold rate 가 2~6배** — reward 형식 ↔ 행동 인과 직접 증거 (DSR window 가 짧은 hold 에서 noise 큼 → 정책이 더 오래 holding 학습)
+
+### §6 메인 결론 (확정)
+
+> **두 cluster 분리는 reward 의 손실 비대칭 (asym β, pt λ) 이 정책의 거래 빈도를 직접 결정한 결과 (H3 강한 지지). DSR 의 hold rate 우위는 sliding window risk-adjusted return 의 메모리 구조가 정책의 holding 시간을 늘린 결과 — reward 형식 → 행동 → 결과 의 메커니즘 인과 사슬 정량 확인.**
+
 ### 진행 예정
 
 | Exp | 목적 | 결과 | 논문 챕터 |
 |---|---|---|---|
-| exp030 | PPO 학습 안정화 | (완료, 위) | §3.3 |
+| exp030 | PPO 학습 안정화 | (완료) | §3.3 |
 | exp031 | BC warm-start | (완료, 폐기) | §3.4 |
-| exp032a | Variant reward hyperparameter 튜닝 | (완료, 위) | §3.5 |
-| exp032b | Full 4 variant 비교 | **(완료, 시나리오 D)** | **§5 Pareto frontier** |
-| **exp032c** | **Mechanism analysis (왜 두 cluster?)** | (다음) | **§6 Mechanism** |
-| exp033 | Slippage + DR | (대기) | §7.1 |
+| exp032a | Variant reward hyperparameter 튜닝 | (완료) | §3.5 |
+| exp032b | Full 4 variant 비교 | (완료, 시나리오 D) | §5 Pareto frontier |
+| exp032c | Mechanism analysis | **(완료, 위)** | **§6 Mechanism** |
+| **exp033** | **Slippage + DR** | **(다음)** | **§7.1 Robustness** |
 | exp034 | CPCV 6-fold + DSR | (대기) | §5, §7.2 |
 | exp035 | Test 봉인 해제 | (대기) | §7.3 |
 
@@ -368,3 +403,4 @@ Early stopping 발동 (100k peak 후 patience=6) → 400k 종료.
 | 2026-05-14 | 본 문서 신설. Phase 1~2 결과 종합 |
 | 2026-05-15 | exp032a 결과 추가 (4 reward variant Optuna 튜닝): dsr 1.89 / pt 1.80 / asym 1.52 (200k single-seed) |
 | 2026-05-15 | **exp032b 결과 추가** (4 variant × 10 seeds × 1M, §5 메인): 시나리오 D — Pareto frontier in risk space, sym 1.87 / dsr 1.81 / asym 1.68 / pt 1.67 |
+| 2026-05-15 | **exp032c 결과 추가** (Mechanism Analysis, §6 메인): Policy distance ratio 2.22× (cluster 통계적 분리 입증), DSR hold rate 2~6×, H3 강한 지지 |

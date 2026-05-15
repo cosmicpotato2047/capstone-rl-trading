@@ -1,0 +1,90 @@
+exp032c eval: 4 variants x 10 seeds = 40 models (best)
+  out: experiments\exp032c_trajectories.parquet
+
+  train: 27,844rows | val: 26,243rows
+
+Using cpu device
+  [1/40] sym seed=42: 26,074 steps, final eq 12,959 - 13.0s
+Using cpu device
+  [2/40] sym seed=43: 26,074 steps, final eq 13,479 - 10.6s
+Using cpu device
+  [3/40] sym seed=44: 26,074 steps, final eq 12,830 - 10.6s
+Using cpu device
+  [4/40] sym seed=45: 26,074 steps, final eq 13,412 - 10.7s
+Using cpu device
+  [5/40] sym seed=46: 26,074 steps, final eq 12,848 - 10.7s
+Using cpu device
+  [6/40] sym seed=47: 26,074 steps, final eq 14,094 - 10.6s
+Using cpu device
+  [7/40] sym seed=48: 26,074 steps, final eq 13,189 - 10.6s
+Using cpu device
+  [8/40] sym seed=49: 26,074 steps, final eq 15,768 - 10.7s
+Using cpu device
+  [9/40] sym seed=50: 26,074 steps, final eq 15,391 - 10.6s
+Using cpu device
+  [10/40] sym seed=51: 26,074 steps, final eq 13,029 - 10.7s
+Using cpu device
+  [11/40] asym seed=42: 26,074 steps, final eq 12,452 - 10.6s
+Using cpu device
+  [12/40] asym seed=43: 26,074 steps, final eq 13,162 - 10.6s
+Using cpu device
+  [13/40] asym seed=44: 26,074 steps, final eq 12,603 - 10.7s
+Using cpu device
+  [14/40] asym seed=45: 26,074 steps, final eq 13,291 - 10.6s
+Using cpu device
+  [15/40] asym seed=46: 26,074 steps, final eq 13,116 - 10.7s
+Using cpu device
+  [16/40] asym seed=47: 26,074 steps, final eq 12,663 - 10.7s
+Using cpu device
+  [17/40] asym seed=48: 26,074 steps, final eq 13,236 - 10.7s
+Using cpu device
+  [18/40] asym seed=49: 26,074 steps, final eq 13,489 - 10.6s
+Using cpu device
+  [19/40] asym seed=50: 26,074 steps, final eq 12,967 - 10.7s
+Using cpu device
+  [20/40] asym seed=51: 26,074 steps, final eq 13,102 - 10.6s
+Using cpu device
+  [21/40] dsr seed=42: 26,074 steps, final eq 13,509 - 10.8s
+Using cpu device
+  [22/40] dsr seed=43: 26,074 steps, final eq 13,854 - 10.7s
+Using cpu device
+  [23/40] dsr seed=44: 26,074 steps, final eq 11,945 - 10.7s
+Using cpu device
+  [24/40] dsr seed=45: 26,074 steps, final eq 12,440 - 10.7s
+Using cpu device
+  [25/40] dsr seed=46: 26,074 steps, final eq 15,412 - 10.7s
+Using cpu device
+  [26/40] dsr seed=47: 26,074 steps, final eq 12,554 - 10.7s
+Using cpu device
+  [27/40] dsr seed=48: 26,074 steps, final eq 12,891 - 10.7s
+Using cpu device
+  [28/40] dsr seed=49: 26,074 steps, final eq 13,086 - 10.6s
+Using cpu device
+  [29/40] dsr seed=50: 26,074 steps, final eq 13,933 - 10.7s
+Using cpu device
+  [30/40] dsr seed=51: 26,074 steps, final eq 13,285 - 10.8s
+Using cpu device
+  [31/40] pt seed=42: 26,074 steps, final eq 12,924 - 10.7s
+Using cpu device
+  [32/40] pt seed=43: 26,074 steps, final eq 12,689 - 10.8s
+Using cpu device
+  [33/40] pt seed=44: 26,074 steps, final eq 13,633 - 10.7s
+Using cpu device
+  [34/40] pt seed=45: 26,074 steps, final eq 12,814 - 10.6s
+Using cpu device
+  [35/40] pt seed=46: 26,074 steps, final eq 13,388 - 10.6s
+Using cpu device
+  [36/40] pt seed=47: 26,074 steps, final eq 12,611 - 10.7s
+Using cpu device
+  [37/40] pt seed=48: 26,074 steps, final eq 11,997 - 10.6s
+Using cpu device
+  [38/40] pt seed=49: 26,074 steps, final eq 13,164 - 10.6s
+Using cpu device
+  [39/40] pt seed=50: 26,074 steps, final eq 13,183 - 10.6s
+Using cpu device
+  [40/40] pt seed=51: 26,074 steps, final eq 13,405 - 10.8s
+
+============================================================
+completed 40 models in 7.2 min
+trajectories: 1,042,960 rows -> experiments\exp032c_trajectories.parquet
+============================================================
