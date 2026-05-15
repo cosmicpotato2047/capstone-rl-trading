@@ -256,13 +256,27 @@ Early stopping 발동 (100k peak 후 patience=6) → 400k 종료.
 - 본 논문 §3.4 Method 또는 §8 Discussion 에서 "단순 bias init 의 한계 + future work" 한 줄
 - 정석 BC pretrain 또는 SAC 전환은 future work
 
+### exp032a — Reward Variant Hyperparameter Optuna 튜닝 (완료, 2026-05-15)
+
+**Optuna TPE 30 trials × 200k steps × 3 variant** (sym 은 hyperparameter 없음).
+
+| Variant | Best Trial | Best Params | Val Sharpe (200k single-seed) | vs ATR (1.505) |
+|---|---|---|---|---|
+| asym | #23 | β=3.4195 | 1.5166 | +0.8% |
+| **dsr** | #1 | η=0.0352 (≈ 1/28h EMA) | **1.8883** | **+25%** |
+| pt | #18 | α=0.6825, λ=3.3029 | 1.8035 | +20% |
+
+→ **DSR 1위, PT 2위, asym 3위.** 단 200k single-seed 라 노이즈 큼. exp032b (1M × 5 seeds) 가 본 검증.
+
+→ 출력: `config/exp032b_{sym,asym,dsr,pt}_config.yaml` 4개 (exp032b 입력으로 사용)
+
 ### 진행 예정
 
 | Exp | 목적 | 결과 (예정) | 논문 챕터 |
 |---|---|---|---|
-| exp030 | PPO 학습 안정화 | (TBD) | §3.3 |
-| exp031 | BC warm-start | (TBD) | §3.4 |
-| **exp032a** | Variant reward hyperparameter 튜닝 | 4 variant 각 best | §3.5 |
+| exp030 | PPO 학습 안정화 | (완료, 위) | §3.3 |
+| exp031 | BC warm-start | (완료, 폐기) | §3.4 |
+| exp032a | Variant reward hyperparameter 튜닝 | (완료, 위) | §3.5 |
 | **exp032b** | **Full 4 variant 비교 (메인)** | **Sharpe + Cohen's d + IQM + BEST + P(A>B)** | **§5 Positive finding** |
 | exp032c | Mechanism analysis | Counterfactual + SHAP + Mediation | §6 Mechanism |
 | exp033 | Slippage + DR | Sim2Real robust | §7.1 |
@@ -304,3 +318,4 @@ Early stopping 발동 (100k peak 후 patience=6) → 400k 종료.
 | 날짜 | 변경 |
 |---|---|
 | 2026-05-14 | 본 문서 신설. Phase 1~2 결과 종합 |
+| 2026-05-15 | exp032a 결과 추가 (4 reward variant Optuna 튜닝): dsr 1.89 / pt 1.80 / asym 1.52 (200k single-seed) |

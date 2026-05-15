@@ -1,0 +1,6 @@
+best_params:
+  dsr_eta: 0.03523609828724682
+best_sharpe: 1.8883
+best_trial: 1
+n_trials: 30
+variant: dsr

@@ -1,0 +1,99 @@
+# exp032b — Reward Variant 비교 (dsr, exp032a Optuna best)
+#
+# 목적: 4 reward variant 비교의 DSR variant.
+#       논문 §5 Positive finding.
+#
+# exp032a Optuna 결과:
+#   best_trial: #1 / 30
+#   best_params: dsr_eta = 0.03524 (≈ 1/28.4 시간 EMA, 약 1.2일)
+#   best Val Sharpe (200k single-seed): 1.8883
+#
+# 출처: Moody & Saffell (2001) — Differential Sharpe Ratio
+#   r = (B·ΔA - 0.5·A·ΔB) / (B - A²)^1.5  with EMA(A, B; η)
+
+# ────────────────────────────────────────
+data:
+  symbol: "BTC/USDT"
+  interval: "1h"
+  train_start: "2017-08-17"
+  train_end:   "2020-12-31"
+  val_start:   "2021-01-01"
+  val_end:     "2023-12-31"
+  test_start:  "2024-01-01"
+  test_end:    null
+
+indicators:
+  price_lookback: 168
+  atr_period: 168
+  zscore_window: 168
+  trend_windows: [72, 168, 336, 720, 1440]
+  trend_short: 72
+  trend_long: 720
+
+# ────────────────────────────────────────
+# 환경 (Env-v4 + reward variant: dsr, η=0.03524)
+# ────────────────────────────────────────
+environment:
+  initial_cash: 10000.0
+  transaction_cost: 0.0005
+  random_start: true
+  n_buy_orders: 2
+  n_splits: 2
+  threshold_basis: "avg_price"
+  reward_type: "dsr"             # ← variant 지정
+  dsr_eta: 0.035236              # ← exp032a Optuna best (≈ 1/28h EMA)
+  formula_coefs:
+    A_b: 1.665
+    B_b: 1.748
+    C_b: 6.070
+    D_b: 18.683
+    A_s: 0.285
+    B_s: 1.95
+    C_s: 1.951
+    D_s: 7.5
+
+agent:
+  algorithm: "PPO"
+  policy: "MlpPolicy"
+  learning_rate: 0.0003
+  lr_schedule: "linear"
+  lr_end: 0.00001
+  n_steps: 4096
+  batch_size: 256
+  n_epochs: 10
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_range: 0.2
+  ent_coef: 0.01
+  ent_coef_end: 0.001
+  ent_schedule: "linear"
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  target_kl: 0.02
+  total_timesteps: 1_000_000
+  n_envs: 4
+
+baselines:
+  buy_and_hold: true
+  fixed_grid:
+    gaps: [0.01, 0.02, 0.05]
+  atr_grid:
+    k_values: [0.5, 1.0, 2.0]
+
+evaluation:
+  metrics:
+    - "total_return"
+    - "sharpe_ratio"
+    - "max_drawdown"
+    - "n_trades"
+    - "avg_cycle_pnl"
+    - "avg_cycle_hours"
+
+training:
+  seed: 42
+  eval_freq: 50000
+  n_eval_episodes: 5
+  max_episode_steps: 2000
+  early_stopping_patience: 10
+  experiment_name: "exp032b_dsr"
+  log_dir: "experiments/exp032b_dsr"

@@ -1,0 +1,7 @@
+best_params:
+  pt_alpha: 0.6825292701936566
+  pt_lambda: 3.3028779931023733
+best_sharpe: 1.8035
+best_trial: 18
+n_trials: 30
+variant: pt

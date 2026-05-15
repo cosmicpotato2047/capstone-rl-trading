@@ -1,0 +1,6 @@
+best_params:
+  reward_loss_beta: 3.4195105232596856
+best_sharpe: 1.5166
+best_trial: 23
+n_trials: 30
+variant: asym

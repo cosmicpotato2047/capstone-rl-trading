@@ -2853,3 +2853,92 @@ Env-v4 (canonical, exp030~ 예정): 2D ATR 비례 + 지정가 체결
 - 문서를 작성하기 전에 **반드시 코드 진실 확인**. RESEARCH_LOG 의 옛 기록만 의지하면 안 됨.
 - 환경 변경 commit 발생 시 단일 source of truth (ENV_HISTORY) 갱신을 commit 의 일부로 강제.
 - 학습 노트의 "우리 시스템 묘사" 가 코드와 일치하는지 주기적 점검.
+
+---
+
+## 2026-05-15 — exp032a 완료 (Reward Variant Hyperparameter Optuna 튜닝)
+
+### Objective (RQ 매핑)
+
+- **목표**: 4 reward variant (sym/asym/dsr/pt) 중 hyperparameter 가 있는 3 variant 의 best param 탐색
+- **RQ 매핑**: §3.5 Method (reward variant 정식화). RQ-2 / H2 의 본 검증 (exp032b) 의 전 단계 hyperparameter 결정
+- 자체로는 최종 결론 도출 X — 200k single-seed 라 노이즈 큼. **exp032b (1M × 5 seeds) 가 본 검증**
+
+### Changes
+
+| 파일 | 변경 |
+|---|---|
+| `config/exp032b_sym_config.yaml` | 신설 — exp030 base + reward_type="sym" 명시 |
+| `config/exp032b_asym_config.yaml` | 신설 — reward_type="asym" + reward_loss_beta=3.4195 (Optuna best) |
+| `config/exp032b_dsr_config.yaml` | 신설 — reward_type="dsr" + dsr_eta=0.035236 (Optuna best) |
+| `config/exp032b_pt_config.yaml` | 신설 — reward_type="pt" + pt_alpha=0.6825, pt_lambda=3.3029 (Optuna best) |
+| `data/processed/btc_train.parquet`, `btc_val.parquet` | 메인 레포에서 worktree 로 복사 (test 는 봉인 유지로 미복사) |
+
+(코드 변경은 직전 commit `fa61087` 의 trading_env.py 4 variant 구현 + tune_reward_optuna.py 작성 으로 끝남.)
+
+### Hyperparameter (탐색 공간)
+
+| Variant | 탐색 범위 | 분포 | 출처 |
+|---|---|---|---|
+| asym | `reward_loss_beta` ∈ [1.0, 4.0] | uniform | exp027_rl 의 β=2.0 주변 확장 |
+| dsr | `dsr_eta` ∈ [1/720, 1/24] | log-uniform | EMA 기간 ~30일 ~ ~1일 |
+| pt | `pt_alpha` ∈ [0.5, 1.0], `pt_lambda` ∈ [1.0, 4.0] | uniform | Kahneman-Tversky 1979 표준 ± 확장 |
+
+각 variant 30 trials × 200k steps × Env-v4 + exp030 안정화 패키지. TPE sampler (seed=42) + MedianPruner (n_startup=5).
+SQLite storage (`experiments/exp032a_{variant}/optuna.db`) 로 study 재개 가능.
+
+### Results
+
+**3 variant 각 best (200k single-seed Val Sharpe):**
+
+| Variant | Best Trial | Best Params | Best Val Sharpe | vs sym baseline (1.974, exp030 best) | vs ATR (1.505) |
+|---|---|---|---|---|---|
+| asym | #23 / 30 | β=3.4195 | **1.5166** | -23% | +0.8% |
+| dsr | #1 / 30 | η=0.0352 (≈ 1/28h EMA) | **1.8883** | -4% | +25% |
+| pt | #18 / 30 | α=0.6825, λ=3.3029 | **1.8035** | -9% | +20% |
+
+**총 학습량**: 90 trials × 200k = 18M steps. **소요 시간**: ~2시간 (Windows 11 CPU, n_envs=4).
+
+### Behavior Analysis
+
+직접 행동 분석은 exp032b/c 단계에서 진행. 본 단계는 hyperparameter 탐색에 한정.
+
+**관찰**:
+- **asym best β=3.4195** > exp027_rl 의 β=2.0. 200k 학습으로 β 큰 쪽이 더 강한 손실 패널티로 빨리 보수화하는 경향 추정. 단 1M 학습에선 더 작은 β 가 더 안정적일 가능성 — exp032b 에서 5 seeds 평균으로 추가 검증.
+- **dsr best η=0.0352** (≈ 1/28h, EMA window 약 1.2일). 탐색 범위 [1/720, 1/24] 의 짧은 쪽 (24h 쪽) 에 가까움 → 단기 변동성에 빠르게 반응하는 것이 유리.
+- **pt best α=0.6825** (concave, 위험 회피), **λ=3.3029** (loss aversion 강함, K-T 표준 2.25 보다 큼). asym β=3.42 와 일관되게 손실 패널티가 강한 쪽 선택.
+
+### Decision
+
+**다음 실험: exp032b (Full 4 variant 비교, 메인 §5)**
+
+이유:
+- 4 variant 모두 ATR baseline (1.505) 이상 성능 (asym 빼고 명확 +20% 이상)
+- DSR, PT 가 200k 시점에서 sym best (1.974) 에 약간 못 미침 — 1M 학습으로 안정 수렴 가능성 충분
+- 5 seeds × 1M 으로 통계적 우열 결정 + Cohen's d / IQM / BEST / P(A>B) 계산
+
+**가설 H1~H4 점검**:
+- **H1 (sym RL ≈ ATR)**: 200k single-seed 라 직접 검증 X. exp030 best 1.974 (1M) 가 ATR (1.505) 초과한 것이 더 강한 증거.
+- **H2 (asym/dsr/pt RL > ATR)**: 200k 시점에서 dsr (+25%), pt (+20%) 가 ATR 초과. asym 은 단일 seed 라 변동 가능. **부분 지지**, exp032b 에서 본 검증.
+
+### Figures
+
+- (해당 시) `reports/.../figures/exp032a_*.png` — Optuna 탐색 곡선, hyperparameter importance — 본 논문 §3.5 작성 시 추가
+
+### 보류 아이디어
+
+- **Trial 수 확장**: 30 → 60 trials 가 더 안정적. 단 9M → 18M steps 추가 비용. 본 단계는 exp032b 입력으로만 사용하므로 30 trials 충분.
+- **asym β > 4.0 탐색**: β=3.42 가 상한 (4.0) 근처라 더 큰 β 가 best 일 수도. 단 K-T λ=2.25 표준 + exp027_rl β=2.0 사전 증거를 고려하면 [1, 4] 범위가 과학적으로 합리적.
+- **pt α 더 작은 영역 (< 0.5) 탐색**: α=0.6825 가 [0.5, 1.0] 의 하한 가까움. K-T 표준 0.88 과의 차이는 흥미. 본 논문 §6 Mechanism 에서 논의.
+- **Multi-objective Optuna**: Sharpe + MDD 동시 최적화 (NSGA-II) — future work, 현재는 Sharpe 단일 목표 충분.
+
+### 산출물
+
+- `experiments/exp032a_asym/best_params.yaml` (β=3.4195, Val Sharpe 1.5166)
+- `experiments/exp032a_dsr/best_params.yaml` (η=0.0352, Val Sharpe 1.8883)
+- `experiments/exp032a_pt/best_params.yaml` (α=0.6825, λ=3.3029, Val Sharpe 1.8035)
+- `experiments/exp032a_{variant}/optuna.db` × 3 (study 재개용)
+- `experiments/exp032a_{variant}/run.log` × 3 (trial 별 진행 기록)
+- `experiments/exp032a_done.flag` (timestamp: 2026-05-15 10:32:03)
+- `config/exp032b_{sym,asym,dsr,pt}_config.yaml` × 4 (exp032b 본 실험 입력)
+
