@@ -8,6 +8,17 @@ data/processed/
 # 논문 PDF — 저작권 문제로 비공개
 papers/
 
+# LaTeX auxiliary files
+reports/paper/*.aux
+reports/paper/*.bbl
+reports/paper/*.blg
+reports/paper/*.log
+reports/paper/*.out
+reports/paper/*.toc
+reports/paper/*.fls
+reports/paper/*.fdb_latexmk
+reports/paper/*.synctex.gz
+
 # Experiments — configs/logs 추적, 모델 가중치 제외
 experiments/*/model_*.zip
 experiments/*/model_*.pt

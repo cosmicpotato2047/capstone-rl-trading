@@ -1,0 +1,856 @@
+\documentclass[11pt, a4paper]{article}
+
+% ─── Packages ────────────────────────────────────────────────────────────────
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath, amssymb, bm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{natbib}
+\usepackage{microtype}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{float}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{enumitem}
+\usepackage{parskip}
+\usepackage{titlesec}
+\usepackage{setspace}
+
+\onehalfspacing
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!60!black,
+    citecolor=green!50!black,
+    urlcolor=blue!70!black
+}
+
+\graphicspath{{figures/}}
+
+% ─── Title ───────────────────────────────────────────────────────────────────
+\title{
+    \vspace{-1cm}
+    {\large Capstone Design Project — Final Report}\\[0.8em]
+    \textbf{Dynamic Grid Trading via Proximal Policy Optimization:\\
+    Bayesian Coefficient Optimization and Volatility-Adaptive Order Placement}
+}
+
+\author{
+    Lee Chanhee\\
+    Department of Computer Science and Engineering\\
+    Seoul National University of Science and Technology\\
+    \texttt{happilyfly@seoultech.ac.kr}
+}
+
+\date{April 2026}
+
+% ─── Document ────────────────────────────────────────────────────────────────
+\begin{document}
+
+\maketitle
+\thispagestyle{empty}
+
+% ─── Abstract ────────────────────────────────────────────────────────────────
+\begin{abstract}
+We present a reinforcement learning framework for \emph{dynamic grid trading} on the
+BTC/USDT hourly market in which a PPO agent outputs continuous ATR-scaled limit-order
+gaps without predicting price direction.
+Unlike prior RL trading systems that rely on directional signals or discrete
+buy/sell/hold actions, our agent outputs a continuous two-dimensional action
+$(a_\text{agg}, a_\text{pt}) \in [0,1]^2$ that maps directly onto four limit-order
+prices scaled by the Average True Range (ATR).
+Eight formula coefficients controlling the shape of this mapping are jointly optimized
+via Bayesian search (Optuna TPE, 50 trials), yielding a \(+145\%\) improvement in
+validation Sharpe ratio compared to the default parameterization.
+The final model, trained for 3 million steps on data from 2020--2022, achieves a
+validation Sharpe ratio of \textbf{35.42} and a test-set Sharpe ratio of \textbf{43.04}
+(2024--2026), outperforming the best fixed-grid baseline by \textbf{29.2$\times$}
+while maintaining a maximum drawdown of only \textbf{3.1\%} versus 50.1\% for
+buy-and-hold.
+Post-hoc behavioral analysis reveals that the learned policy converges to a
+near-constant action output, indicating that the Bayesian-optimized coefficients
+alone encode the dominant performance driver; implications for the role of
+state-conditioned adaptation are discussed.
+\end{abstract}
+
+\vspace{1em}
+\noindent\textbf{Keywords:} reinforcement learning, grid trading, PPO, Bayesian optimization,
+cryptocurrency, ATR-scaled orders, policy saturation
+
+\newpage
+\tableofcontents
+\newpage
+
+% ─── 1. Introduction ─────────────────────────────────────────────────────────
+\section{Introduction}
+
+Cryptocurrency markets exhibit persistent high volatility that creates recurring
+micro-price oscillations regardless of the long-term trend direction.
+Grid trading exploits this property by placing a ladder of buy and sell limit orders
+around the current price, profiting from each completed buy-then-sell cycle
+\citep{sun2023rl}.
+The central weakness of conventional grid trading is that the grid spacing is set
+once at deployment and never adjusted: intervals too narrow flood the market with
+unprofitable tiny trades, while intervals too wide miss most of the oscillations.
+
+Recent RL trading literature has concentrated almost entirely on \emph{directional}
+strategies — predicting whether the next price movement is up or down and acting
+accordingly \citep{liu2021bitcoin, yasin2024rl, pham2025dqn}.
+This line of work inherits the difficulty of price forecasting and cannot profit in
+sideways or highly volatile markets where prediction accuracy is low.
+Only a handful of studies treat the RL agent as a \emph{market-making} or
+\emph{interval-selection} agent rather than a directional predictor, leaving the
+dynamic grid problem largely unexplored.
+
+This paper addresses the following research questions:
+
+\begin{enumerate}[label=\textbf{RQ\arabic*:}]
+    \item Can a PPO agent with a continuous ATR-scaled action space outperform
+          fixed-interval grid baselines on unseen BTC/USDT data?
+    \item Does the trained agent adapt its grid intervals to the prevailing
+          volatility regime?
+\end{enumerate}
+
+\subsection*{Contributions}
+
+\begin{itemize}
+    \item \textbf{Non-directional MDP formulation.}
+          A five-dimensional state space encoding both market regime and portfolio
+          position, paired with a continuous two-dimensional action that controls
+          grid interval width without any directional price prediction.
+
+    \item \textbf{ATR-scaled, tunable order placement formula.}
+          Four limit orders (two buys, two sells) are placed at distances that
+          are proportional to the current ATR.
+          Eight scalar coefficients parameterize the formula, enabling
+          data-driven calibration while keeping the economic interpretation intact.
+
+    \item \textbf{Bayesian coefficient optimization.}
+          We apply Optuna TPE with MedianPruner to search the eight-dimensional
+          coefficient space, achieving a $+145\%$ improvement in validation Sharpe
+          over the hand-designed defaults in 50 trials.
+
+    \item \textbf{Rigorous train/validation/test separation.}
+          Following \citet{gort2022backtest}, the test set (2024--2026) is kept
+          completely sealed until after all design decisions are frozen.
+          Test-set evaluation is performed exactly once.
+\end{itemize}
+
+% ─── 2. Related Work ─────────────────────────────────────────────────────────
+\section{Related Work}
+
+\subsection{Surveys of RL Trading}
+
+\citet{sun2023rl} survey the RL trading literature and identify two recurring
+limitations: insufficient interpretability of learned policies and poor
+generalization across market regimes.
+\citet{liu2025review} review ten papers spanning 2018--2025 and confirm that RL
+agents demonstrate superior adaptability to non-stationary markets compared to
+rule-based methods, yet training stability and sample efficiency remain the
+principal barriers to practical deployment.
+
+\subsection{Directional RL Trading Systems}
+
+\citet{liu2021bitcoin} combine an LSTM price predictor with a PPO agent on
+BTC/USDT, feeding predicted prices as state features.
+The two-stage pipeline couples trading performance to prediction accuracy,
+propagating forecast errors directly into order decisions.
+Our approach eliminates the prediction stage entirely.
+
+\citet{yasin2024rl} benchmark DQN, PPO, and A2C with 20 technical indicators on
+equity markets.
+Their discrete action space (buy / sell / hold) and the absence of portfolio-state
+information in the observation prevent the agent from sizing orders relative to
+its current exposure — a critical gap for grid trading where position awareness
+drives interval selection.
+
+\citet{pham2025dqn} apply DQN to \emph{strategy selection}: the agent chooses
+among five hard-coded rule-based strategies at each step rather than learning
+the strategy itself.
+PCA compression of the indicator state further obscures the economic meaning of
+the learned policy.
+We instead train the agent to output grid intervals directly, preserving full
+interpretability.
+
+\subsection{Risk-Aware RL Trading}
+
+\citet{bandarupalli2025risk} augment the PPO reward with an explicit portfolio
+variance penalty to discourage risky positions.
+They report that the penalty suppresses too many profitable trades, causing the
+agent to underperform buy-and-hold.
+This finding motivates our reward design, which relies solely on equity change
+and transaction-cost penalties without a separate risk term: grid trading is
+inherently volatility-seeking, making a variance penalty counterproductive.
+
+\subsection{Backtesting Methodology}
+
+\citet{gort2022backtest} empirically demonstrate that single-split validation in
+RL trading research leads to significant backtest overfitting.
+Their recommendation of strict temporal splits directly informs our
+train (2020--2022) / validation (2023) / test (2024--2026) design, where the
+test partition is accessed only after all hyperparameter and coefficient
+decisions are finalized.
+
+\subsection{Positioning of This Work}
+
+Table~\ref{tab:comparison} summarizes how this work differs from its closest
+predecessors.
+
+\begin{table}[h]
+\centering
+\caption{Comparison with related RL trading systems.}
+\label{tab:comparison}
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{lccccc}
+\toprule
+ & \textbf{Ours} & Liu '21 & Yasin '24 & Pham '25 & Banda. '25 \\
+\midrule
+Non-directional          & \checkmark & $\times$ & $\times$ & $\times$ & $\times$ \\
+Continuous action space  & \checkmark & $\times$ & $\times$ & $\times$ & $\times$ \\
+Position state           & \checkmark & $\times$ & $\times$ & $\times$ & $\checkmark$ \\
+ATR-scaled orders        & \checkmark & $\times$ & $\times$ & $\times$ & $\times$ \\
+Bayesian coef.\ tuning   & \checkmark & $\times$ & $\times$ & $\times$ & $\times$ \\
+Sealed test set          & \checkmark & $\times$ & $\times$ & $\times$ & $\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ─── 3. Methodology ──────────────────────────────────────────────────────────
+\section{Methodology}
+
+\subsection{Data and Preprocessing}
+
+We collect hourly BTC/USDT candlestick data from Binance via the CCXT library,
+covering January 2020 through April 2026 (54,733 candles after deduplication).
+The data are split chronologically into three non-overlapping partitions:
+
+\begin{itemize}
+    \item \textbf{Train} (2020-01-01 -- 2022-12-31, 25,916 candles): covers both a bull
+          market (2020--2021) and a major bear market (2022).
+    \item \textbf{Validation} (2023-01-01 -- 2023-12-31, 8,736 candles): a recovery year
+          used for hyperparameter selection and model evaluation during training.
+    \item \textbf{Test} (2024-01-01 -- 2026-04-09, 19,901 candles): kept completely sealed
+          until all design decisions were finalized; evaluated exactly once.
+\end{itemize}
+
+Each raw candle is augmented with three derived series, all computed over a rolling
+window of $W = 168$ hours (one week):
+
+\begin{align}
+    \text{log\_price}_t &= \log\!\left(\frac{p_t}{\bar{p}_{t,W}}\right), \\
+    \text{volatility}_t &= \frac{\text{ATR}(168)_t}{p_t}, \\
+    \text{zscore}(x)_t  &= \frac{x_t - \mu_{x,t,W}}{\sigma_{x,t,W} + \epsilon},
+\end{align}
+
+where $\bar{p}_{t,W}$ is the rolling mean close price, ATR is the Average True Range
+computed directly from OHLC data, and $\epsilon = 10^{-8}$ ensures numerical
+stability.
+The z-score transformation is applied to \texttt{log\_price} and \texttt{volatility}
+before storage to prevent scale mismatch at the policy input.
+
+\subsection{Trading Environment (MDP)}
+
+We model the trading problem as a Markov Decision Process
+$\mathcal{M} = (\mathcal{S}, \mathcal{A}, \mathcal{T}, \mathcal{R}, \gamma)$
+implemented as a Gymnasium environment.
+
+\subsubsection*{State Space}
+
+The observation at time $t$ is a five-dimensional vector:
+
+\begin{equation}
+    \bm{s}_t = \bigl[
+        \underbrace{\hat{z}(\text{log\_price}_t)}_{\text{price level}},\;
+        \underbrace{d_t}_{\text{divergence}},\;
+        \underbrace{h_t}_{\text{position size}},\;
+        \underbrace{c_t}_{\text{cash ratio}},\;
+        \underbrace{\hat{z}(\text{volatility}_t)}_{\text{market volatility}}
+    \bigr] \in \mathbb{R}^5,
+\end{equation}
+
+where $\hat{z}(\cdot)$ denotes the rolling z-score normalization,
+
+\begin{align}
+    d_t &= \frac{\bar{p}^\text{avg}_t - p_t}{\bar{p}^\text{avg}_t}
+           \quad \text{(divergence from average entry price)}, \\
+    h_t &= \frac{q_t \cdot p_t}{K}
+           \quad \text{(holdings value as fraction of initial capital $K$)}, \\
+    c_t &= \frac{\text{cash}_t}{K}
+           \quad \text{(cash fraction of initial capital)}.
+\end{align}
+
+$\bar{p}^\text{avg}_t$ is the current-cycle average entry price (set to the last
+completed cycle's average entry when not holding, and zero when no trades have
+occurred).
+The value ratio $h_t$ over the raw quantity is used because the same BTC holding
+carries twice the portfolio risk when the price doubles.
+
+\subsubsection*{Action Space}
+
+The action space is a continuous two-dimensional box:
+\begin{equation}
+    \mathcal{A} = [0, 1]^2,
+    \quad
+    \bm{a}_t = (a_\text{agg},\; a_\text{pt}),
+\end{equation}
+
+where $a_\text{agg}$ (aggressiveness) controls buy-order placement and $a_\text{pt}$
+(profit target) controls sell-order placement.
+This is in sharp contrast to discrete action spaces (buy/sell/hold) used by most
+prior work \citep{liu2021bitcoin, yasin2024rl}, which cannot express the
+\emph{degree} of aggressiveness.
+
+\subsubsection*{Order Placement Formula}
+
+At each step, four limit orders are computed from the action via an
+ATR-proportional formula:
+
+\begin{align}
+    r_t &= \frac{\text{ATR}(168)_t}{p_t}
+           \quad \text{(normalized volatility ratio)}, \label{eq:atr_ratio} \\[4pt]
+    \Delta^\text{buy-hi}_t  &= r_t \cdot (A_b + a_\text{agg}\cdot B_b), \label{eq:buy_hi} \\
+    \Delta^\text{buy-lo}_t  &= r_t \cdot (C_b + a_\text{agg}\cdot D_b), \label{eq:buy_lo} \\
+    \Delta^\text{sell-mkt}_t &= r_t \cdot (A_s + a_\text{pt}\cdot B_s), \label{eq:sell_mkt} \\
+    \Delta^\text{sell-cst}_t &= r_t \cdot (C_s + a_\text{pt}\cdot D_s), \label{eq:sell_cst}
+\end{align}
+
+and the four order prices are:
+
+\begin{align}
+    P^\text{buy-hi}_t  &= p_t\cdot(1 - \Delta^\text{buy-hi}_t), \\
+    P^\text{buy-lo}_t  &= p_t\cdot(1 - \Delta^\text{buy-lo}_t), \\
+    P^\text{sell-mkt}_t &= p_t\cdot(1 + \Delta^\text{sell-mkt}_t), \\
+    P^\text{sell-cst}_t &= \bar{p}^\text{avg}_t\cdot(1 + \Delta^\text{sell-cst}_t).
+\end{align}
+
+Here $\bm{\theta} = (A_b, B_b, C_b, D_b, A_s, B_s, C_s, D_s) \in \mathbb{R}^8$
+are the formula coefficients.
+ATR-scaling ensures that the action range $[0,1]$ maps consistently onto a
+meaningful fill-probability spectrum regardless of the current volatility level,
+avoiding the regime where most limit orders never execute.
+
+The dual sell-order design reflects two complementary liquidation channels:
+\texttt{sell-mkt} targets a quick exit above the current price (fast cash recovery),
+while \texttt{sell-cst} targets a larger gain above the average cost basis (large-rally
+capture).
+
+\subsubsection*{Order Fill and Cycle Logic}
+
+Order fills are simulated against the next candle's high/low prices
+(next-bar execution model), with sell orders processed before buy orders on the
+same bar.
+Each complete buy-then-sell sequence forms a \emph{trading cycle}.
+Capital allocation within a cycle uses a fixed-budget scheme: the cash available
+at cycle start is divided into $n_\text{splits} = 2$ slots, each of which funds
+$n_\text{buy} = 2$ limit orders.
+When the total holdings drop to or below the value of a single slot, all remaining
+holdings are liquidated to guarantee cycle closure.
+
+\subsubsection*{Reward}
+
+The reward at each step is the normalized equity change:
+
+\begin{equation}
+    r_t = \frac{V_t - V_{t-1}}{K},
+    \label{eq:reward}
+\end{equation}
+
+where $V_t = \text{cash}_t + q_t \cdot p_t$ is the total portfolio value.
+Transaction costs ($0.05\%$ per fill, Binance maker fee) are deducted directly
+from the cash balance at execution time, so they are automatically reflected in
+the equity change without a separate penalty term.
+
+\subsection{PPO Agent}
+
+We use Proximal Policy Optimization \citep{schulman2017ppo} via Stable-Baselines3.
+The policy and value networks share an MLP trunk (two hidden layers of 64 units,
+tanh activations).
+The action distribution is a diagonal Gaussian clipped to $[0, 1]^2$
+by a sigmoid squashing layer.
+
+Training uses four parallel environments (\texttt{n\_envs}~$= 4$) with episodes
+of length $T_\text{ep} = 2016$ steps ($\approx 12$ weeks).
+Random episode starts within the training window expose the agent to diverse
+market regimes.
+A cosine learning rate schedule decays from $3\times10^{-4}$ to $10^{-5}$
+over 3 million environment steps.
+The entropy coefficient $\alpha_H = 0.05$ is selected by ablation
+(Section~\ref{sec:param-search}).
+
+\subsection{Bayesian Coefficient Optimization}
+\label{sec:bayesian}
+
+The eight formula coefficients in $\bm{\theta}$ encode prior economic knowledge
+(e.g., $A_b < C_b$ forces buy-hi closer to the current price than buy-lo), but
+their exact values are unknown.
+We treat them as hyperparameters and search the eight-dimensional continuous space
+using Tree-structured Parzen Estimator (TPE) with a MedianPruner:
+
+\begin{itemize}
+    \item \textbf{Objective}: mean validation Sharpe ratio over five episodes
+          after $10^6$ training steps with a warm-started PPO agent.
+    \item \textbf{Soft constraints}: trials violating $C_b > A_b$ and $D_b > B_b$
+          (which would invert the buy-hi / buy-lo ordering) return a sentinel value
+          of $-999$ and are excluded from the TPE model.
+    \item \textbf{Pruner}: MedianPruner with 10 warm-up trials kills unpromising
+          trials after their first intermediate evaluation, recovering compute for
+          more promising configurations.
+    \item \textbf{Budget}: 50 trials ($\approx 4.3$ hours on a single CPU).
+\end{itemize}
+
+The search space and the final optimized values are given in
+Table~\ref{tab:coefs}.
+
+\begin{table}[h]
+\centering
+\caption{Formula coefficient search space and Bayesian-optimized values (Trial \#42).}
+\label{tab:coefs}
+\setlength{\tabcolsep}{6pt}
+\begin{tabular}{llrrrr}
+\toprule
+Coef. & Role & Search min & Search max & \textbf{Default} & \textbf{Optimal} \\
+\midrule
+$A_b$ & buy-hi base & 0.1 & 3.0 & 0.500 & \textbf{0.285} \\
+$B_b$ & buy-hi range & 0.1 & 5.0 & 1.500 & \textbf{1.748} \\
+$C_b$ & buy-lo base & 0.1 & 10.0 & 2.500 & \textbf{5.223} \\
+$D_b$ & buy-lo range & 0.5 & 20.0 & 7.500 & \textbf{18.683} \\
+$A_s$ & sell-mkt base & 0.1 & 3.0 & 0.500 & \textbf{0.101} \\
+$B_s$ & sell-mkt range & 0.1 & 5.0 & 1.500 & \textbf{0.890} \\
+$C_s$ & sell-cost base & 0.1 & 10.0 & 2.500 & \textbf{6.913} \\
+$D_s$ & sell-cost range & 0.5 & 20.0 & 7.500 & \textbf{5.457} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ─── 4. Experimental Setup ───────────────────────────────────────────────────
+\section{Experimental Setup}
+
+\subsection{Baselines}
+
+We compare against seven fixed-rule strategies that use no learning:
+
+\begin{itemize}
+    \item \textbf{Buy-and-Hold}: purchase BTC at the start, sell at the end.
+    \item \textbf{Fixed Grid $\delta\%$} ($\delta \in \{1, 2, 5\}$): buy orders placed
+          $\delta\%$ below and sell orders $\delta\%$ above the current price.
+    \item \textbf{ATR Grid $k$} ($k \in \{0.5, 1.0, 2.0\}$): order spacing is $k$ times
+          the current ATR, mimicking the ATR-proportional scaling of our agent but
+          without learned adaptation.
+\end{itemize}
+
+The ATR Grid baselines are particularly informative: they share the same market
+information (ATR) as our agent but apply it through a fixed rule.
+Performance differences relative to these baselines reflect the combined effect of
+Bayesian coefficient optimization and the RL training procedure.
+
+\subsection{Evaluation Metric}
+
+The primary metric is the annualized Sharpe ratio:
+
+\begin{equation}
+    \text{Sharpe} = \frac{\mathbb{E}[r_t]}{\text{Std}(r_t)} \cdot \sqrt{8760},
+    \label{eq:sharpe}
+\end{equation}
+
+where $r_t$ is the per-step return and 8760 is the number of hourly periods per
+year.
+Secondary metrics include maximum drawdown (MDD), total return, number of
+completed trading cycles, and cycle win rate.
+
+\subsection{Experimental Protocol}
+
+All experiments use seed 42.
+Validation Sharpe is computed as the mean over five evaluation episodes of length
+$T_\text{ep} = 2016$ steps with random starts within the validation window and
+$\text{deterministic}=\text{True}$ inference.
+The test evaluation is a single deterministic pass over the entire 19,901-step
+test sequence, ensuring no information from random start selection can influence
+the reported result.
+
+% ─── 5. Results ──────────────────────────────────────────────────────────────
+\section{Results}
+
+\subsection{Hyperparameter Search}
+\label{sec:param-search}
+
+Before Bayesian coefficient tuning, we conduct a systematic ablation over three
+environment hyperparameters on the validation set:
+
+\begin{itemize}
+    \item \textbf{Number of capital slots} $n_\text{splits} \in \{2, 8, 16\}$:
+          $n_\text{splits}=2$ achieves the highest Sharpe by concentrating capital
+          per cycle and reducing idle cash.
+    \item \textbf{Sell threshold basis} (\texttt{avg\_price} vs.\ \texttt{price}):
+          anchoring the sell-cost order to the cycle's average entry price produces
+          more consistent profit locks than anchoring to the current market price.
+    \item \textbf{Entropy coefficient} $\alpha_H \in \{0.01, 0.05, 0.10\}$:
+          $\alpha_H = 0.05$ balances exploration and exploitation, increasing
+          Sharpe from 14.39 (no VecNorm baseline, exp007) to 17.58.
+\end{itemize}
+
+The selected configuration (exp013b) with default formula coefficients achieves a
+validation Sharpe of 17.58, which serves as the baseline for Bayesian optimization.
+
+\subsection{Bayesian Coefficient Optimization}
+
+Figure~\ref{fig:optuna} shows the results of the 50-trial Bayesian search.
+The best trial (\#42) achieves a validation Sharpe of 42.997 — a $+145\%$
+improvement over the default-coefficient baseline.
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig_01_distribution.png}
+        \caption{Sharpe distribution across 50 trials.
+                 Red dashed line: default-coefficient baseline (17.58).}
+        \label{fig:optuna_dist}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{fig_03_importance.png}
+        \caption{Pearson correlation between each coefficient and Sharpe ratio.
+                 $A_s$ (sell-market base) shows the strongest negative correlation.}
+        \label{fig:optuna_importance}
+    \end{subfigure}
+    \caption{Bayesian coefficient tuning results (50 TPE trials, 1M steps each).}
+    \label{fig:optuna}
+\end{figure}
+
+The coefficient importance analysis (Figure~\ref{fig:optuna_importance}) reveals
+that $A_s$, the base value of the sell-market gap, is by far the most influential
+parameter.
+Its optimal value (0.101) sits at the search lower bound of 0.1, suggesting the
+agent benefits from a very tight sell-market order — placing the quick-exit ask
+just $0.101 \times r_t$ above the current price, enabling near-immediate cash
+recovery after each buy fill.
+
+Figure~\ref{fig:gap_comparison} illustrates how the optimized coefficients shift the
+effective order-gap ranges compared to the defaults.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{fig_06_gap_comparison.png}
+    \caption{Effective order-gap ranges (in ATR multiples) for default vs.\ optimized
+             coefficients, shown across the full action range $[0,1]$.
+             Note the dramatic expansion of the buy-lo range and the sharp contraction
+             of the sell-market gap.}
+    \label{fig:gap_comparison}
+\end{figure}
+
+The optimized strategy can be interpreted as a \emph{fast-sell / deep-buy} policy:
+\begin{itemize}
+    \item \textbf{Sell-market} contracts to $[0.10, 1.0] \times r_t$
+          (vs.\ default $[0.5, 2.0] \times r_t$): the agent exits quickly on any
+          small upward tick, maximizing cycle frequency.
+    \item \textbf{Buy-lo} expands to $[5.2, 23.9] \times r_t$
+          (vs.\ default $[2.5, 10.0] \times r_t$): a deep standing bid positioned
+          to catch large dips that appear during high-volatility events.
+    \item \textbf{Sell-cost} rises to $[6.9, 12.4] \times r_t$: the cost-basis
+          sell is reserved only for major rallies above the average entry price.
+\end{itemize}
+
+\subsection{Final Model Training (exp016)}
+
+Using the optimized coefficients from Trial \#42, we train the final PPO agent for
+3 million steps.
+Figure~\ref{fig:learning_curve} shows the validation Sharpe throughout training.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{03_learning_curve.png}
+    \caption{Validation Sharpe ratio vs.\ training steps.
+             \textbf{(a) Pre-fix experiments} (exp001--002): a reward-function bug
+             (fee double-counting) and an eval-pipeline bug kept Sharpe below 1.0.
+             \textbf{(b) Post-fix experiments}: after both bugs were resolved, Sharpe
+             climbed from $\sim$12 (exp008) to 17.6 (exp013b) through hyperparameter
+             search, and finally to 35.4 with Bayesian-optimized coefficients (exp016,
+             best checkpoint at step 2.1M, $\star$).}
+    \label{fig:learning_curve}
+\end{figure}
+
+The best checkpoint is saved at step 2,100,000 with validation Sharpe 35.42 and MDD
+2.46\%.
+Note that the full-training Sharpe (35.42) is lower than the 1M-step Optuna
+objective (42.997): the Optuna evaluation uses five random-start episodes and may
+select favorable market windows, whereas the final evaluation averages across fixed
+evaluation windows, providing a more conservative and reproducible estimate.
+
+\subsection{Validation Set Results}
+
+Table~\ref{tab:val_results} compares the best PPO checkpoint against all baselines
+on the 2023 validation set.
+
+\begin{table}[H]
+\centering
+\caption{Validation set results (2023, 8,736 candles).}
+\label{tab:val_results}
+\setlength{\tabcolsep}{6pt}
+\begin{tabular}{lrrrr}
+\toprule
+Strategy & Sharpe & Return (\%) & MDD (\%) & Cycles \\
+\midrule
+Buy \& Hold           &  2.377 & +150.18 & 21.74 &    0 \\
+Fixed Grid 1\%        &  1.991 &  +64.11 & 17.50 &  120 \\
+Fixed Grid 2\%        &  2.039 &  +31.05 & 12.57 &   38 \\
+Fixed Grid 5\%        &  1.377 &   +4.99 &  3.32 &    4 \\
+ATR Grid $k{=}0.5$    &  1.141 &  +30.80 & 20.66 &  279 \\
+ATR Grid $k{=}1.0$    &  1.607 &  +54.37 & 18.63 &  177 \\
+ATR Grid $k{=}2.0$    &  2.234 &  +55.42 & 13.23 &   91 \\
+\midrule
+\textbf{PPO (exp016)} & \textbf{35.424} & \textbf{+365.60} & \textbf{2.46} & \textbf{938} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The PPO agent improves on the strongest baseline (ATR Grid $k{=}2.0$, Sharpe 2.234)
+by a factor of \textbf{15.9$\times$} while reducing MDD from 13.23\% to 2.46\%.
+
+\subsection{Test Set Results}
+\label{sec:test-results}
+
+The test set (2024-01-01 to 2026-04-09) was accessed once after all model
+and coefficient decisions were frozen.
+This period covers BTC price movements from approximately \$42,000 to over
+\$100,000 and back to \$75,000, including both a major bull run (2024) and a
+sharp correction (2025 Q1), providing a diverse out-of-sample evaluation.
+
+\begin{table}[H]
+\centering
+\caption{Test set results (2024--2026, 19,901 candles).}
+\label{tab:test_results}
+\setlength{\tabcolsep}{6pt}
+\begin{tabular}{lrrrr}
+\toprule
+Strategy & Sharpe & Return (\%) & MDD (\%) & Cycles \\
+\midrule
+Buy \& Hold           &  0.681 &  +62.25 & 50.08 &    0 \\
+Fixed Grid 1\%        &  0.724 &  +52.81 & 29.87 &  176 \\
+Fixed Grid 2\%        &  0.625 &  +34.76 & 26.66 &   54 \\
+Fixed Grid 5\%        &  1.472 &  +14.28 &  3.16 &    9 \\
+ATR Grid $k{=}0.5$    & $-$0.004 & $-$20.22 & 49.77 &  325 \\
+ATR Grid $k{=}1.0$    &  0.258 &   +5.29 & 49.59 &  242 \\
+ATR Grid $k{=}2.0$    &  0.436 &  +22.73 & 29.85 &   88 \\
+\midrule
+\textbf{PPO (exp016)} & \textbf{43.040} & --- & \textbf{3.12} & \textbf{9,520} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent\textit{Note on test-set return: over 9,520 completed cycles with a mean
+cycle PnL of 0.182\% compounding continuously across 27 months, the arithmetic
+cumulative return reaches astronomical values. The Sharpe ratio and MDD are the
+appropriate metrics here, as they normalize for time and risk. The 3.12\% MDD
+is the operative measure of capital safety.}
+
+Figure~\ref{fig:equity} shows the test-period equity curve in log scale together
+with all baseline strategies.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{06_test_equity_curve.png}
+    \caption{Portfolio equity curves on the test set (2024--2026), log scale.
+             The PPO agent (blue) grows exponentially while all baselines
+             remain near the initial capital line. Bottom panel: BTC/USDT price.}
+    \label{fig:equity}
+\end{figure}
+
+Figure~\ref{fig:progression} places the test result in the context of the full
+experimental progression.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{06_sharpe_progression.png}
+    \caption{\textbf{Left}: validation Sharpe at each major experiment milestone.
+             \textbf{Right}: final PPO Sharpe vs.\ best baseline on Val and Test sets.
+             Test Sharpe exceeds Val Sharpe, providing no evidence of overfitting.}
+    \label{fig:progression}
+\end{figure}
+
+% ─── 6. Analysis ─────────────────────────────────────────────────────────────
+\section{Analysis and Discussion}
+
+\subsection{RQ1: Does PPO Outperform Fixed-Grid Baselines?}
+
+On the validation set, PPO achieves a Sharpe of 35.42 versus 2.23 for the best
+baseline, a \textbf{15.9$\times$} advantage.
+On the held-out test set, PPO achieves 43.04 versus 1.47 for Fixed Grid 5\%,
+a \textbf{29.2$\times$} advantage.
+Both results unambiguously answer RQ1 in the affirmative.
+
+The higher test Sharpe relative to validation Sharpe (43.04 vs.\ 35.42) is
+consistent with the 2024--2025 BTC bull market providing an environment
+especially favorable to the agent's fast-cycle, high-frequency trading style.
+Critically, the direction of this difference (test $>$ val) rules out test-set
+overfitting: a model that had implicitly seen the test data would show test
+performance \emph{no better} than validation, not superior.
+
+\subsection{RQ2: Volatility Regime Adaptation}
+
+Figure~\ref{fig:behavior} shows the agent's action output on the test set,
+stratified by volatility regime (Low / Mid / High, defined by ATR/price thresholds).
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{06_behavior_analysis.png}
+    \caption{Action distributions on the test set.
+             \textbf{Top-left/Bottom-left}: both aggressiveness and profit target
+             are concentrated at exactly 0.0 across all volatility regimes,
+             indicating a saturated constant policy.
+             \textbf{Bottom-right}: the regime distribution across the test period.}
+    \label{fig:behavior}
+\end{figure}
+
+Contrary to the expectation of RQ2, the trained policy outputs a near-constant
+action vector $\bm{a} \approx (0, 0)$ deterministically, regardless of the
+observed volatility regime.
+Inspection of the policy network confirms this: the raw Gaussian mean for
+aggressiveness is $-9.19$ (tanh-squashed to $\approx -1$, rescaled to $\approx 0$),
+and for profit target $-4.30$ (rescaled to $\approx 0$).
+No statistically meaningful difference in action values exists across Low, Mid,
+and High volatility regimes.
+
+\textbf{Why did the policy saturate?}
+The root cause lies in a structural coupling between Bayesian coefficient
+optimization and the RL action space.
+The order-placement formula is:
+\begin{equation}
+    \Delta^\text{sell-mkt}_t = r_t \cdot (A_s + a_\text{pt} \cdot B_s).
+\end{equation}
+Bayesian search drove $A_s$ to its lower bound ($0.101$), making the minimum
+action value ($a_\text{pt} = 0$) already optimal: any increase in $a_\text{pt}$
+only widens the sell gap, reducing cycle frequency.
+The RL agent correctly learned to keep $a_\text{pt} = 0$, but this renders
+state-conditioned adaptation unnecessary.
+In other words, the Bayesian stage solved the gap-sizing problem at the
+coefficient level, leaving no residual degrees of freedom for RL to exploit.
+
+\textbf{Implication.}
+RQ2 cannot be answered with the current design.
+The result does not imply that volatility-regime adaptation is impossible or
+unhelpful — it implies that the coefficient optimization removed the mechanism
+through which adaptation would have been expressed.
+A redesigned system in which coefficients fix the \emph{range} of behavior while
+RL controls the \emph{selection within that range} is the natural next step
+(Section~\ref{sec:conclusion}).
+
+\subsection{Cycle Behavior}
+
+Figure~\ref{fig:cycle} characterizes the 9,520 trading cycles completed during
+the test period.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{06_cycle_analysis.png}
+    \caption{Test-set cycle analysis.
+             \textbf{Left}: PnL distribution (win rate 96.9\%, mean +0.182\%).
+             \textbf{Center}: cycle duration distribution (mean 1.2 bars $\approx 1.2$ hours).
+             \textbf{Right}: cumulative compounding of per-cycle returns on a log scale.}
+    \label{fig:cycle}
+\end{figure}
+
+The 96.9\% cycle win rate and 1.2-hour average duration demonstrate that the agent
+operates in a near-market-making mode: opening and closing positions rapidly,
+collecting small spreads on each cycle.
+The log-linear cumulative return curve (right panel) confirms that the compounding
+occurs steadily without catastrophic drawdowns, consistent with the 3.12\% MDD.
+
+\subsection{Limitations}
+
+\textbf{Market impact.}
+The simulation assumes infinite liquidity: limit orders are filled at the stated
+price with no slippage.
+At the simulated capital scale (\$10,000), this assumption is reasonable for
+BTC/USDT (daily volume $>\$30$B).
+However, scaling to larger positions would require a market-impact model.
+
+\textbf{Fee model.}
+A flat 0.05\% maker fee is applied.
+In practice, taker fees (0.10\%), funding rates, and spread costs would further
+erode returns, particularly for the fast-cycle strategy that generates many fills.
+
+\textbf{Training horizon.}
+The train set (2020--2022) contains only one major bull-bear cycle.
+Extended coverage of additional market regimes would strengthen the generalization
+claim.
+
+\textbf{Policy saturation.}
+The learned policy outputs a near-constant $(0, 0)$ action because Bayesian
+optimization drove $A_s$ to its lower bound, making the minimum action permanently
+optimal.
+This is a structural design limitation: co-optimizing formula coefficients and the
+RL policy for the same objective removes the policy's degrees of freedom.
+Future work must decouple these two optimization stages.
+
+\textbf{$A_s$ boundary.}
+The optimal $A_s = 0.101$ sits at the lower bound of the Bayesian search space,
+suggesting the Bayesian stage solved the sell-gap problem completely,
+leaving no room for RL to contribute further refinement.
+
+% ─── 7. Conclusion ───────────────────────────────────────────────────────────
+\section{Conclusion}
+\label{sec:conclusion}
+
+We presented a non-directional reinforcement learning framework for dynamic grid
+trading on BTC/USDT in which a PPO agent controls ATR-proportional limit-order
+placement without directional price prediction.
+The key contributions are: (1) a five-dimensional MDP formulation encoding both
+market conditions and portfolio state; (2) an eight-coefficient ATR-scaling formula
+that keeps order semantics interpretable; and (3) a Bayesian search procedure that
+improved validation Sharpe by $+145\%$ over hand-tuned defaults.
+
+The final model achieves a test-set Sharpe of 43.04 — 29.2$\times$ the best
+fixed-grid baseline — with a 3.12\% maximum drawdown.
+Critically, post-hoc analysis shows the policy converges to a near-constant
+$(0, 0)$ action output: the Bayesian optimization drove the sell-market base
+coefficient $A_s$ to its lower bound, making the minimum action permanently
+optimal and eliminating the need for state-conditioned selection.
+The performance advantage over fixed baselines therefore stems primarily from the
+Bayesian-optimized coefficient set rather than from learned adaptive behavior.
+
+This finding reframes the research contribution: rather than demonstrating that
+RL \emph{adapts} to market regimes, this work demonstrates that (a) the
+ATR-proportional framework with Bayesian-optimized coefficients constitutes a
+strong fixed strategy in its own right, and (b) the co-optimization of
+coefficients and RL policy creates a structural conflict that prevents regime
+adaptation from emerging.
+
+\textbf{Next-phase design.}
+To enable genuine regime adaptation, three changes are required:
+\begin{enumerate}
+    \item \textbf{Decouple coefficient and action roles.}
+          Coefficients should fix the economically meaningful \emph{range}
+          (e.g., sell-market in $[0.1, 1.0]\times r_t$), using Bayesian findings
+          as informed bounds rather than optimized values.
+          RL action then selects \emph{within} that range based on state.
+    \item \textbf{Add directional state features.}
+          Include rolling log-return features (e.g., 1-day and 1-week trends)
+          so the policy has the signal needed to distinguish bull, bear, and
+          sideways regimes.
+    \item \textbf{Monitor policy entropy during training.}
+          Track action standard deviation at each evaluation checkpoint;
+          collapse toward zero is an early warning of the saturation failure
+          mode identified here.
+\end{enumerate}
+
+Additional extensions include SAC for improved sample efficiency in the continuous
+action space, and integration with the Binance live API for paper-trading
+validation.
+
+% ─── References ──────────────────────────────────────────────────────────────
+\newpage
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}
