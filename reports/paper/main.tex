@@ -75,9 +75,10 @@ and evaluated on three environments: (i) single-split validation
 \citep{lopezdeprado2018advances} 15 paths, and (iii) the unsealed
 out-of-sample Test set (2024--2026, BTC \$42K\,$\to$\,\$76K bull regime).
 
-We report five key findings.
-\textbf{(1)} All four variants exceed the ATR baseline by $+11$--$24\%$ on Val,
-yet partition into two clusters \{\texttt{sym}, \texttt{dsr}\} (aggressive) vs.\
+We report four key findings.
+\textbf{(1)} All four variants exceed the ATR baseline ($1.378$) by
+$+21$--$36\%$ on Val, yet partition into two clusters
+\{\texttt{sym}, \texttt{dsr}\} (aggressive) vs.\
 \{\texttt{asym}, \texttt{pt}\} (conservative); within-cluster Cohen's $|d|<0.3$
 versus across-cluster $|d|>0.8$.
 \textbf{(2)} Mechanism: reward loss asymmetry directly determines trade frequency
@@ -94,7 +95,7 @@ sell-side timing risk of the unseen bull regime. In contrast, \texttt{dsr} learn
 long holding (mean 4.58\,h, max 169\,h = 7 days) and records the worst OOS
 performance---demonstrating that the same reward formulation underlies both
 in-sample advantage and OOS failure as two sides of the same coin.
-\textbf{(5)} The Val--Test distribution shift is highly significant
+The Val--Test distribution shift is highly significant
 (KS $p<10^{-10}$, $-27\%$ variance), while policies' actions remain nearly
 invariant between Val and Test ($\Delta \leq 5\%$), indicating that the
 regime shift, not the policy, drives OOS differences.
@@ -903,7 +904,7 @@ ATR baseline & $1.378$ & --- & $9.83$ & $0.153$ & $2{,}121$ & $35.80$ \\
 Two key observations follow.
 
 \paragraph{(i) All four variants exceed the ATR baseline.}
-Best Val Sharpe values range from $+21\%$ (\texttt{sym}) to $+21\%$ (\texttt{pt})
+Best Val Sharpe values range from $+21\%$ (\texttt{pt}) to $+36\%$ (\texttt{sym})
 relative to ATR ($1.378$), and all are statistically significant
 (per-variant bootstrap 95\% CI lower bound exceeds 1.5). This contrasts
 qualitatively with the ``RL = Fixed $[1.0, 0.0]$'' result of
@@ -1795,7 +1796,7 @@ Source & Variant & Test mean $\pm$ std & IQM & 5\% CVaR & $t$-stat & $p$ (1-side
 
 \begin{figure}[h]
 \centering
-\includegraphics[width=0.95\textwidth]{menu3_boxplot}
+\includegraphics[width=0.95\textwidth]{menu3_oos_boxplot}
 \caption{Test Sharpe distributions (variant $\times$ source). \texttt{pt}'s
 box is highest in both sources; \texttt{dsr} drops below zero in the exp032b
 source and has the widest spread in the exp034 source. The ATR baseline
