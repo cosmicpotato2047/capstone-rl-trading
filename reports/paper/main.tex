@@ -102,9 +102,9 @@ regime shift, not the policy, drives OOS differences.
 
 Our contribution is twofold. First, we demonstrate quantitatively that reward
 design exerts its effect through a \emph{trade-off dimension in risk profile}
-rather than a single Sharpe ``alpha source.'' Second, we provide the first
-quantitative evidence that Kahneman-Tversky prospect theory confers
-out-of-distribution safety on RL trading policies. Code and data:
+rather than a single Sharpe ``alpha source.'' Second, we provide, to our
+knowledge, the first quantitative evidence that Kahneman-Tversky prospect
+theory confers out-of-distribution safety on RL trading policies. Code and data:
 \url{https://github.com/cosmicpotato2047/capstone-rl-trading}.
 \end{abstract}
 
@@ -793,6 +793,10 @@ remaining Fixed policies $[1.0, 0.5]$ and $[1.0, 1.0]$ are substantially
 worse, partly justifying the claim that ``RL did pick a meaningful point in
 the action space.'' The crucial qualifier is that the point is
 time-independent.
+\emph{The absolute Sharpe values reported in this section (e.g., 45.390)
+include a favorable-bias artifact and are \textbf{not} used as a baseline
+in the comparisons of \S\ref{sec:pareto}--\S\ref{sec:robustness}; the RL
+$=$ Fixed $[1.0, 0.0]$ agreement itself is the qualitative conclusion.}
 
 \subsection{Mechanism: The ATR Formula Absorbs Degrees of Freedom}
 \label{sec:phase1_mechanism}
@@ -881,7 +885,10 @@ deviation for the six metrics.
 \small
 \caption{exp032b results. 10 seeds $\times$ 1M steps, evaluated on Val. The
 ATR baseline is a single deterministic policy so it has no std.
-\textbf{Bold} indicates per-metric leaders.}
+\textbf{Bold} indicates per-metric leaders. ATR's Trades count $2{,}121$ is
+$\approx 18\times$ that of the RL variants ($85$--$120$); this reflects the
+ATR grid's volatility-proportional formula filling more often, not a
+behavioral difference in the policy.}
 \begin{tabular}{lcccccc}
 \toprule
 Variant & Best Sharpe & Final Sharpe & MDD (\%) & Calmar & Trades & Return (\%) \\
@@ -1202,9 +1209,9 @@ rather in differential baseline trade frequency.
 \label{sec:mechanism_hold_rate}
 
 The single most striking row in Table~\ref{tab:behavior_per_regime} is
-\texttt{dsr}'s hold rate. With trade frequency nearly identical to
-\texttt{sym}'s ($0.073$ vs $0.073$), \texttt{dsr}'s hold rate of $0.142$ is
-\textbf{1.9$\times$} \texttt{sym}'s $0.074$, \textbf{3.9$\times$}
+\texttt{dsr}'s hold rate. At low\_vol, with trade frequency nearly identical
+to \texttt{sym}'s ($0.073$ vs $0.073$), \texttt{dsr}'s hold rate of $0.142$
+is \textbf{1.9$\times$} \texttt{sym}'s $0.074$, \textbf{3.9$\times$}
 \texttt{asym}'s $0.036$, and \textbf{4.6$\times$} \texttt{pt}'s $0.031$.
 At high\_vol the gap widens to $0.120$ vs $0.020$, i.e., \textbf{6.0$\times$}
 \texttt{pt}.
@@ -2072,9 +2079,8 @@ step reward, (ii) discovers that the Optuna-best parameters
 ($\alpha = 0.683$, $\lambda = 3.303$) are \emph{more concave and more
 loss-averse} than the human values ($\alpha = 0.88$, $\lambda = 2.25$), and
 (iii) quantifies that this policy is OOS-robust to unseen market regimes
-across two sources at $p < 0.002$. To our knowledge, this is the first
-quantitative demonstration that prospect theory confers OOS safety on RL
-policies.
+across two sources at $p < 0.002$
+(see \S\ref{sec:intro_contribution}, contribution 4).
 
 \textbf{Final verdict on H4 (robustness)}: \emph{partially supported}. The
 cluster structure is robust under slippage ($2.19\times$) and CPCV
@@ -2298,9 +2304,9 @@ domain data instead.
 
 H5 establishes ``using prospect theory as an RL reward produces an
 OOS-robust policy'' at the application level, with consistent confirmation
-across two sources at $p<0.002$. To our knowledge, this is the first
-quantitative OOS-safety result at the intersection of behavioral economics
-and RL.
+across two sources at $p<0.002$
+(see \S\ref{sec:intro_contribution}, contribution 4;
+\S\ref{sec:conclusion}).
 
 \subsection{Limitations and Future Work}
 \label{sec:disc_limitations}
@@ -2414,26 +2420,19 @@ a dimension along which reward formulations differ.
 
 \subsection*{Future Work}
 
-Five directions responding to the limitations of \S\ref{sec:disc_limitations}:
+See \S\ref{sec:disc_limitations} for the five limitation-driven future
+directions; here we highlight the three of highest defense priority:
 \begin{itemize}[leftmargin=*]
-\item \textbf{Multi-asset verification}: re-test H5 on equity ETFs (S\&P 500
-sectors), FX major pairs, and commodities (gold/oil). Distribution-shift
-forms differ across assets; the question is whether
-\texttt{pt}'s short-holding mechanism generalizes.
-\item \textbf{Additional regimes}: extend Test to the 2018 bear, 2019
-sideways, and potential 2025+ sideways periods. Broaden ``OOS robust'' from
-``bull only'' to ``all regimes.''
-\item \textbf{Domain Randomization (DR)}: train with randomized
-slippage/fee/start times and ask whether \texttt{dsr}'s OOS failure
-recovers, and whether the already-robust \texttt{pt} gains additional
-margin.
-\item \textbf{Meta-RL and continuous reward learning}: learn a meta-policy
-that adapts $(\alpha, \lambda)$ online based on environment signals. H5
-verifies that ``one-shot'' prospect parameters are OOS robust, but
-time-varying parameters may be more robust in nonstationary environments.
-\item \textbf{Other RL algorithms}: this paper used PPO alone. Replicate
-the reward-variant comparison on SAC, TD3, IMPALA to separate algorithm
-effects from reward effects.
+\item \textbf{Multi-asset verification}: re-test H5 (\texttt{pt} OOS
+robust) on equity ETFs, FX, and commodities, where distribution-shift
+forms differ---quantifying whether the short-holding mechanism generalizes.
+\item \textbf{Meta-RL adaptive reward parameters}: this paper verifies
+one-shot $(\alpha, \lambda)$ as OOS robust; the question is whether
+online-adapted parameters yield additional advantage in nonstationary
+environments.
+\item \textbf{Domain Randomization (DR)}: whether \texttt{dsr}'s OOS
+failure recovers under DR---i.e., whether the dual face of the same reward
+can be dissolved by DR.
 \end{itemize}
 
 The code and data of this work are released at
