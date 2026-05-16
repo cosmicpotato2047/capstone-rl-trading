@@ -1,168 +1,218 @@
-# BTC 그리드 트레이딩 — Reward Design이 RL 알파에 미치는 영향
+# The Effect of Reward Function Design in RL-Based BTC Grid Trading
 
-2026 컴퓨터공학과 캡스톤 디자인 / 졸업 논문
-
-## 핵심 연구 질문 (RQ)
-
-> **BTC 그리드 트레이딩에서 reward 설계가 RL 정책의 알파에 어떤 영향을 미치는가?
-> 특히, 어떤 reward 함수 하에서 RL이 ATR 규칙 기반을 초과하며 (혹은 초과하지 못하며), 그 메커니즘은 무엇인가?**
-
-가격 방향을 예측하지 않고, 변동성 자체에서 수익을 추구하는 **동적 그리드 트레이딩** 환경에서,
-PPO 에이전트가 ATR 비례 규칙 기반 시스템 대비 보이는 성능 차이를 reward 함수 별로 비교 분석한다.
-
-**자산 범위**: BTC/USDT 1시간봉 **단일 자산** (자산 확장은 본 논문 범위 외).
-
-상세는 [docs/PROJECT_GOAL.md](docs/PROJECT_GOAL.md) 참조.
+> **Pareto Frontier, Winner Reversal, and Out-of-Distribution Robustness of Prospect-Theoretic Reward**
+>
+> Capstone Design Project · Bachelor's Thesis · June 2026
+> Chanhee Lee · Department of Computer Science · Seoul National University of Science and Technology
 
 ---
 
-## 핵심 가설 및 사전 증거
+## TL;DR
 
-| 가설 | 사전 증거 | 정식 검증 |
-|---|---|---|
-| **H1**: Symmetric reward + ATR 비례 공식에서 RL ≈ ATR | exp020~022 (Test Sharpe 42.0 vs 41.8) | RQ-1 (재현) |
-| **H2**: Asymmetric / Prospect-theoretic reward로 RL > ATR | exp027_rl (Test Sharpe 1.955 vs 0.935) | **RQ-2 (메인, exp032)** |
-| **H3**: 우수 reward는 "선택적 진입" 행동 | exp027_rl 거래수 214 (ATR 1591의 1/7) | RQ-3 (exp032 행동 분석) |
-| **H4**: 알파가 CPCV + Slippage에서도 유지 | — | RQ-4 (exp033~035) |
+We quantitatively study the effect of **reward function design** on PPO-based reinforcement-learning policies for ATR-proportional grid trading on the BTC/USDT 1-hour market. Four reward variants are each trained with **10 seeds × 1M steps** and evaluated on **three environments**: single-split validation, 6-fold combinatorial purged cross-validation (CPCV, 15 paths), and the unsealed out-of-sample test set (2024–2026, BTC \$42K → \$76K bull regime).
 
----
+Key finding: the winner **reverses across evaluation environments** — Val=sym → CPCV=dsr → Test=pt — and **prospect-theoretic reward (pt)** is the only variant that achieves consistent positive Sharpe on out-of-sample data, providing the first quantitative evidence that Kahneman–Tversky prospect theory confers OOS safety on RL trading policies.
 
-## Phase 진행 상황
+![Three-environment winner reversal](reports/phase15/figures/menu_c_three_env.png)
 
-```
-Phase 1  ██████████ 완료  환경 설계 + RL 학습 + 핵심 발견 (negative finding 확보)
-Phase 2  ██████████ 완료  체결 정합성 + ATR 재최적화 + asymmetric reward 사전 증거
-Phase 3  ██░░░░░░░░ 진행  Reward 변형 비교 (본 논문 메인) — exp030~035
-Phase 4  ░░░░░░░░░░ 대기  논문 작성 + 디펜스 (Phase 3 후반과 병행)
-```
-
-상세는 [ROADMAP.md](ROADMAP.md) 참조.
+📄 **Paper PDFs** (43–45 pages, 9 chapters, 9 figures, 18 tables, 20 references):
+- 한글 본문: [`reports/paper/main_ko.pdf`](reports/paper/main_ko.pdf)
+- English: [`reports/paper/main.pdf`](reports/paper/main.pdf)
 
 ---
 
-## 다음 실험 시리즈
+## Key Contributions
 
-| Exp | 목적 | 논문 챕터 | 상태 |
-|---|---|---|---|
-| exp030 | PPO 학습 안정화 | §3.3 Method | 대기 |
-| exp031 | BC warm-start | §3.4 Method | 대기 |
-| exp031b | (조건부) CQL + mixed | §3.4 Method | 조건부 |
-| **exp032** | **4가지 reward 비교 (메인)** | **§5 Positive finding** | 대기 |
-| exp033 | Slippage + Domain Randomization | §7.1 | 대기 |
-| exp034 | CPCV 6-fold + DSR | §5, §7.2 | 대기 |
-| exp035 | Test set 봉인 해제 | §7.3 | 대기 |
+1. **Scenario D — Pareto-frontier discovery**
+   Four reward variants partition into two clusters {sym, dsr} (aggressive) vs.
+   {asym, pt} (conservative) on the Sharpe–MDD plane, with **no single Sharpe winner**.
+   Within-cluster Cohen's |d| < 0.30 vs. across-cluster |d| > 0.79.
 
-상세 설계는 [docs/study/rl_finance/project_continuation_plan.md](docs/study/rl_finance/project_continuation_plan.md).
+2. **Three-environment winner reversal**
+   - Val (single-split): **sym 1.871**
+   - CPCV (multi-split): **dsr 1.413** (p < 10⁻⁹, Bonferroni 4-way corrected)
+   - Test (out-of-sample): **pt 0.367 / 0.339** (consistent across two model sources, p < 0.002)
+   The winner reverses completely across the three evaluation environments.
+
+3. **H5 — Prospect Theory confers OOS safety on RL policies**
+   Trajectory analysis shows that **pt**'s loss aversion (λ = 3.30) and concave gain
+   (α = 0.68) train policies to exit within **mean 1.4 h (max 6 h)**, avoiding
+   sell-side timing risk in the unseen bull regime. In contrast, **dsr** learns
+   long holding (mean 4.58 h, max 169 h = 7 days) and records the worst OOS
+   performance — the same reward formulation drives both in-sample advantage and
+   OOS failure as two sides of the same coin.
+
+4. **Methodological recommendation**
+   Single-split Val + multi-split CPCV + out-of-sample Test are jointly required;
+   in-sample diversity (CPCV) does not guarantee OOS consistency.
 
 ---
 
-## 환경 설정
+## Selected Figures
+
+### Pareto frontier on Val (Scenario D)
+40 runs (4 variants × 10 seeds) form two clusters on the Sharpe–MDD plane; 5 runs
+are Pareto-optimal.
+
+![Pareto frontier](reports/exp032c/figures/menu1_pareto_scatter.png)
+
+### Mechanism — Hold duration on Test
+DSR learns long holding (max 7 days) while pt exits within 6 hours, explaining
+the OOS reversal.
+
+![Hold duration](reports/phase16d/figures/menu3_hold_duration.png)
+
+### Val → Test generalization gap
+All variants degrade by ~1.5 Sharpe; pt's gap is the smallest (−0.75 to −1.30),
+asym/pt are the only variants achieving positive Test Sharpe with statistical
+significance.
+
+![Val vs Test](reports/exp035/figures/menu2_val_vs_test.png)
+
+### Cluster preservation via policy distance
+Within-cluster L2 distance 0.129 vs. across-cluster 0.286 (ratio 2.22×) quantifies
+the two-cluster separation at the policy level.
+
+![Policy distance](reports/exp032c/figures/menu5_policy_distance.png)
+
+---
+
+## Reproduction
+
+### Environment
+
+- Python 3.13 (any 3.11+ works)
+- Dependencies: see `requirements.txt` (`pip install -r requirements.txt`) or `pyproject.toml`
+- Core: `stable-baselines3==2.8.0`, `gymnasium==1.2.3`, `optuna==4.8.0`, `pandas`, `numpy`, `matplotlib`, `scipy`
+
+### Data
 
 ```bash
-python -m venv venv
-venv\Scripts\activate       # Windows
-pip install -r requirements-dev.txt
+python scripts/data/download_data.py     # ccxt Binance API, BTC/USDT 1h
+python scripts/data/preprocess_data.py   # adds ATR, log_price, z-scores
+# → data/processed/btc_{train,val,test}.parquet
 ```
 
-> ⚠️ yfinance 1h 데이터는 최근 730일 제한. 학습 기간 전체는 Binance API(ccxt)로 다운로드.
+Train 2017-08 ~ 2020-12 / Val 2021-01 ~ 2023-12 / Test 2024-01 ~ (sealed until §7.3).
 
-## 데이터 다운로드 및 전처리
+### Train (4 reward variants × 10 seeds × 1M steps, ≈ 3.5 h)
 
 ```bash
-python scripts/download_data.py
-python scripts/preprocess_data.py
+# §3.5 — Optuna hyperparameter tuning for each variant (~2 h)
+python scripts/tune/tune_reward_optuna.py
+
+# §5 — main comparison
+python scripts/train/run_exp032b.py
 ```
 
-## 베이스라인 실행
+### Analyze (mechanism, §6)
 
 ```bash
-python scripts/run_baselines.py
+# §6 — trajectory collection (5 min) + 5-menu mechanism analysis
+python scripts/analyze/run_exp032c_eval.py --eval-data data/processed/btc_val.parquet \
+    --out experiments/exp032c_trajectories.parquet
+python scripts/analyze/analyze_exp032c.py
 ```
 
-## 학습 실행
+### Robustness (§7)
 
 ```bash
-python scripts/train_ppo.py
+# §7.1 Slippage 0.02%
+python scripts/train/run_exp032b.py --config-tmpl "config/exp033_{variant}_config.yaml" \
+    --csv experiments/exp033_summary.csv --exp-tag exp033
+
+# §7.2 CPCV 6-fold (15 paths × 4 variants, ≈ 5 h)
+python scripts/train/run_exp034_cpcv.py
+
+# §7.3 Final OOS test set (single-shot, ≈ 20 min)
+python scripts/train/run_exp035_test.py
+python scripts/analyze/analyze_exp035.py
 ```
 
-## 실험 결과 확인 (MLflow)
+### Build paper
 
 ```bash
-mlflow ui   # http://localhost:5000
+cd reports/paper
+xelatex main_ko.tex && bibtex main_ko && xelatex main_ko.tex && xelatex main_ko.tex
+pdflatex main.tex   && bibtex main    && pdflatex main.tex   && pdflatex main.tex
 ```
 
 ---
 
-## 데이터 분할
-
-| 구분 | 기간 | 용도 |
-|------|------|------|
-| Train | 2017-08-17 ~ 2022-12-31 | 에이전트 학습 |
-| Validation | 2023-01-01 ~ 2023-12-31 | 하이퍼파라미터 튜닝, CPCV |
-| Test | 2024-01-01 ~ | 최종 평가 — **exp035까지 봉인** |
-
----
-
-## 프로젝트 구조
+## Repository Structure
 
 ```
 capstone-rl-trading/
-├── docs/
-│   ├── PROJECT_GOAL.md         # ★ 단일 기준점 (RQ, 가설, scope)
-│   ├── MDP.md                  # 환경 설계 근거
-│   ├── FORMULAS.md             # ATR/RL 공식
-│   ├── RELATED_WORK.md         # 선행 연구
-│   └── study/
-│       ├── rl_finance/         # ★ 학습 노트 24개 (이론 보강)
-│       │   ├── 00_overview.md  #   허브
-│       │   └── project_continuation_plan.md  # exp030~035 상세
-│       ├── ernie chan/         # Quantitative Trading (Chan)
-│       ├── lopez de prado/     # Advances in FinML
-│       └── *.md                # 팩터, 위험지표 등
-├── config/                     # 실험 설정 (exp별 yaml)
-├── data/raw/                   # 다운로드 원본 (불변)
-├── data/processed/             # 전처리 parquet (.gitignore)
-├── src/
-│   ├── data/                   # 다운로더, 전처리기
-│   ├── env/                    # Gymnasium 트레이딩 환경
-│   ├── agents/                 # PPO 래퍼, 베이스라인
-│   ├── evaluation/             # 지표, 행동 분석
-│   └── utils/                  # 설정 로더, 시각화
-├── scripts/                    # CLI 진입점
-├── notebooks/                  # 탐색/시각화 전용
-├── experiments/                # 실험별 결과 (model + config + log)
-├── reports/                    # 학기별 보고서
-├── tests/                      # 단위 테스트 (46개)
-├── papers/                     # 참고 논문 PDF
-├── live_trading/               # (선택) Paper trading 인프라
-├── ROADMAP.md                  # Phase별 진행 + 의사결정
-├── CLAUDE.md                   # Claude Code 작업 규칙
-└── RESEARCH_LOG.md             # 날짜별 실험 기록
+├── CLAUDE.md              # project briefing
+├── README.md              # this file
+├── RESEARCH_LOG.md        # dated decisions & per-experiment 6-section logs
+├── ROADMAP.md             # phase status
+├── config/                # YAML experiment configs (exp030 ~ exp035)
+├── data/                  # processed/ (parquet, gitignored)
+├── docs/                  # design + reference documents
+│   ├── PAPER_OUTLINE.md           # 9-chapter outline
+│   ├── PROJECT_GOAL.md            # RQ, hypotheses, scenario branches
+│   ├── RESULTS_SUMMARY.md         # quick-reference of all results
+│   ├── MDP.md, FORMULAS.md, ENV_HISTORY.md, RELATED_WORK.md
+│   └── study/                     # learning notes (rl_finance/, lopez de prado/, etc.)
+├── experiments/
+│   ├── archive/                   # Phase 1-2 (exp001 ~ exp027), outdated
+│   └── exp032a ~ exp035/          # main paper experiments (configs, models, csv, log)
+├── notebooks/             # exploratory Jupyter notebooks
+├── reports/
+│   ├── exp032b ~ phase16d/        # per-experiment analysis.md + figures/
+│   ├── midterm/                   # mid-term presentation materials
+│   └── paper/                     # main_ko.tex, main.tex, references.bib, archive/
+├── scripts/
+│   ├── train/             # training + evaluation runners
+│   ├── analyze/           # post-hoc analysis (Cohen's d, CPCV, mechanism)
+│   ├── tune/              # Optuna hyperparameter search
+│   ├── data/              # download + preprocess
+│   └── build/             # figure / slides / knowledge-map generators
+├── src/                   # production code
+│   ├── env/               # trading_env.py (Env-v4 canonical)
+│   ├── agents/            # PPO agent + baselines
+│   ├── evaluation/        # metrics + behavior analysis
+│   └── utils/             # config loader
+├── tests/                 # 46 environment unit tests
+└── live_trading/          # paper-trading scaffolding (not used in thesis)
 ```
 
 ---
 
-## 주요 문서
+## Document Index
 
-| 문서 | 내용 |
-|------|------|
-| **[docs/PROJECT_GOAL.md](docs/PROJECT_GOAL.md)** | **★ 단일 기준점. RQ, 가설, 평가 방법, scope** |
-| [ROADMAP.md](ROADMAP.md) | Phase별 진행 현황 + 의사결정 기록 |
-| [docs/study/rl_finance/00_overview.md](docs/study/rl_finance/00_overview.md) | 학습 노트 24개 허브 |
-| [docs/study/rl_finance/project_continuation_plan.md](docs/study/rl_finance/project_continuation_plan.md) | exp030~035 상세 설계 |
-| [docs/MDP.md](docs/MDP.md) | 환경 설계 근거 (Phase 1~3 변천 포함) |
-| [docs/FORMULAS.md](docs/FORMULAS.md) | ATR 고정 / RL / Phase 3 reward 변형 공식 |
-| [docs/RELATED_WORK.md](docs/RELATED_WORK.md) | 선행 연구 + Phase 3 인용 매핑 |
-| [RESEARCH_LOG.md](RESEARCH_LOG.md) | 날짜별 의사결정 및 실험 결과 |
-| [CLAUDE.md](CLAUDE.md) | Claude Code 작업 규칙 |
+| Document | Purpose |
+|---|---|
+| [`reports/paper/main_ko.pdf`](reports/paper/main_ko.pdf) | **Final paper (Korean, 43 pages)** |
+| [`reports/paper/main.pdf`](reports/paper/main.pdf) | **Final paper (English, 45 pages)** |
+| [`docs/PROJECT_GOAL.md`](docs/PROJECT_GOAL.md) | Research question, hypotheses, scenario branches |
+| [`docs/PAPER_OUTLINE.md`](docs/PAPER_OUTLINE.md) | 9-chapter outline used as writing navigation |
+| [`docs/RESULTS_SUMMARY.md`](docs/RESULTS_SUMMARY.md) | Single-page quick reference of all numerical results |
+| [`RESEARCH_LOG.md`](RESEARCH_LOG.md) | Dated decisions, per-experiment 6-section logs (~5,800 lines) |
+| [`docs/MDP.md`](docs/MDP.md), [`FORMULAS.md`](docs/FORMULAS.md) | Environment specification, ATR formula |
+| [`docs/ENV_HISTORY.md`](docs/ENV_HISTORY.md) | Environment versions (Env-v2 / v3 / v4) and citation eligibility |
 
 ---
 
-## 이전 README
+## Honest Limitations
 
-본 README는 2026-05-14 RQ 재정의 (Pivot 2) 에 맞춰 전면 개정됨.
-Phase 1 시점의 RQ ("PPO 동적 그리드가 고정 그리드 대비 Sharpe Ratio 우위?") 와
-자산 확장 계획(Phase 4~6 주식/FX/원자재) 은 **본 졸업 논문 범위에서 제외됨**.
-이전 RQ의 결과(RL ≈ ATR 발견) 는 본 논문의 §4 Negative finding의 출발점으로 활용.
+The paper's §8.4 documents the following limitations transparently:
 
-같은 날 2차 수정으로 RQ를 단정문에서 열린 질문 형태로 다듬음 — 학술 컨벤션 준수.
+- **BTC single asset.** Multi-asset extension is explicitly out of scope.
+- **Single OOS regime.** Test (2024–2026) is a BTC bull market only; bear or
+  sideways regimes are not evaluated.
+- **Single slippage level (0.02%).** Slippage sensitivity scan and full Domain
+  Randomization are deferred to future work.
+- **1M training steps per seed.** Longer training may shift winner reversal patterns.
+- **Phase 2 prior evidence (exp027_rl, Env-v3, Test Sharpe 1.955) is not reproduced**
+  on the canonical Env-v4 environment, demonstrating that environment dependence
+  exceeds reward-variant effect in absolute alpha.
+
+---
+
+## Author
+
+**Chanhee Lee** (이찬희) · `happilyfly@seoultech.ac.kr`
+Department of Computer Science, Seoul National University of Science and Technology
+Capstone Design Project · 2026 · Bachelor's Thesis
