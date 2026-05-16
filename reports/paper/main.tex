@@ -73,7 +73,7 @@ prospect-theoretic ($\alpha=0.68$, $\lambda=3.30$, \texttt{pt};
 and evaluated on three environments: (i) single-split validation
 (Val 2021--2023), (ii) 6-fold combinatorial purged cross-validation
 \citep{lopezdeprado2018advances} 15 paths, and (iii) the unsealed
-out-of-sample Test set (2024--2026, BTC \$42K\,$\to$\,\$76K bull regime).
+out-of-sample Test set (2024--2026, BTC \$42K\,$\to$\,\$75K bull regime).
 
 We report four key findings.
 \textbf{(1)} All four variants exceed the ATR baseline ($1.378$) by
@@ -86,7 +86,7 @@ and holding time (policy distance ratio 2.22$\times$), and the sliding-window
 memory structure of DSR results in 2--6$\times$ higher hold rate than other
 variants.
 \textbf{(3)} Winner reverses across evaluation environments: Val=\texttt{sym}(1.87)
-$\to$ CPCV=\texttt{dsr}(1.41, $p<0.001$) $\to$ Test=\texttt{pt}(0.34--0.37,
+$\to$ CPCV=\texttt{dsr}(1.41, $p<10^{-9}$) $\to$ Test=\texttt{pt}(0.34--0.37,
 consistent across two model sources, $p<0.002$).
 \textbf{(4)} The OOS robustness of \texttt{pt} arises from a short-holding
 mechanism: loss aversion $\lambda=3.30$ combined with concave gain $\alpha=0.68$
@@ -933,7 +933,9 @@ the vertical axis is MDD (lower better). \texttt{sym}/\texttt{dsr} cluster in
 the \emph{aggressive} region of high Sharpe + high MDD;
 \texttt{asym}/\texttt{pt} cluster in the \emph{conservative} region of
 moderate Sharpe + low MDD. The ATR baseline sits at $(1.378, 9.83)$ in the
-same plane and is Pareto-dominated by every RL policy.}
+same plane and is Pareto-dominated by every RL policy. Of the 40 policies,
+\textbf{5 are Pareto-optimal} (\texttt{sym} 2, \texttt{asym} 1, \texttt{dsr} 1,
+\texttt{pt} 1), so all four variants contribute to the frontier.}
 \label{fig:pareto_scatter}
 \end{figure}
 
@@ -1772,7 +1774,8 @@ B\&H is included as a secondary baseline added during Phase 16b.
 \centering
 \small
 \caption{Test 2024+ results per source and per variant. \texttt{pt} is first
-in both sources and exceeds the ATR baseline ($-0.055$) by the largest margin.
+in both sources and exceeds the ATR baseline (Test Sharpe $= -0.055$,
+MDD $= 8.04\%$) by the largest margin.
 \texttt{dsr} is negative on the exp032b source---worse than ATR.}
 \begin{tabular}{llcccccc}
 \toprule
@@ -1877,7 +1880,7 @@ Variant & exp032b Val $\to$ Test & $\Delta$ & exp034 CPCV $\to$ Test & $\Delta$ 
 \texttt{sym}  & $1.871 \to 0.090$ & $-1.78$ & $1.302 \to 0.001$ & $-1.30$ \\
 \texttt{asym} & $1.681 \to 0.173$ & $-1.51$ & $1.043 \to 0.175$ & $-0.87$ \\
 \texttt{dsr}  & $1.809 \to -0.122$ & $\mathbf{-1.93}$ \textbf{(worst)} & $1.413 \to 0.070$ & $-1.34$ \\
-\texttt{pt}   & $1.667 \to 0.367$ & $\mathbf{-1.30}$ \textbf{(smallest)} & $1.092 \to 0.339$ & $\mathbf{-0.75}$ \textbf{(smallest)} \\
+\texttt{pt}   & $1.667 \to 0.367$ & $\mathbf{-1.30}$ \textbf{(smallest)} & $1.093 \to 0.339$ & $\mathbf{-0.75}$ \textbf{(smallest)} \\
 \bottomrule
 \end{tabular}
 \label{tab:oos_gap}

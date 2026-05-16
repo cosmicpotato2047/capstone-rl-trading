@@ -85,11 +85,11 @@ $+21\sim36\%$ 초과하나 단일 winner는 없으며, 두 클러스터
 (정책 거리 비율 2.22배), \texttt{dsr}의 hold rate가 다른 변형의 2--6배인 것이
 sliding-window reward 자체의 메모리 구조 결과임을 정량 확인한다.
 (3) 평가 환경별로 winner가 reversal: Val의 \texttt{sym}(1.87) $\to$
-CPCV의 \texttt{dsr}(1.41, p$<$0.001) $\to$ Test의 \texttt{pt}(0.34--0.37,
+CPCV의 \texttt{dsr}(1.41, p$<10^{-9}$) $\to$ Test의 \texttt{pt}(0.34--0.37,
 두 소스 일관 p$<$0.002).
 (4) \texttt{pt}의 분포 외 강건성 메커니즘: $\lambda=3.30$ 손실 회피와 $\alpha=0.68$
 오목한 효용함수가 정책의 매수 후 평균 1.4시간(최대 6시간) 빠른 청산을 학습시켜
-미관측 강세장(BTC \$42K $\to$ \$76K)의 매도 타이밍 위험을 회피한다. 반면 \texttt{dsr}은
+미관측 강세장(BTC \$42K $\to$ \$75K)의 매도 타이밍 위험을 회피한다. 반면 \texttt{dsr}은
 평균 4.58시간(최대 169시간 = 7일) holding을 학습시켜 동일 환경에서 최악 성능 기록.
 Val--Test 분포 차이는 통계적으로 매우 유의(KS $p<10^{-10}$, 변동성 $-27\%$)하며,
 모든 정책의 Val/Test 행동은 거의 동일($\Delta$ action $\leq 5\%$)이므로 OOS 성능
@@ -117,7 +117,7 @@ Differential Sharpe Ratio ($\eta=1/28\,\mathrm{h}$, \texttt{dsr}), and
 prospect-theoretic ($\alpha=0.68$, $\lambda=3.30$, \texttt{pt})---are each trained
 with 10 seeds $\times$ 1M steps and evaluated on three environments:
 (i) single-split validation (Val 2021--2023), (ii) 6-fold CPCV 15 paths, and
-(iii) the unsealed out-of-sample Test (2024--2026, BTC \$42K\,$\to$\,\$76K).
+(iii) the unsealed out-of-sample Test (2024--2026, BTC \$42K\,$\to$\,\$75K).
 
 Key findings:
 (1) All four variants exceed the ATR baseline by $+11$--$24\%$ on Val, but partition
@@ -870,7 +870,9 @@ $>$ sym)이 부분 부정}된다.
 가로축은 best Val Sharpe(↑좋음), 세로축은 MDD(↓좋음). \texttt{sym}/\texttt{dsr}이
 높은 Sharpe + 높은 MDD의 \emph{aggressive} 영역에 모이고, \texttt{asym}/\texttt{pt}는
 중간 Sharpe + 낮은 MDD의 \emph{conservative} 영역에 모인다. ATR 베이스라인은
-같은 평면의 (1.378, 9.83) 위치이며 모든 RL 정책이 Pareto-dominate한다.}
+같은 평면의 (1.378, 9.83) 위치이며 모든 RL 정책이 Pareto-dominate한다.
+40 점 중 \textbf{5 점이 Pareto-optimal} (\texttt{sym} 2, \texttt{asym} 1,
+\texttt{dsr} 1, \texttt{pt} 1)으로 4 variant 모두 frontier 에 기여한다.}
 \label{fig:pareto_scatter}
 \end{figure}
 
@@ -1637,8 +1639,8 @@ ATR baseline 또한 같은 환경에서 단일 결정적 정책(\S\ref{sec:atr_b
 \centering
 \small
 \caption{Test 2024+ 결과 per source per variant. \texttt{pt}가 양 source 일관
-1위이며 두 source 모두 ATR baseline($-0.055$)을 가장 큰 폭으로 초과. \texttt{dsr}은
-exp032b source에서 음수 Sharpe로 ATR보다 더 나쁨.}
+1위이며 두 source 모두 ATR baseline (Test Sharpe $= -0.055$, MDD $= 8.04\%$)을
+가장 큰 폭으로 초과. \texttt{dsr}은 exp032b source에서 음수 Sharpe로 ATR보다 더 나쁨.}
 \begin{tabular}{llcccccc}
 \toprule
 Source & Variant & Test mean $\pm$ std & IQM & 5\% CVaR & $t$-stat & $p$ (1-sided) & vs ATR \\
@@ -1735,7 +1737,7 @@ Variant & exp032b Val $\to$ Test & $\Delta$ & exp034 CPCV $\to$ Test & $\Delta$ 
 \texttt{sym}  & $1.871 \to 0.090$ & $-1.78$ & $1.302 \to 0.001$ & $-1.30$ \\
 \texttt{asym} & $1.681 \to 0.173$ & $-1.51$ & $1.043 \to 0.175$ & $-0.87$ \\
 \texttt{dsr}  & $1.809 \to -0.122$ & $\mathbf{-1.93}$ \textbf{(worst)} & $1.413 \to 0.070$ & $-1.34$ \\
-\texttt{pt}   & $1.667 \to 0.367$ & $\mathbf{-1.30}$ \textbf{(smallest)} & $1.092 \to 0.339$ & $\mathbf{-0.75}$ \textbf{(smallest)} \\
+\texttt{pt}   & $1.667 \to 0.367$ & $\mathbf{-1.30}$ \textbf{(smallest)} & $1.093 \to 0.339$ & $\mathbf{-0.75}$ \textbf{(smallest)} \\
 \bottomrule
 \end{tabular}
 \label{tab:oos_gap}
