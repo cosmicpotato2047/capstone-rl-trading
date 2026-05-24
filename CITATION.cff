@@ -1,0 +1,55 @@
+cff-version: 1.2.0
+message: "If you use this work, please cite it as below."
+type: software
+title: >-
+  The Effect of Reward Function Design in RL-Based BTC Grid Trading:
+  Pareto Frontier, Winner Reversal, and OOS Robustness of
+  Prospect-Theoretic Reward
+authors:
+  - family-names: Lee
+    given-names: Chanhee
+    affiliation: "Seoul National University of Science and Technology"
+    email: happilyfly@seoultech.ac.kr
+abstract: >-
+  Quantitative study of the effect of reward function design on PPO-based
+  reinforcement-learning policies for ATR-proportional grid trading on the
+  BTC/USDT 1-hour market. Four reward variants (symmetric, asymmetric,
+  Differential Sharpe Ratio, prospect-theoretic) are each trained with
+  10 seeds × 1M steps and evaluated on three environments:
+  single-split validation, 6-fold combinatorial purged cross-validation,
+  and the unsealed out-of-sample Test set. Findings include winner reversal
+  across the three evaluation environments and the first quantitative
+  evidence that Kahneman-Tversky prospect theory confers OOS safety on
+  RL trading policies.
+keywords:
+  - reinforcement learning
+  - PPO
+  - grid trading
+  - reward design
+  - prospect theory
+  - differential sharpe ratio
+  - combinatorial purged cross-validation
+  - out-of-sample generalization
+  - cryptocurrency
+  - bitcoin
+license: MIT
+repository-code: "https://github.com/cosmicpotato2047/capstone-rl-trading"
+url: "https://github.com/cosmicpotato2047/capstone-rl-trading"
+date-released: "2026-06-01"
+version: "1.0.0"
+preferred-citation:
+  type: thesis
+  title: >-
+    The Effect of Reward Function Design in RL-Based BTC Grid Trading:
+    Pareto Frontier, Winner Reversal, and OOS Robustness of
+    Prospect-Theoretic Reward
+  authors:
+    - family-names: Lee
+      given-names: Chanhee
+      affiliation: "Seoul National University of Science and Technology"
+  thesis-type: "Bachelor's thesis"
+  institution:
+    name: "Seoul National University of Science and Technology"
+  year: 2026
+  month: 6
+  url: "https://github.com/cosmicpotato2047/capstone-rl-trading"
