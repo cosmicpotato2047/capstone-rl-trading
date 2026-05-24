@@ -1,0 +1,125 @@
+ATR 공식 계수 재최적화 (eval_atr_test 직접 시뮬레이션)
+  trials=100  Val: 21,827봉
+  현재 계수: A_b=0.1061 C_b=13.9205 A_s=0.0796 C_s=4.3085 n_splits=3
+  현재 Val Sharpe: 59.003
+
+  [trial   0] Sharpe=+59.003 | A_b=0.106 C_b=13.921 A_s=0.080 C_s=4.309 n_splits=3
+  [trial   1] Sharpe=+9.444 | A_b=0.780 C_b=19.064 A_s=0.745 C_s=6.187 n_splits=3
+  [trial   2] Sharpe=+4.753 | A_b=0.354 C_b=2.104 A_s=0.873 C_s=6.211 n_splits=6
+  [trial   3] Sharpe=+8.891 | A_b=0.090 C_b=19.428 A_s=0.841 C_s=2.517 n_splits=3
+  [trial   4] Sharpe=+10.666 | A_b=0.408 C_b=6.781 A_s=0.549 C_s=4.603 n_splits=4
+  [trial   5] Sharpe=+13.164 | A_b=1.243 C_b=3.650 A_s=0.328 C_s=3.980 n_splits=5
+  [trial   6] Sharpe=+10.356 | A_b=1.581 C_b=4.794 A_s=0.539 C_s=6.128 n_splits=2
+  [trial   7] Sharpe=+14.535 | A_b=1.235 C_b=4.240 A_s=0.112 C_s=9.514 n_splits=8
+  [trial   8] Sharpe=+12.140 | A_b=1.626 C_b=6.788 A_s=0.143 C_s=7.000 n_splits=5
+  [trial   9] Sharpe=+49.897 | A_b=0.288 C_b=10.408 A_s=0.083 C_s=9.139 n_splits=3
+  [trial  10] Sharpe=+19.961 | A_b=0.799 C_b=14.722 A_s=0.342 C_s=0.671 n_splits=8
+  [trial  11] Sharpe=+63.001 | A_b=0.113 C_b=11.706 A_s=0.056 C_s=9.496 n_splits=2
+  [trial  12] Sharpe=+39.198 | A_b=0.081 C_b=13.492 A_s=0.265 C_s=3.004 n_splits=2
+  [trial  13] Sharpe=+26.766 | A_b=0.671 C_b=12.274 A_s=0.238 C_s=8.101 n_splits=2
+  [trial  14] Sharpe=+16.249 | A_b=0.571 C_b=16.026 A_s=0.422 C_s=8.000 n_splits=4
+  [trial  15] Sharpe=+10.269 | A_b=1.933 C_b=10.144 A_s=0.059 C_s=1.245 n_splits=4
+  [trial  16] Sharpe=+7.374 | A_b=0.969 C_b=8.583 A_s=0.655 C_s=3.641 n_splits=6
+  [trial  17] Sharpe=+39.387 | A_b=0.210 C_b=16.507 A_s=0.202 C_s=5.110 n_splits=3
+  [trial  18] Sharpe=+22.039 | A_b=0.460 C_b=12.367 A_s=0.444 C_s=2.073 n_splits=2
+  [trial  19] Sharpe=+4.096 | A_b=0.099 C_b=17.147 A_s=0.971 C_s=8.164 n_splits=5
+  [trial  20] Sharpe=+21.069 | A_b=1.069 C_b=14.147 A_s=0.185 C_s=7.188 n_splits=3
+  [trial  21] Sharpe=+51.948 | A_b=0.284 C_b=10.681 A_s=0.052 C_s=8.721 n_splits=3
+  [trial  22] Sharpe=+51.734 | A_b=0.256 C_b=11.289 A_s=0.063 C_s=9.907 n_splits=4
+  [trial  23] Sharpe=+33.823 | A_b=0.567 C_b=8.875 A_s=0.156 C_s=9.009 n_splits=2
+  [trial  24] Sharpe=+29.648 | A_b=0.230 C_b=12.640 A_s=0.296 C_s=7.448 n_splits=3
+  [trial  25] Sharpe=+29.170 | A_b=0.050 C_b=8.935 A_s=0.394 C_s=9.001 n_splits=2
+  [trial  26] Sharpe=+23.092 | A_b=0.466 C_b=7.256 A_s=0.208 C_s=5.548 n_splits=6
+  [trial  27] Sharpe=+54.790 | A_b=0.211 C_b=14.554 A_s=0.060 C_s=9.993 n_splits=4
+  [trial  28] Sharpe=+35.303 | A_b=0.564 C_b=15.220 A_s=0.134 C_s=9.860 n_splits=4
+  [trial  29] Sharpe=+20.514 | A_b=0.825 C_b=17.549 A_s=0.264 C_s=4.197 n_splits=5
+  [trial  30] Sharpe=+30.234 | A_b=0.668 C_b=17.663 A_s=0.136 C_s=6.079 n_splits=7
+  [trial  31] Sharpe=+58.896 | A_b=0.163 C_b=11.486 A_s=0.054 C_s=8.428 n_splits=3
+  [trial  32] Sharpe=+53.123 | A_b=0.180 C_b=13.861 A_s=0.103 C_s=8.585 n_splits=3
+  [trial  33] Sharpe=+10.392 | A_b=0.374 C_b=15.542 A_s=0.674 C_s=9.449 n_splits=3
+  [trial  34] Sharpe=+36.306 | A_b=0.162 C_b=18.676 A_s=0.182 C_s=4.782 n_splits=4
+  [trial  35] Sharpe=+47.980 | A_b=0.345 C_b=11.443 A_s=0.052 C_s=6.556 n_splits=4
+  [trial  36] Sharpe=+41.332 | A_b=0.429 C_b=13.203 A_s=0.125 C_s=9.977 n_splits=2
+  [trial  37] Sharpe=+24.327 | A_b=0.149 C_b=1.175 A_s=0.347 C_s=7.601 n_splits=3
+  [trial  38] Sharpe=+18.203 | A_b=0.052 C_b=11.902 A_s=0.478 C_s=3.169 n_splits=3
+  [trial  39] Sharpe=+13.993 | A_b=1.451 C_b=9.709 A_s=0.228 C_s=5.487 n_splits=5
+  [trial  40] Sharpe=+10.746 | A_b=0.343 C_b=14.356 A_s=0.822 C_s=8.501 n_splits=2
+  [trial  41] Sharpe=+51.755 | A_b=0.208 C_b=14.194 A_s=0.106 C_s=9.420 n_splits=3
+  [trial  42] Sharpe=+49.766 | A_b=0.153 C_b=13.055 A_s=0.096 C_s=8.643 n_splits=4
+  [trial  43] Sharpe=+41.235 | A_b=0.311 C_b=13.724 A_s=0.166 C_s=9.258 n_splits=3
+  [trial  44] Sharpe=+56.873 | A_b=0.154 C_b=15.297 A_s=0.097 C_s=6.774 n_splits=2
+  [trial  45] Sharpe=+15.955 | A_b=0.494 C_b=15.246 A_s=0.603 C_s=7.672 n_splits=2
+  [trial  46] Sharpe=+59.143 | A_b=0.122 C_b=16.676 A_s=0.091 C_s=6.665 n_splits=2
+  [trial  47] Sharpe=+37.181 | A_b=0.120 C_b=18.571 A_s=0.286 C_s=6.929 n_splits=2
+  [trial  48] Sharpe=+26.134 | A_b=0.715 C_b=16.803 A_s=0.238 C_s=6.308 n_splits=2
+  [trial  49] Sharpe=+44.818 | A_b=0.393 C_b=19.307 A_s=0.096 C_s=6.747 n_splits=2
+  [trial  50] Sharpe=+11.375 | A_b=1.867 C_b=16.094 A_s=0.150 C_s=4.271 n_splits=2
+  [trial  51] Sharpe=+54.624 | A_b=0.252 C_b=15.114 A_s=0.071 C_s=8.082 n_splits=2
+  [trial  52] Sharpe=+58.515 | A_b=0.059 C_b=11.208 A_s=0.091 C_s=5.713 n_splits=3
+  [trial  53] Sharpe=+44.292 | A_b=0.051 C_b=10.548 A_s=0.183 C_s=5.798 n_splits=3
+  [trial  54] Sharpe=+53.953 | A_b=0.147 C_b=11.812 A_s=0.121 C_s=4.733 n_splits=2
+  [trial  55] Sharpe=+48.289 | A_b=0.314 C_b=8.052 A_s=0.091 C_s=5.061 n_splits=2
+  [trial  56] Sharpe=+18.192 | A_b=1.205 C_b=11.123 A_s=0.159 C_s=7.175 n_splits=3
+  [trial  57] Sharpe=+39.211 | A_b=0.102 C_b=9.780 A_s=0.212 C_s=3.695 n_splits=3
+  [trial  58] Sharpe=+8.257 | A_b=0.265 C_b=12.661 A_s=0.999 C_s=5.925 n_splits=2
+  [trial  59] Sharpe=+40.900 | A_b=0.517 C_b=16.076 A_s=0.050 C_s=6.560 n_splits=3
+  [trial  60] Sharpe=+12.721 | A_b=0.218 C_b=5.793 A_s=0.324 C_s=2.228 n_splits=7
+  [trial  61] Sharpe=+52.248 | A_b=0.133 C_b=13.068 A_s=0.089 C_s=9.542 n_splits=4
+  [trial  62] Sharpe=+54.990 | A_b=0.205 C_b=14.632 A_s=0.076 C_s=8.950 n_splits=3
+  [trial  63] Sharpe=+52.408 | A_b=0.100 C_b=12.189 A_s=0.127 C_s=7.848 n_splits=3
+  [trial  64] Sharpe=+50.755 | A_b=0.307 C_b=17.233 A_s=0.082 C_s=8.886 n_splits=2
+  [trial  65] Sharpe=+43.261 | A_b=0.197 C_b=14.598 A_s=0.172 C_s=8.327 n_splits=3
+  [trial  66] Sharpe=+24.353 | A_b=0.917 C_b=18.205 A_s=0.138 C_s=5.381 n_splits=3
+  [trial  67] Sharpe=+43.653 | A_b=0.396 C_b=16.531 A_s=0.114 C_s=7.203 n_splits=2
+  [trial  68] Sharpe=+39.544 | A_b=0.091 C_b=10.887 A_s=0.257 C_s=4.972 n_splits=2
+  [trial  69] Sharpe=+38.745 | A_b=0.243 C_b=19.925 A_s=0.203 C_s=6.461 n_splits=3
+  [trial  70] Sharpe=+52.372 | A_b=0.176 C_b=9.804 A_s=0.074 C_s=5.714 n_splits=4
+  [trial  71] Sharpe=+61.460 | A_b=0.056 C_b=15.661 A_s=0.053 C_s=9.081 n_splits=4
+  [trial  72] Sharpe=+57.035 | A_b=0.063 C_b=13.529 A_s=0.075 C_s=8.873 n_splits=4
+  [trial  73] Sharpe=+57.245 | A_b=0.062 C_b=13.653 A_s=0.054 C_s=9.755 n_splits=5
+  [trial  74] Sharpe=+51.843 | A_b=0.088 C_b=11.553 A_s=0.054 C_s=9.658 n_splits=6
+  [trial  75] Sharpe=+34.346 | A_b=0.057 C_b=13.625 A_s=0.155 C_s=9.595 n_splits=5
+  [trial  76] Sharpe=+40.061 | A_b=0.264 C_b=12.566 A_s=0.122 C_s=9.149 n_splits=5
+  [trial  77] Sharpe=+54.628 | A_b=0.127 C_b=13.551 A_s=0.078 C_s=4.444 n_splits=4
+  [trial  78] Sharpe=+43.915 | A_b=0.052 C_b=13.043 A_s=0.110 C_s=8.362 n_splits=5
+  [trial  79] Sharpe=+24.337 | A_b=0.337 C_b=15.688 A_s=0.189 C_s=8.758 n_splits=6
+  [trial  80] Sharpe=+8.443 | A_b=1.456 C_b=9.270 A_s=0.741 C_s=9.840 n_splits=4
+  [trial  81] Sharpe=+57.613 | A_b=0.155 C_b=15.116 A_s=0.051 C_s=9.249 n_splits=4
+  [trial  82] Sharpe=+52.734 | A_b=0.176 C_b=14.205 A_s=0.059 C_s=8.983 n_splits=5
+  [trial  83] Sharpe=+45.502 | A_b=0.125 C_b=14.967 A_s=0.130 C_s=9.349 n_splits=4
+  [trial  84] Sharpe=+48.982 | A_b=0.270 C_b=10.335 A_s=0.083 C_s=9.173 n_splits=4
+  [trial  85] Sharpe=+40.157 | A_b=0.185 C_b=12.025 A_s=0.147 C_s=9.673 n_splits=4
+  [trial  86] Sharpe=+56.535 | A_b=0.094 C_b=13.902 A_s=0.051 C_s=8.678 n_splits=5
+  [trial  87] Sharpe=+46.846 | A_b=0.235 C_b=15.746 A_s=0.108 C_s=8.372 n_splits=4
+  [trial  88] Sharpe=+51.415 | A_b=0.126 C_b=17.732 A_s=0.094 C_s=3.817 n_splits=4
+  [trial  89] Sharpe=+6.621 | A_b=0.165 C_b=16.409 A_s=0.923 C_s=9.266 n_splits=3
+  [trial  90] Sharpe=+9.099 | A_b=0.429 C_b=11.469 A_s=0.511 C_s=7.847 n_splits=5
+  [trial  91] Sharpe=+62.788 | A_b=0.083 C_b=15.433 A_s=0.075 C_s=7.425 n_splits=2
+  [trial  92] Sharpe=+63.670 | A_b=0.051 C_b=14.894 A_s=0.076 C_s=7.533 n_splits=2
+  [trial  93] Sharpe=+58.416 | A_b=0.096 C_b=14.891 A_s=0.106 C_s=7.183 n_splits=2
+  [trial  94] Sharpe=+46.243 | A_b=0.294 C_b=16.803 A_s=0.146 C_s=7.470 n_splits=2
+  [trial  95] Sharpe=+56.824 | A_b=0.112 C_b=15.603 A_s=0.113 C_s=7.245 n_splits=2
+  [trial  96] Sharpe=+46.319 | A_b=0.212 C_b=14.987 A_s=0.178 C_s=3.286 n_splits=2
+  [trial  97] Sharpe=+56.962 | A_b=0.160 C_b=17.150 A_s=0.094 C_s=6.937 n_splits=2
+  [trial  98] Sharpe=+41.187 | A_b=0.235 C_b=16.215 A_s=0.223 C_s=7.866 n_splits=2
+  [trial  99] Sharpe=+21.834 | A_b=1.079 C_b=14.879 A_s=0.070 C_s=6.254 n_splits=2
+
+============================================================
+최적 Trial #92  Val Sharpe=63.670  (기존 59.003, 개선 +4.668)
+============================================================
+  A_b: 0.0507
+  C_b: 14.8944
+  A_s: 0.0763
+  C_s: 7.5334
+  n_splits: 2
+
+상위 5 trials:
+  # 92 Sharpe=63.670 | A_b=0.051 C_b=14.894 A_s=0.076 C_s=7.533 n_splits=2
+  # 11 Sharpe=63.001 | A_b=0.113 C_b=11.706 A_s=0.056 C_s=9.496 n_splits=2
+  # 91 Sharpe=62.788 | A_b=0.083 C_b=15.433 A_s=0.075 C_s=7.425 n_splits=2
+  # 71 Sharpe=61.460 | A_b=0.056 C_b=15.661 A_s=0.053 C_s=9.081 n_splits=4
+  # 46 Sharpe=59.143 | A_b=0.122 C_b=16.676 A_s=0.091 C_s=6.665 n_splits=2
+
+결과 저장: experiments\exp025_atr_reopt_v2\best_params.yaml
+config 반영 명령:
+  A_b=0.0507  C_b=14.8944  A_s=0.0763  C_s=7.5334  n_splits=2
