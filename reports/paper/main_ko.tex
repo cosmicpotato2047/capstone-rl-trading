@@ -92,8 +92,10 @@ CPCV의 \texttt{dsr}(1.41, p$<10^{-9}$) $\to$ Test의 \texttt{pt}(0.34--0.37,
 미관측 강세장(BTC \$42K $\to$ \$75K)의 매도 타이밍 위험을 회피한다. 반면 \texttt{dsr}은
 평균 4.58시간(최대 169시간 = 7일) holding을 학습시켜 동일 환경에서 최악 성능 기록.
 Val--Test 분포 차이는 통계적으로 매우 유의(KS $p<10^{-10}$, 변동성 $-27\%$)하며,
-모든 정책의 Val/Test 행동은 거의 동일($\Delta$ action $\leq 5\%$)이므로 OOS 성능
-차이는 정책이 아닌 \emph{시장 분포 이동}이 직접 원인이다.
+모든 정책의 Val/Test 행동은 거의 동일($\Delta$ action $\leq 5\%$)이다. 즉 정책은
+같은 행동을 출력하지만 그 행동이 다른 시장 regime(Val = range-bound vs Test = bull)에서
+다른 결과를 낳으므로, OOS 성능 차이는 정책 변화가 아니라 \emph{시장 분포 이동}에서
+직접 기인한다.
 
 본 연구의 학술적 기여는 reward 설계의 효과가 단일 Sharpe metric의 ``alpha source''가
 아니라 \emph{risk profile 차원의 trade-off + 평가 환경별 winner reversal}로 나타남을
@@ -999,7 +1001,10 @@ $L_2$ action 거리를 계산했다 (variant당 10 시드 평균).
 \centering
 \includegraphics[width=0.65\textwidth]{menu5_policy_distance}
 \caption{4 variant 간 정책 거리 행렬. cell의 값은 두 variant 정책의 평균
-$L_2$ action 거리. 대각선은 0. 색은 진할수록 거리가 가깝다.}
+$L_2$ action 거리이며, 값이 작을수록 두 정책이 같은 state에서 비슷한 action을
+낸다는 의미. 그룹 내 평균 $0.129$ vs 그룹 간 평균 $0.286$(비율 $2.22\times$)로
+Sharpe 분포 수준의 클러스터가 정책 행동 자체에서도 분리됨을 확인.
+대각선은 0, 색은 진할수록 거리가 가깝다.}
 \label{fig:policy_distance}
 \end{figure}
 
@@ -1128,9 +1133,9 @@ Variant & low\_vol & mid\_vol & high\_vol & low\_vol & mid\_vol & high\_vol \\
 \begin{figure}[h]
 \centering
 \includegraphics[width=0.95\textwidth]{menu4_behavior_per_regime}
-\caption{4 variant $\times$ 3 vol regime의 거래/hold rate. 위 행: trade rate.
-아래 행: hold rate. \texttt{dsr}의 hold rate (가운데 행 두 번째 패널)가
-다른 변형의 약 2--6배로 두드러진다.}
+\caption{4 variant $\times$ 3 vol regime의 행동 통계. 왼쪽 패널: trade rate.
+가운데 패널: hold rate. 오른쪽 패널: mean step reward. 가운데 패널에서 \texttt{dsr}
+(주황색)의 hold rate가 모든 vol regime에서 다른 변형의 약 2--6배로 두드러진다.}
 \label{fig:behavior_per_regime}
 \end{figure}
 
@@ -1854,9 +1859,13 @@ holding''이라는 동일 메커니즘이:
 \item \S\ref{sec:cpcv}의 in-sample 환경에서는 \textbf{시기-robust 우위}로 나타나고,
 \item 본 절의 Test 환경에서는 \textbf{distribution-shift 실패}로 나타난다.
 \end{itemize}
-즉 \textbf{같은 reward formulation의 같은 행동 효과가 평가 환경에 따라 반대
-부호}로 작동한다. ``in-sample 우위와 OOS robust는 reward formulation의 동일
-차원에서의 trade-off''라는 본 논문 frame이 직접 정량 입증된다.
+즉 \textbf{같은 reward formulation의 같은 행동 효과(\texttt{dsr}의 긴 holding)가
+평가 환경에 따라 반대 부호로 작동한다}. in-sample(CPCV)에서 강점이 되는
+``긴 holding을 통한 시기-robust 우위''가 OOS bull regime에서는 ``매도 타이밍
+실패를 통한 distribution-shift 손실''로 뒤바뀐다. 즉 reward formulation의 같은
+차원이 in-sample 우위와 OOS 실패를 동시에 결정하는 \emph{trade-off} 관계이며,
+이를 단일 metric으로 평가하면 어느 쪽이 winner인지가 환경 선택에 따라 달라진다.
+본 절은 이 \emph{trade-off 관계}를 정량 입증한다.
 
 \subsubsection{정책 안정성 vs 시장 Distribution Shift}
 \label{sec:oos_policy_stability}
@@ -1885,9 +1894,13 @@ Variant & $\Delta$ trade rate & $\Delta$ hold rate & $\Delta a^{(0)}$ & $\Delta 
 때 trade/hold rate와 mean action 모두 $\Delta \leq 0.05$ (즉 5\% 미만) 이내로
 \emph{거의 동일한 행동}을 유지함을 보인다. 따라서 Val $\to$ Test의 큰 성능
 gap(표 \ref{tab:oos_gap})은 \textbf{정책의 변화가 아니라 시장의 distribution
-shift}가 원인이다. 즉 정책은 ``robust''하게 같은 행동을 출력하지만 그 행동이
-다른 시장에서 다른 결과를 낳는다. \S\ref{sec:discussion}에서 이 distribution
-shift의 정량(KS $p < 10^{-10}$, variance $-27\%$)을 자세히 다룬다.
+shift}에서 직접 기인한다. 다시 말해 정책은 robust하게 같은 행동을 출력하지만,
+같은 행동이 Val (range-bound regime)과 Test (bull regime)라는 \emph{서로 다른
+시장 분포}에서 다른 결과를 낳는다. 이는 정책 자체가 OOS 실패의 원인이 아니므로
+실 운용 환경에서 정책을 ``사용할 수 없다''는 의미가 아니라, \emph{어느 정책이
+OOS 안전한가는 시장 regime에 따라 reward formulation 선택의 문제}임을 시사한다.
+\S\ref{sec:discussion}에서 이 distribution shift의 정량(KS $p < 10^{-10}$,
+variance $-27\%$)을 자세히 다룬다.
 
 \subsubsection{B\&H Baseline 비교: 한계 명시}
 \label{sec:oos_bh_honesty}
@@ -2099,10 +2112,15 @@ CPCV에서는 \texttt{dsr}이, Test에서는 \texttt{pt}가 각각 1위이다. R
 이는 \citet{henderson2018rlreproducibility}의 reproducibility 우려를 reward
 design 비교의 차원으로 확장한 결과이다. 단일 시드 변동성이 변형 차이를 가리는
 것과 같은 메커니즘으로, 단일 평가 환경이 변형 차이의 \emph{차원 자체}를 결정한다.
-실제로 본 논문은 \S\ref{sec:pareto_clusters}의 single-split Cohen's $d$ 패턴에서
-\S\ref{sec:cpcv_cluster}의 CPCV preservation, \S\ref{sec:oos_three_env_reversal}의
-세 환경 reversal까지의 분석을 통해, 평가 환경이 reward 변형 사이의 거리 metric
-자체를 변형하는 현상을 정량화했다.
+실제로 본 논문은 세 단계의 분석을 통해 평가 환경이 reward 변형 사이의 거리
+metric 자체를 변형하는 현상을 정량화했다. 첫째, \S\ref{sec:pareto_clusters}의
+single-split Val에서 \texttt{sym}--\texttt{dsr}의 Cohen's $d$가 작아 두 변형이
+가까운 것처럼 보인다. 둘째, \S\ref{sec:cpcv_cluster}의 CPCV multi-split에서는
+within-cluster 차이가 더 줄어 두 변형이 더 가까워 보이고 baseline 대비
+우위는 ratio $3.55\times$로 강화된다. 셋째, \S\ref{sec:oos_three_env_reversal}의
+Test에서는 winner 자체가 reversal한다(Val=\texttt{sym} $\to$
+CPCV=\texttt{dsr} $\to$ Test=\texttt{pt}). 즉 변형 사이의 거리와 우열 모두
+평가 환경에 따라 변한다.
 
 본 논문은 RL 트레이딩 연구의 \emph{표준 평가 절차로 세 환경 동시 사용을 권고}한다:
 
