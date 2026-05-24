@@ -23,6 +23,10 @@ paper/*.synctex.gz
 experiments/*/model_*.zip
 experiments/*/model_*.pt
 
+# Experiments — 실행 진행 마커 (재현 시 자동 생성)
+experiments/*_done.flag
+experiments/*_run.log
+
 # MLflow
 mlruns/
 
