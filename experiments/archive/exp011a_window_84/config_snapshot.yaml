@@ -1,0 +1,92 @@
+# 베이스: exp008 / 변경: 지표 윈도우 168→84 (빠른 적응)
+
+# ────────────────────────────────────────
+# 데이터
+# ────────────────────────────────────────
+data:
+  symbol: "BTC/USDT"
+  interval: "1h"
+  train_start: "2020-01-01"
+  train_end:   "2022-12-31"
+  val_start:   "2023-01-01"
+  val_end:     "2023-12-31"
+  test_start:  "2024-01-01"
+  test_end:    null
+
+# ────────────────────────────────────────
+# State 구성 지표
+# ────────────────────────────────────────
+indicators:
+  price_lookback: 84          # exp008: 168 → exp011a: 84
+  atr_period: 84              # exp008: 168 → exp011a: 84
+  zscore_window: 84           # exp008: 168 → exp011a: 84
+
+# ────────────────────────────────────────
+# 환경 (MDP)
+# ────────────────────────────────────────
+environment:
+  initial_cash: 10000.0
+  transaction_cost: 0.0005
+
+  n_buy_orders: 2
+  n_sell_orders: 2
+  n_splits: 4
+
+  random_start: true
+
+# ────────────────────────────────────────
+# PPO 에이전트
+# ────────────────────────────────────────
+agent:
+  algorithm: "PPO"
+  policy: "MlpPolicy"
+
+  learning_rate: 0.0003
+  lr_schedule: "cosine"
+  lr_end: 0.00001
+
+  n_steps: 8192
+  batch_size: 256
+  n_epochs: 10
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_range: 0.2
+  ent_coef: 0.05
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+
+  n_envs: 4
+
+  total_timesteps: 3000000
+
+# ────────────────────────────────────────
+# VecNormalize — 완전 비활성화
+# obs가 이미 z-score 정규화됨 (이중 정규화 방지)
+# ────────────────────────────────────────
+vec_normalize:
+  enabled: false
+
+# ────────────────────────────────────────
+# 베이스라인
+# ────────────────────────────────────────
+baselines:
+  buy_and_hold: true
+  fixed_grid:
+    gaps: [0.01, 0.02, 0.05]
+  atr_grid:
+    k_values: [0.5, 1.0, 2.0]
+
+# ────────────────────────────────────────
+# 학습 설정
+# ────────────────────────────────────────
+training:
+  seed: 42
+  eval_freq: 50000
+  n_eval_episodes: 5
+  experiment_name: "exp011a_window_84"
+  log_dir: "experiments/exp011a_window_84"
+
+  max_episode_steps: 2016
+
+  save_freq: 500000
+  save_best: true

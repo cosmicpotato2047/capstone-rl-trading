@@ -1,0 +1,153 @@
+# 캡스톤 실험 설정 파일
+# 모든 하이퍼파라미터의 단일 진실 공급원 (single source of truth)
+# 설정 변경 시 experiments/ 하위 폴더에 config_snapshot.yaml로 복사본 저장
+
+# ────────────────────────────────────────
+# 데이터
+# ────────────────────────────────────────
+# ⚠️ 중요: yfinance 1h 데이터는 최근 730일(약 2년)까지만 제공한다.
+#    2018년부터 필요하므로 Binance API (ccxt) 사용 필요.
+#    다운로드 스크립트: scripts/download_data.py 참고.
+data:
+  symbol: "BTC/USDT"            # ccxt Binance 기호
+  interval: "1h"                # 1시간봉
+  train_start: "2017-08-17"     # Binance BTC/USDT 최초 상장일
+  train_end:   "2020-12-31"     # BEAR 2018 + 혼재 2019 + BULL 2020 (BULL 46%, BEAR 38%, SIDE 15%)
+  val_start:   "2021-01-01"     # ATH→대폭락→회복→2023 BULL (BULL ~30%, BEAR ~28%, SIDE ~42%)
+  val_end:     "2023-12-31"     # 2021 혼재 + 2022 BEAR(-64%) + 2023 회복 + 2023 H2 BULL(30k→44k)
+  test_start:  "2024-01-01"     # 봉인 — ETF 승인(2024-01-10) + 반감기(2024-04-20) 이후 구간
+  test_end:    null             # null = 현재까지
+
+# ────────────────────────────────────────
+# State 구성 지표
+# ────────────────────────────────────────
+indicators:
+  # log_price 계산용
+  price_lookback: 168           # 7일 × 24h = 168봉 rolling mean
+
+  # volatility 계산용 (ATR 기반)
+  atr_period: 168               # 7일 × 24h
+
+  # rolling z-score 정규화 window (모든 state 변수 공통)
+  zscore_window: 168
+
+  # trend 방향성 피처 윈도우 (시간 단위)
+  # 5개 전부 전처리에서 계산, ATR direction rule + RL state에서 선택 사용
+  trend_windows: [72, 168, 336, 720, 1440]   # 3일 / 7일 / 14일 / 30일 / 60일
+  trend_short: 72               # RL state[5] 사용 윈도우 (단기 모멘텀)
+  trend_long: 720               # RL state[6] 사용 윈도우 (중기 레짐)
+
+# ────────────────────────────────────────
+# State 변수 (7차원) — Phase 2 재설계
+# ────────────────────────────────────────
+# 0. log_price            = log(price / price.rolling(168).mean())
+# 1. divergence           = (avg_price - price) / avg_price  (미보유 시 0)
+# 2. holdings_value_ratio = (holdings × price) / start_capital  (미보유 시 0)
+# 3. cash_ratio           = cash / start_capital
+# 4. volatility           = ATR(168) / price
+# 5. trend_1d             = pct_change(24)  — 24h 단기 방향성 (regime 감지용)
+# 6. trend_1w             = pct_change(168) — 168h 주간 방향성 (regime 감지용)
+# → 모두 rolling z-score 정규화 후 observation space에 입력
+
+# ────────────────────────────────────────
+# 환경 (MDP) — exp029 재설계
+# ────────────────────────────────────────
+environment:
+  initial_cash: 10000.0         # USD
+
+  # 거래비용 — Binance 지정가 maker fee 기준
+  transaction_cost: 0.0005      # 0.05% per trade
+
+  # 랜덤 시작점 (멀티 환경 학습용)
+  random_start: true
+
+  # ── n_splits 범위 (RL이 사이클마다 결정) ──
+  n_splits_min: 5               # 최소 분할 수
+  n_splits_max: 15              # 최대 분할 수
+
+  # ── ATR gap 최대 계수 (Optuna 탐색 대상) ──
+  # gap = atr_ratio × action × coef_max
+  coef_b1_max: 5.0              # buy_market  최대 배율
+  coef_b2_max: 15.0             # buy_avg     최대 배율 (DCA, 더 넓은 범위)
+  coef_s1_max: 5.0              # sell_market 최대 배율
+  coef_s2_max: 15.0             # sell_cost   최대 배율
+
+  # ── Reward 파라미터 (Optuna 탐색 대상) ──
+  w_cycle: 3.0                  # 사이클 완료 보너스 배율
+  idle_rate: 2.0e-5             # idle 패널티 강도 (스텝당)
+  grace_period: 24              # idle 패널티 유예 시간 (h)
+
+  # 사이클 정의
+  # 시작: holdings == 0 → 첫 체결 (액션 캡처)
+  # 종료: holdings → 0 (전량 매도)
+  # 청산: holdings 가치 < 1 split 가치 → sell_market 전량
+
+# ────────────────────────────────────────
+# Action 공간 (5D, [0,1]⁵) — exp029 재설계
+# ────────────────────────────────────────
+# 사이클 시작 시 한 번 결정, 사이클 종료까지 유지
+# [0] n_splits_coef → n_splits = n_splits_min + round(a × (n_splits_max - n_splits_min))
+# [1] gap_b1        → buy_market  = price         × (1 - atr_ratio × gap_b1 × coef_b1_max)
+# [2] gap_b2        → buy_avg     = last_avg_price × (1 - atr_ratio × gap_b2 × coef_b2_max)
+#                     (last_avg_price == 0이면 첫 사이클 → buy_avg 생략)
+# [3] gap_s1        → sell_market = price         × (1 + atr_ratio × gap_s1 × coef_s1_max)
+# [4] gap_s2        → sell_cost   = avg_price     × (1 + atr_ratio × gap_s2 × coef_s2_max)
+
+# ────────────────────────────────────────
+# PPO 에이전트 (stable-baselines3)
+# ────────────────────────────────────────
+agent:
+  algorithm: "PPO"
+  policy: "MlpPolicy"
+  learning_rate: 0.00016751     # Optuna exp026 Trial #34 (Val Sharpe 1.192)
+  n_steps: 4096
+  batch_size: 64
+  n_epochs: 10
+  gamma: 0.9875                 # Optuna exp026 최적값
+  gae_lambda: 0.9056            # Optuna exp026 최적값
+  clip_range: 0.1032            # Optuna exp026 최적값
+  ent_coef: 0.0182              # Optuna exp026 최적값
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  total_timesteps: 1_000_000
+  n_envs: 4                     # 병렬 환경 수
+
+# ────────────────────────────────────────
+# 베이스라인
+# ────────────────────────────────────────
+baselines:
+  # 1. Buy-and-Hold
+  buy_and_hold: true
+
+  # 2. 고정 그리드 봇 (간격 고정)
+  fixed_grid:
+    gaps: [0.01, 0.02, 0.05]    # 1%, 2%, 5% 세 가지 비교
+
+  # 3. ATR 비례 그리드 봇 (규칙 기반 적응)
+  atr_grid:
+    k_values: [0.5, 1.0, 2.0]   # gap = k × (ATR_168 / price)
+    # sell_gap = buy_gap × 1.0  (대칭 설정)
+
+# ────────────────────────────────────────
+# 평가 지표
+# ────────────────────────────────────────
+evaluation:
+  metrics:
+    - "total_return"
+    - "sharpe_ratio"             # 주 평가 기준
+    - "max_drawdown"
+    - "n_trades"
+    - "avg_cycle_pnl"
+    - "avg_cycle_hours"
+
+# ────────────────────────────────────────
+# 학습 설정
+# ────────────────────────────────────────
+training:
+  seed: 42
+  eval_freq: 50000
+  n_eval_episodes: 3
+  max_episode_steps: 2000       # ~83일 단위 에피소드 (다양한 regime 노출)
+  early_stopping_patience: 6    # Val Sharpe 6회(=300k step) 연속 미개선 시 조기 종료
+  experiment_name: "exp029_redesign"
+  log_dir: "experiments/exp029_redesign"

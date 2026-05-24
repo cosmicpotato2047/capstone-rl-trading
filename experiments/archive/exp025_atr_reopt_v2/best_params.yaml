@@ -1,0 +1,10 @@
+baseline_sharpe: 59.0026
+best_params:
+  A_b: 0.05072085738973464
+  A_s: 0.07628171162639827
+  C_b: 14.89441603401881
+  C_s: 7.533378589165283
+  n_splits: 2
+best_sharpe: 63.6702
+best_trial: 92
+improvement: 4.6677

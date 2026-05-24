@@ -1,0 +1,161 @@
+# 캡스톤 실험 설정 파일
+# 모든 하이퍼파라미터의 단일 진실 공급원 (single source of truth)
+# 설정 변경 시 experiments/ 하위 폴더에 config_snapshot.yaml로 복사본 저장
+
+# ────────────────────────────────────────
+# 데이터
+# ────────────────────────────────────────
+# ⚠️ 중요: yfinance 1h 데이터는 최근 730일(약 2년)까지만 제공한다.
+#    2018년부터 필요하므로 Binance API (ccxt) 사용 필요.
+#    다운로드 스크립트: scripts/download_data.py 참고.
+data:
+  symbol: "BTC/USDT"            # ccxt Binance 기호
+  interval: "1h"                # 1시간봉
+  train_start: "2020-01-01"     # Binance BTC/USDT 상장일 기준
+  train_end:   "2022-12-31"     # 상승·하락·횡보 레짐 포함
+  val_start:   "2023-01-01"
+  val_end:     "2023-12-31"
+  test_start:  "2024-01-01"     # 봉인 — 학습 완료 전 절대 열람 금지
+  test_end:    null             # null = 현재까지
+
+# ────────────────────────────────────────
+# State 구성 지표
+# ────────────────────────────────────────
+indicators:
+  # log_price 계산용
+  price_lookback: 168           # 7일 × 24h = 168봉 rolling mean
+
+  # volatility 계산용 (ATR 기반)
+  atr_period: 168               # 7일 × 24h
+
+  # rolling z-score 정규화 window (모든 state 변수 공통)
+  zscore_window: 168
+
+# ────────────────────────────────────────
+# State 변수 (7차원) — Phase 2 재설계
+# ────────────────────────────────────────
+# 0. log_price            = log(price / price.rolling(168).mean())
+# 1. divergence           = (avg_price - price) / avg_price  (미보유 시 0)
+# 2. holdings_value_ratio = (holdings × price) / start_capital  (미보유 시 0)
+# 3. cash_ratio           = cash / start_capital
+# 4. volatility           = ATR(168) / price
+# 5. trend_1d             = pct_change(24)  — 24h 단기 방향성 (regime 감지용)
+# 6. trend_1w             = pct_change(168) — 168h 주간 방향성 (regime 감지용)
+# → 모두 rolling z-score 정규화 후 observation space에 입력
+
+# ────────────────────────────────────────
+# 환경 (MDP)
+# ────────────────────────────────────────
+environment:
+  initial_cash: 10000.0         # USD
+
+  # 거래비용 — Binance 지정가 maker fee 기준
+  transaction_cost: 0.0005      # 0.05% per trade
+
+  # 주문 개수
+  n_buy_orders: 2               # buy_hi, buy_lo
+
+  # 예산 분할 — 사이클 시작 시 현금을 n_splits 슬롯으로 나눔
+  n_splits: 4
+
+  # sell_market 임계값 기준: "price" | "avg_price"
+  threshold_basis: "avg_price"
+
+  # ── 공식 계수 (Phase 2 재설계) ──────────────────────────
+  # buy side: Bayesian Trial #42 참고값 (신뢰 가능)
+  # sell side: 재설계값 — A_s/B_s는 Bayesian 튜닝 대상 제외
+  #   ※ Bayesian 튜닝 대상: n_splits, n_buy_orders 만 허용
+  #      gap 계수(A_s, B_s 등)는 RL action과 역할 충돌 → 금지
+  formula_coefs:
+    A_b: 0.285
+    B_b: 1.748
+    C_b: 5.223
+    D_b: 18.683
+    A_s: 0.05    # 재설계: 0.5 → 0.05 (Bayesian 탐색 하한 이하 허용)
+    B_s: 1.95    # 재설계: sell_market 범위 [0.05×ATR, 2.0×ATR]
+    C_s: 2.5
+    D_s: 7.5
+
+  # budget_fraction 최솟값 (action[0]=0일 때 투입 비율 하한)
+  budget_fraction_min: 0.1          # 10% ~ 100% 범위
+
+  # 랜덤 시작점 (멀티 환경 학습용)
+  random_start: true
+
+  # 사이클 정의
+  # 시작: holdings == 0 → 첫 체결
+  # 종료: holdings > 0 → holdings == 0 (전량 매도)
+
+# ────────────────────────────────────────
+# Action 공간 (2차원 연속) — exp019 재설계
+# ────────────────────────────────────────
+# [0] budget_fraction ∈ [0, 1]
+#   actual_fraction = 0.1 + raw × 0.9  → [10%, 100%]
+#   사이클 시작 시 가용 현금의 몇 %를 투입할지 RL이 결정
+#   → 레짐 적응 핵심: 상승장 많이, 하락장 적게 (포지션 사이징)
+#
+# [1] profit_target ∈ [0, 1]
+#   sell_market_gap = atr_ratio × (A_s + profit_target × B_s)
+#   sell_cost_gap   = atr_ratio × (C_s + profit_target × D_s)
+#
+# aggressiveness는 exp018에서 항상 0 수렴 → 0.0 고정
+#   buy_hi_gap = atr_ratio × A_b  (고정)
+#   buy_lo_gap = atr_ratio × C_b  (고정)
+
+# ────────────────────────────────────────
+# PPO 에이전트 (stable-baselines3)
+# ────────────────────────────────────────
+agent:
+  algorithm: "PPO"
+  policy: "MlpPolicy"
+  learning_rate: 0.00047        # Optuna Trial #18 (Sharpe 38.491)
+  n_steps: 2048                 # Optuna 최적값
+  batch_size: 64
+  n_epochs: 10
+  gamma: 0.974                  # Optuna 최적값 (0.99→0.974)
+  gae_lambda: 0.940             # Optuna 최적값
+  clip_range: 0.155             # Optuna 최적값
+  ent_coef: 0.0164              # Optuna 최적값 (0.05→0.0164)
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  total_timesteps: 1000000
+  n_envs: 4                     # 병렬 환경 수
+
+# ────────────────────────────────────────
+# 베이스라인
+# ────────────────────────────────────────
+baselines:
+  # 1. Buy-and-Hold
+  buy_and_hold: true
+
+  # 2. 고정 그리드 봇 (간격 고정)
+  fixed_grid:
+    gaps: [0.01, 0.02, 0.05]    # 1%, 2%, 5% 세 가지 비교
+
+  # 3. ATR 비례 그리드 봇 (규칙 기반 적응)
+  atr_grid:
+    k_values: [0.5, 1.0, 2.0]   # gap = k × (ATR_168 / price)
+    # sell_gap = buy_gap × 1.0  (대칭 설정)
+
+# ────────────────────────────────────────
+# 평가 지표
+# ────────────────────────────────────────
+evaluation:
+  metrics:
+    - "total_return"
+    - "sharpe_ratio"             # 주 평가 기준
+    - "max_drawdown"
+    - "n_trades"
+    - "avg_cycle_pnl"
+    - "avg_cycle_hours"
+
+# ────────────────────────────────────────
+# 학습 설정
+# ────────────────────────────────────────
+training:
+  seed: 42
+  eval_freq: 50000
+  n_eval_episodes: 3
+  max_episode_steps: 2000       # ~83일 단위 에피소드 (다양한 regime 노출)
+  experiment_name: "exp019_budget_fraction"
+  log_dir: "experiments/exp019_budget_fraction"

@@ -1,0 +1,11 @@
+baseline_sharpe: 59.003
+best_params:
+  clip_range: 0.1636400119456225
+  ent_coef: 0.0010082300088871897
+  gae_lambda: 0.965694544528038
+  gamma: 0.9910812534989903
+  learning_rate: 2.085022754845662e-05
+  n_splits: 3
+  n_steps: 512
+best_sharpe: 83.25109695006219
+best_trial: 22

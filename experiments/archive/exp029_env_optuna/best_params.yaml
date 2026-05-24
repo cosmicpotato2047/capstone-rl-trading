@@ -1,0 +1,11 @@
+baseline_sharpe: 1.051
+best_params:
+  coef_b1_max: 9.886816739108344
+  coef_b2_max: 9.505277600318903
+  coef_s1_max: 9.72352944327192
+  coef_s2_max: 23.94353796646215
+  grace_period: 43
+  idle_rate: 1.0332076163690408e-05
+  w_cycle: 3.2080774423876437
+best_sharpe: 2.019245870995054
+best_trial: 12

@@ -1,0 +1,1546 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>논문 읽기 가이드 — BTC RL 그리드 트레이딩 (비전문가용)</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+:root {
+  --primary: #1a73e8;
+  --accent: #ff6f00;
+  --success: #2e7d32;
+  --danger: #c62828;
+  --bg: #fafafa;
+  --bg-soft: #f0f4f8;
+  --text: #1a1a1a;
+  --text-soft: #555;
+  --border: #e0e0e0;
+  --sidebar-w: 280px;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+body {
+  margin: 0;
+  font-family: 'Segoe UI', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--text);
+  background: var(--bg);
+}
+
+/* === Top progress bar === */
+.progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--primary), var(--accent));
+  width: 0;
+  z-index: 1000;
+  transition: width 0.05s ease-out;
+}
+
+/* === Header === */
+header.site-header {
+  position: sticky;
+  top: 0;
+  background: white;
+  border-bottom: 1px solid var(--border);
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 100;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+header.site-header h1 {
+  font-size: 17px;
+  margin: 0;
+  font-weight: 600;
+  color: var(--primary);
+}
+header.site-header .meta {
+  font-size: 13px;
+  color: var(--text-soft);
+}
+.sidebar-toggle {
+  display: none;
+  background: none;
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+/* === Layout === */
+.layout {
+  display: flex;
+  max-width: 1400px;
+  margin: 0 auto;
+  position: relative;
+}
+
+/* === Sidebar (TOC) === */
+nav.sidebar {
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+  padding: 24px 16px;
+  position: sticky;
+  top: 60px;
+  height: calc(100vh - 60px);
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  background: white;
+}
+nav.sidebar h3 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-soft);
+  margin: 0 0 12px;
+  font-weight: 600;
+}
+nav.sidebar ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  counter-reset: section;
+}
+nav.sidebar ol li {
+  counter-increment: section;
+  margin: 2px 0;
+}
+nav.sidebar ol li a {
+  display: block;
+  padding: 6px 12px;
+  font-size: 14px;
+  color: var(--text);
+  text-decoration: none;
+  border-radius: 4px;
+  border-left: 3px solid transparent;
+  line-height: 1.4;
+  transition: all 0.15s;
+}
+nav.sidebar ol li a:hover {
+  background: var(--bg-soft);
+  color: var(--primary);
+}
+nav.sidebar ol li a.active {
+  background: var(--bg-soft);
+  border-left-color: var(--primary);
+  color: var(--primary);
+  font-weight: 600;
+}
+nav.sidebar ol li a::before {
+  content: counter(section) ". ";
+  color: var(--text-soft);
+  font-size: 12px;
+  margin-right: 4px;
+}
+
+/* === Main content === */
+main.content {
+  flex-grow: 1;
+  padding: 32px 48px;
+  max-width: 900px;
+  min-width: 0;
+}
+
+main.content h1 {
+  font-size: 32px;
+  margin-top: 0;
+  color: var(--text);
+  border-bottom: 3px solid var(--primary);
+  padding-bottom: 8px;
+}
+main.content h2 {
+  font-size: 24px;
+  margin-top: 56px;
+  padding-top: 16px;
+  border-top: 2px solid var(--border);
+  color: var(--primary);
+}
+main.content h3 {
+  font-size: 19px;
+  margin-top: 36px;
+  color: var(--accent);
+}
+main.content h4 {
+  font-size: 16px;
+  margin-top: 28px;
+  color: var(--text);
+}
+main.content p { margin: 12px 0; }
+main.content a { color: var(--primary); text-decoration: none; border-bottom: 1px dotted; }
+main.content a:hover { border-bottom-style: solid; }
+
+/* === Blockquote / callout === */
+blockquote {
+  margin: 20px 0;
+  padding: 16px 20px;
+  background: var(--bg-soft);
+  border-left: 4px solid var(--primary);
+  border-radius: 0 6px 6px 0;
+}
+blockquote p { margin: 6px 0; }
+
+.callout {
+  margin: 20px 0;
+  padding: 16px 20px;
+  border-radius: 6px;
+  border-left: 4px solid;
+}
+.callout-info    { background: #e3f2fd; border-color: #1565c0; }
+.callout-success { background: #e8f5e9; border-color: #2e7d32; }
+.callout-warn    { background: #fff8e1; border-color: #f57c00; }
+.callout-danger  { background: #ffebee; border-color: #c62828; }
+.callout strong:first-child { display: block; margin-bottom: 4px; }
+
+/* === Tables === */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 16px 0;
+  font-size: 14px;
+}
+th, td {
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+th {
+  background: var(--bg-soft);
+  font-weight: 600;
+}
+tr:nth-child(even) td { background: #fafbfc; }
+td code { font-size: 13px; }
+
+/* === Code / pre === */
+code {
+  background: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 14px;
+}
+pre {
+  background: #2d2d2d;
+  color: #e0e0e0;
+  padding: 16px;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-size: 13px;
+  line-height: 1.5;
+}
+pre code { background: none; padding: 0; color: inherit; }
+
+/* === Mermaid diagram container === */
+.mermaid {
+  background: white;
+  padding: 16px;
+  border-radius: 6px;
+  margin: 20px 0;
+  text-align: center;
+  border: 1px solid var(--border);
+  overflow-x: auto;
+}
+
+/* === Figures === */
+figure {
+  margin: 24px 0;
+  text-align: center;
+}
+figure img {
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: zoom-in;
+  transition: transform 0.2s;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+figure img:hover { transform: scale(1.01); box-shadow: 0 4px 16px rgba(0,0,0,0.1); }
+figcaption {
+  font-size: 13px;
+  color: var(--text-soft);
+  margin-top: 8px;
+  font-style: italic;
+}
+
+/* === Lightbox === */
+.lightbox {
+  display: none;
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(0,0,0,0.9);
+  z-index: 2000;
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-out;
+}
+.lightbox img {
+  max-width: 95%;
+  max-height: 95%;
+  border-radius: 6px;
+}
+.lightbox.open { display: flex; }
+
+/* === Collapsible details === */
+details {
+  margin: 12px 0;
+  padding: 8px 14px;
+  background: var(--bg-soft);
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+details summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--primary);
+  padding: 4px 0;
+  list-style: none;
+}
+details summary::-webkit-details-marker { display: none; }
+details summary::before {
+  content: '▶ ';
+  color: var(--primary);
+  font-size: 11px;
+  transition: transform 0.15s;
+  display: inline-block;
+}
+details[open] summary::before {
+  transform: rotate(90deg);
+  margin-right: 4px;
+}
+
+/* === Highlight badges === */
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+.badge-success { background: #e8f5e9; color: var(--success); border: 1px solid #a5d6a7; }
+.badge-danger  { background: #ffebee; color: var(--danger);  border: 1px solid #ef9a9a; }
+.badge-warn    { background: #fff8e1; color: #f57c00;        border: 1px solid #ffcc80; }
+.badge-info    { background: #e3f2fd; color: var(--primary); border: 1px solid #90caf9; }
+
+/* === TL;DR card === */
+.tldr-card {
+  background: linear-gradient(135deg, #e3f2fd 0%, #fce4ec 100%);
+  padding: 24px;
+  border-radius: 10px;
+  border: 1px solid #c5cae9;
+  margin: 24px 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+.tldr-card h3 {
+  margin-top: 0 !important;
+  color: var(--primary) !important;
+  border-bottom: 1px solid #c5cae9;
+  padding-bottom: 8px;
+}
+
+/* === Mobile === */
+@media (max-width: 900px) {
+  nav.sidebar {
+    position: fixed;
+    left: -100%;
+    width: 280px;
+    height: 100vh;
+    top: 0;
+    transition: left 0.25s;
+    z-index: 150;
+    box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+  }
+  nav.sidebar.open { left: 0; }
+  .sidebar-toggle { display: inline-block; }
+  main.content { padding: 24px 16px; }
+}
+
+/* === Footer === */
+footer.site-footer {
+  margin-top: 80px;
+  padding: 32px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-soft);
+  border-top: 1px solid var(--border);
+}
+
+/* === Mermaid override === */
+.mermaid svg { max-width: 100%; height: auto; }
+
+/* === In-page anchors === */
+.section-anchor {
+  scroll-margin-top: 80px;
+}
+
+/* === Smooth tooltip for technical terms === */
+.term {
+  border-bottom: 1px dashed var(--accent);
+  cursor: help;
+  position: relative;
+}
+.term:hover::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #2d2d2d;
+  color: white;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  max-width: 300px;
+  white-space: normal;
+  width: 240px;
+  z-index: 10;
+  font-weight: normal;
+  text-align: center;
+  margin-bottom: 4px;
+}
+
+/* === Quick-jump grid for findings === */
+.findings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin: 20px 0;
+}
+@media (max-width: 700px) { .findings-grid { grid-template-columns: 1fr; } }
+.finding-card {
+  background: white;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  border-top: 4px solid var(--primary);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.finding-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+.finding-card h4 {
+  margin: 0 0 8px !important;
+  color: var(--primary);
+}
+.finding-card p { font-size: 14px; margin: 4px 0; }
+
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progressBar"></div>
+
+<header class="site-header">
+  <div>
+    <h1>📖 논문 읽기 가이드</h1>
+    <span class="meta">BTC RL 그리드 트레이딩 · Reward 설계의 영향 · 비전문가용</span>
+  </div>
+  <button class="sidebar-toggle" id="sidebarToggle">☰ 목차</button>
+</header>
+
+<div class="layout">
+
+<nav class="sidebar" id="sidebar">
+  <h3>목차</h3>
+  <ol>
+    <li><a href="#sec-1">30초 요약</a></li>
+    <li><a href="#sec-2">5분 요약</a></li>
+    <li><a href="#sec-3">배경 지식</a></li>
+    <li><a href="#sec-4">연구 질문</a></li>
+    <li><a href="#sec-5">전체 흐름 한눈에</a></li>
+    <li><a href="#sec-6">4가지 보상 함수</a></li>
+    <li><a href="#sec-7">환경 설계 (MDP)</a></li>
+    <li><a href="#sec-8">실험 단계별 흐름</a></li>
+    <li><a href="#sec-9">4가지 핵심 발견</a></li>
+    <li><a href="#sec-10">본 논문 그림 한 장씩</a></li>
+    <li><a href="#sec-11">인과 사슬 정리</a></li>
+    <li><a href="#sec-12">FAQ</a></li>
+    <li><a href="#sec-13">한계 / 다음 단계</a></li>
+    <li><a href="#sec-14">용어집</a></li>
+    <li><a href="#sec-15">더 읽고 싶다면</a></li>
+  </ol>
+</nav>
+
+<main class="content">
+
+<h1>BTC RL 그리드 트레이딩 — 논문 읽기 가이드</h1>
+
+<blockquote>
+  <p>본 가이드는 <a href="main.pdf">main.pdf</a> (영문) / <a href="main_ko.pdf">main_ko.pdf</a> (한글) 캡스톤 논문을
+  강화학습이나 금융 트레이딩 배경이 없는 분도 이해할 수 있도록 풀어 쓴 부가 자료입니다.
+  논문의 형식적 abstract → introduction → method 순서가 아니라, <strong>이야기 흐름</strong>으로
+  재구성했습니다. 30분 정도 시간을 잡고 위에서 아래로 읽으면 논문 PDF를 펼쳤을 때
+  도식과 표가 무엇을 말하려는지 따라갈 수 있습니다.</p>
+  <p style="margin-top:12px"><strong>저자</strong>: 이찬희 (Lee Chanhee), 서울과학기술대학교 컴퓨터공학부<br/>
+  <strong>제출 시점</strong>: 2026년 6월<br/>
+  <strong>코드 / 데이터</strong>: <a href="https://github.com/cosmicpotato2047/capstone-rl-trading">github.com/cosmicpotato2047/capstone-rl-trading</a></p>
+</blockquote>
+
+<section id="sec-1" class="section-anchor">
+<h2>1. 30초 요약</h2>
+
+<div class="tldr-card">
+  <h3>한 단락으로</h3>
+  <p>비트코인 시장에서 자동으로 매수·매도 주문을 깔아두는 <strong>그리드 트레이딩</strong> 전략을
+  <strong>강화학습(AI)</strong>으로 학습시킬 때, <em>AI에게 무엇을 "잘했다"고 알려주는 점수표(=보상 함수)</em>
+  의 모양이 정책의 성격을 결정한다.</p>
+
+  <p>4가지 보상 함수를 비교했더니, <strong>단 하나의 최고 보상은 없었고</strong>, 보상마다 다른 거래
+  성격(공격적 vs 보수적)으로 갈라졌으며, <strong>평가 환경 3가지(과거 검증, 다중 시간 분할,
+  미공개 테스트)에서 우승자가 매번 바뀌는</strong> 현상이 관측되었다.</p>
+
+  <p>특히 <strong>인간의 손실 회피 심리(프로스펙트 이론)</strong>를 보상 함수로 직접 쓰면, AI가
+  "짧게 잡고 빨리 빠지는" 행동을 배워서 <strong>한 번도 본 적 없는 미래 시장(2024년 강세장)
+  에서도 안정적으로 수익을 낸다</strong>는 것이 본 연구의 핵심 발견이다.</p>
+</div>
+</section>
+
+<section id="sec-2" class="section-anchor">
+<h2>2. 5분 요약</h2>
+
+<h3>무엇을 하는 시스템인가</h3>
+<p>비트코인(BTC) 1시간봉 가격을 입력받아, <strong>현재 가격 위·아래로 몇 개의 매수/매도 주문</strong>을
+얼마나 떨어진 위치에 깔아둘지를 매 시간 결정하는 자동 매매 시스템입니다. 가격이 그
+주문에 닿으면 자동 체결되어 작은 차익을 누적합니다. 이것이 "그리드 트레이딩"입니다.</p>
+
+<pre>가격 차트:        AI 가 매 시간 매수/매도 그리드 폭을 결정:
+
+  ┃                    sell_mkt  ━━ (윗쪽 매도, 시장가 기반)
+  ┃ ╱╲                 sell_cost ━━ (윗쪽 매도, 원가 회복 기반)
+  ┃╱  ╲    ← 현재가
+  ┃    ╲   buy_hi   ━━ (아래쪽 매수, 가까이)
+  ┃     ╲╱ buy_lo   ━━ (아래쪽 매수, 멀리)</pre>
+
+<p>가격 방향 예측을 하지 않습니다. <strong>변동성 자체에서 수익을 추구</strong>합니다.</p>
+
+<h3>왜 강화학습인가</h3>
+<p>"그리드 폭을 얼마로 할지"는 시장 변동성에 따라 달라져야 합니다. 단순히 고정된
+규칙(ATR 비례, 본 논문의 <em>baseline</em>) 으로 결정할 수도 있지만, <strong>상태에 따라
+동적으로 폭을 조정</strong>하면 더 나은 성능이 가능할 거라는 가설로 강화학습(PPO)
+정책에게 그리드 폭 결정을 맡깁니다.</p>
+
+<h3>왜 "보상 함수"가 핵심인가</h3>
+<p>강화학습은 "보상이 높은 행동을 더 많이 하자"라는 단순한 알고리즘입니다.
+따라서 <strong>보상이 무엇이냐</strong>가 정책의 성격을 직접 결정합니다.</p>
+<ul>
+  <li>그냥 수익률을 보상으로 주면 → "위험하든 말든 일단 수익을 많이 내자"</li>
+  <li>손실에 더 큰 패널티를 주면 → "위험을 회피하자"</li>
+  <li>위험 조정 수익(샤프)을 보상으로 주면 → "수익은 적어도 변동성을 줄이자"</li>
+  <li>인간의 손실 회피 심리를 보상으로 주면 → "이익은 빨리 실현, 손실은 절대 피하자"</li>
+</ul>
+<p>본 논문은 이 네 가지를 같은 환경에서 비교합니다.</p>
+
+<h3>핵심 발견 4가지</h3>
+
+<div class="findings-grid">
+  <div class="finding-card">
+    <h4>🏔️ 발견 1 — Pareto Frontier</h4>
+    <p>단일 우승자가 없다. 4 보상은 두 그룹(공격적 sym/dsr vs 보수적 asym/pt)으로 갈라지며
+    Sharpe-MDD 평면에서 trade-off frontier를 그린다.</p>
+  </div>
+  <div class="finding-card">
+    <h4>🔄 발견 2 — Winner Reversal</h4>
+    <p>평가 환경(Val / CPCV / Test)에 따라 우승자가 매번 바뀐다. "X가 best"라는 단일 결론은
+    평가 방법에 종속적이다.</p>
+  </div>
+  <div class="finding-card">
+    <h4>🛡️ 발견 3 — Prospect Theory의 OOS 강건성</h4>
+    <p>인간 손실 회피 심리(pt)를 reward로 쓰면 AI가 짧게 잡고 빠지는 정책을 학습 → 미공개
+    2024+ 강세장에서 양 소스 일관 1위.</p>
+  </div>
+  <div class="finding-card">
+    <h4>⚖️ 발견 4 — DSR의 양면성</h4>
+    <p>같은 메커니즘(긴 holding)이 in-sample에서는 강점, OOS에서는 치명적 약점이 된다.</p>
+  </div>
+</div>
+
+<h3>학술적 기여 (왜 이 논문이 의미 있는가)</h3>
+<ol>
+  <li><strong>Reward 변형 효과의 통계적 비교 프레임워크</strong>: 4 reward × 10 시드 × 1M step,
+      Cohen's d / 부트스트랩 / IQM / CVaR 등 신뢰성 확보.</li>
+  <li><strong>시나리오 D 발견</strong>: 사전 등록한 시나리오 A/B/C 어디에도 들지 않는 새로운 결과 형태
+      (Pareto frontier).</li>
+  <li><strong>Reward → 행동 → 결과의 인과 사슬 정량화</strong>: trajectory 1.04M step 분석.</li>
+  <li><strong>Prospect theory가 RL trading 정책에 부여하는 OOS 안전성의 첫 정량 확인</strong>
+      (본 논문이 알기로는).</li>
+</ol>
+</section>
+
+<section id="sec-3" class="section-anchor">
+<h2>3. 배경 지식 — 전문지식 없이 따라오기</h2>
+
+<p>논문의 abstract만 봐도 "PPO", "ATR", "DSR", "CPCV" 등 약어가 잔뜩입니다. 이 절은
+모든 약어를 풀이합니다. 이미 익숙하다면 건너뛰어도 좋습니다.</p>
+
+<details open>
+<summary>3.1 강화학습이 뭐예요?</summary>
+<blockquote><p><strong>한 줄 비유</strong>: 강아지에게 "앉아"를 가르치는 방식의 컴퓨터 버전.</p></blockquote>
+
+<p>강화학습(Reinforcement Learning, RL)은:</p>
+<ol>
+  <li>어떤 <strong>환경</strong>(environment)이 주어지고</li>
+  <li><strong>에이전트</strong>(agent, 정책)가 매 순간 <strong>행동</strong>(action)을 하고</li>
+  <li>환경이 <strong>보상</strong>(reward)을 돌려주고</li>
+  <li>에이전트는 미래의 누적 보상을 최대화하도록 행동을 조금씩 바꿔갑니다.</li>
+</ol>
+<p>본 논문에서:</p>
+<ul>
+  <li><strong>환경</strong> = BTC 1시간봉 시장 시뮬레이터</li>
+  <li><strong>에이전트</strong> = PPO라는 알고리즘으로 학습되는 정책 (작은 신경망)</li>
+  <li><strong>행동</strong> = 매 시간 "매수 호가는 얼마나 가까이? 매도 호가는 얼마나 멀리?"의 두 숫자</li>
+  <li><strong>보상</strong> = 1시간마다 자본 변화 (= 수익 또는 손실) — <strong>여기를 4가지 모양으로 바꿔서 비교하는 것이 본 논문의 핵심</strong></li>
+</ul>
+<p><strong>PPO</strong> (Proximal Policy Optimization)는 강화학습 알고리즘 중 가장 표준적이고
+안정적인 것 중 하나입니다. 본 논문에서는 PPO 자체를 바꾸지 않고 <em>보상 함수만</em> 바꿔서
+어떤 정책이 학습되는지 비교합니다.</p>
+</details>
+
+<details>
+<summary>3.2 트레이딩이 뭐예요?</summary>
+<p>가격이 오르고 내리는 자산(주식, 코인 등)을 사고팔아 이익을 내는 행위입니다. 본 논문은
+<strong>비트코인(BTC)을 USDT(달러 페그 코인)로 사고파는 시장</strong>을 다룹니다.</p>
+<p>전통적인 트레이딩은 두 종류:</p>
+<ul>
+  <li><strong>방향성 트레이딩</strong>: "오를 것 같다 → 사두고 오르길 기다림". 가격 예측에 의존.</li>
+  <li><strong>변동성 트레이딩</strong>: 가격 방향과 무관하게 오르락내리락 하는 <em>흔들림</em> 자체에서 수익.
+      본 논문이 다루는 그리드 트레이딩이 여기 속합니다.</li>
+</ul>
+</details>
+
+<details>
+<summary>3.3 그리드 트레이딩이 뭐예요?</summary>
+<blockquote><p><strong>한 줄 비유</strong>: 낚시터에 여러 개의 낚싯대를 다른 깊이에 던져두는 것.</p></blockquote>
+
+<pre>     현재가 100,000원
+
+매도 호가 ─────  101,500원  ← sell_market (시장가에서 1.5% 위)
+매도 호가 ─────  102,800원  ← sell_cost   (원가에서 2.8% 위)
+
+   현재가  ▼
+
+매수 호가 ─────   99,200원  ← buy_hi (현재가에서 0.8% 아래)
+매수 호가 ─────   98,000원  ← buy_lo (현재가에서 2% 아래)</pre>
+
+<p>매 시간 위와 같이 <strong>4개의 지정가 호가</strong>를 깔아둡니다. 다음 1시간 동안 가격이</p>
+<ul>
+  <li>99,200원까지 떨어지면 → 매수 체결 (보유 시작)</li>
+  <li>98,000원까지 떨어지면 → 추가 매수 체결 (포지션 늘림)</li>
+  <li>101,500원까지 오르면 → 매도 체결 (이익 실현)</li>
+</ul>
+<p>가격이 자주 오르락내리락 하면(=변동성이 클수록) 그리드가 자주 체결되어 작은 수익이
+누적됩니다. <strong>"방향"이 아니라 "흔들림"에서 돈을 버는 구조</strong>입니다.</p>
+
+<p>본 논문에서 강화학습의 역할은 <strong>그리드 폭(얼마나 멀리 호가를 둘 것인가)을 동적으로
+결정</strong>하는 것입니다.</p>
+</details>
+
+<details>
+<summary>3.4 왜 BTC인가? 왜 1시간봉인가?</summary>
+<ul>
+  <li><strong>BTC</strong>는 24시간 거래되는 거대 시장이라 데이터 품질이 좋고 (2017–현재), 변동성이
+      높아 그리드 트레이딩에 유리합니다.</li>
+  <li><strong>1시간봉</strong>(=1시간마다 한 점)은 1분봉(노이즈 너무 많음)과 일봉(데이터 너무 적음)의
+      적당한 중간입니다.</li>
+  <li>졸업 논문 범위에서 <strong>단일 자산</strong>으로 제한했습니다 (자산 확장은 future work).</li>
+</ul>
+</details>
+
+<details>
+<summary>3.5 ATR이 뭐예요?</summary>
+<p><strong>ATR (Average True Range, 평균 진실 범위)</strong> = 최근 168시간 (= 1주일) 동안 가격이
+얼마나 흔들렸는지를 나타내는 수치. 변동성을 측정하는 표준 지표입니다.</p>
+<p>본 논문에서 ATR은 두 가지 역할:</p>
+<ol>
+  <li><strong>베이스라인 정책</strong>의 그리드 폭을 자동으로 결정 (= "ATR 베이스라인")</li>
+  <li><strong>강화학습 정책</strong>의 그리드 공식에도 사용됨: <code>격자폭 = ATR/가격 × (계수 + AI행동)</code>
+      즉 RL은 "ATR이 정한 기본 폭에 추가로 얼마나 조정할까"를 학습합니다.</li>
+</ol>
+</details>
+
+<details>
+<summary>3.6 보상(reward)이 왜 중요한가요?</summary>
+<p>PPO 같은 알고리즘은 결국 <strong>"보상이 높았던 행동을 더 자주, 보상이 낮았던
+행동은 덜 자주"</strong> 하도록 정책을 업데이트합니다. 즉:</p>
+<blockquote><p><strong>보상 함수의 모양 = 정책의 가치관</strong></p></blockquote>
+<p>같은 시장, 같은 알고리즘이라도 보상 함수가 다르면 완전히 다른 정책이 학습됩니다.
+<strong>본 논문은 이 점을 정량적으로 보이는 것이 핵심 기여</strong>입니다.</p>
+</details>
+
+<details>
+<summary>3.7 그 외 약어들 (한눈에 보기)</summary>
+<table>
+  <tr><th>약어</th><th>풀이</th><th>한 줄 설명</th></tr>
+  <tr><td><strong>MDP</strong></td><td>Markov Decision Process</td><td>강화학습 문제의 수학적 정식화.</td></tr>
+  <tr><td><strong>State</strong></td><td>상태</td><td>매 시간 에이전트가 보는 정보 (7개 숫자).</td></tr>
+  <tr><td><strong>Action</strong></td><td>행동</td><td>에이전트가 매 시간 출력하는 결정 (2개 숫자).</td></tr>
+  <tr><td><strong>Sharpe ratio</strong></td><td>샤프 비율</td><td>수익을 변동성으로 나눈 값. 높을수록 좋음.</td></tr>
+  <tr><td><strong>MDD</strong></td><td>Maximum Drawdown</td><td>자산이 고점에서 최대로 떨어진 비율 (%).</td></tr>
+  <tr><td><strong>Calmar</strong></td><td>Calmar 비율</td><td>Return / MDD.</td></tr>
+  <tr><td><strong>CPCV</strong></td><td>Combinatorial Purged CV</td><td>시계열 누설 차단 다중 분할.</td></tr>
+  <tr><td><strong>DSR (1)</strong></td><td>Differential Sharpe Ratio</td><td>본 논문의 4 reward 중 하나.</td></tr>
+  <tr><td><strong>DSR (2)</strong></td><td>Deflated Sharpe Ratio</td><td>다른 개념! López de Prado(2014) 백테스트 보정.</td></tr>
+  <tr><td><strong>OOS</strong></td><td>Out-Of-Sample</td><td>학습/검증에 쓰이지 않은 데이터에서의 성능.</td></tr>
+  <tr><td><strong>B&amp;H</strong></td><td>Buy-and-Hold</td><td>"그냥 사두고 가만히 있기" 기본 비교 전략.</td></tr>
+</table>
+</details>
+</section>
+
+<section id="sec-4" class="section-anchor">
+<h2>4. 이 연구가 답하려는 질문</h2>
+
+<h3>4.1 한 줄 RQ</h3>
+<blockquote>
+<p><strong>BTC 그리드 트레이딩에서 reward 함수의 설계가 RL 정책의 행동 패턴과 일반화 성능에
+어떤 영향을 미치는가? 특히, 어떤 reward 함수 하에서 RL이 ATR 규칙 기반을 초과하며
+(혹은 초과하지 못하며), 그 메커니즘은 무엇인가?</strong></p>
+</blockquote>
+
+<h3>4.2 왜 이 질문이 의미 있는가</h3>
+<p>기존 강화학습 트레이딩 연구의 대부분은 <em>알고리즘 비교</em>, <em>입력 데이터 변경</em>, <em>state 설계 비교</em>에 집중되어 있고, <strong>보상 함수 자체를 바꿔가며 통제 비교</strong>한 연구는 드뭅니다.</p>
+<p>본 논문이 다루는 4가지 보상은 강화학습/행동경제학의 <strong>서로 다른 이론적 계보</strong>에서 나옵니다:</p>
+<ul>
+  <li><code>sym</code> = 표준 PnL (기본형)</li>
+  <li><code>asym</code> = 위험 회피 효용의 1차 근사</li>
+  <li><code>dsr</code> = Moody(2001)의 differential Sharpe — 위험 조정 수익 직접 최적화</li>
+  <li><code>pt</code> = Kahneman &amp; Tversky(1979)의 prospect theory — 행동경제학</li>
+</ul>
+<p>같은 환경 위에서 이 네 가지의 효과를 분리 측정하는 것이 학술적 기여 포인트입니다.</p>
+
+<h3>4.3 5가지 가설과 결과</h3>
+<table>
+  <tr><th>가설</th><th>내용</th><th>결과</th></tr>
+  <tr><td>H1</td><td>sym reward + ATR 공식 조합에서 RL ≈ ATR</td><td><span class="badge badge-danger">부정</span> sym RL이 ATR을 22~36% 초과</td></tr>
+  <tr><td>H2 weak</td><td>asym/dsr/pt &gt; ATR</td><td><span class="badge badge-success">지지</span> 4 변형 모두 ATR 초과</td></tr>
+  <tr><td>H2 strong</td><td>asym/dsr/pt &gt; sym</td><td><span class="badge badge-warn">부분 부정</span> dsr=sym, asym/pt&lt;sym (다른 차원 우위)</td></tr>
+  <tr><td>H3</td><td>우수 reward의 효과는 "선택적 진입"으로</td><td><span class="badge badge-success">지지</span> conservative cluster 거래수 25-35% 적음</td></tr>
+  <tr><td>H4</td><td>CPCV + Slippage에서도 유지</td><td><span class="badge badge-warn">부분 지지</span> cluster 구조 robust, 절대 우위는 환경 의존</td></tr>
+  <tr><td><strong>H5 ★ (사후)</strong></td><td><strong>Prospect theory reward가 OOS robust 정책 산출</strong></td><td><span class="badge badge-success">강한 지지</span> 양 source 일관 p&lt;0.002</td></tr>
+</table>
+</section>
+
+<section id="sec-5" class="section-anchor">
+<h2>5. 연구 전체 흐름 한눈에 보기</h2>
+
+<h3>5.1 마스터 흐름도</h3>
+
+<div class="mermaid">
+flowchart TD
+    Start([2026년 1월<br/>BTC 그리드 트레이딩에<br/>RL 적용 가설]) --> Phase1
+
+    subgraph Phase1["📍 Phase 1 — Negative Finding"]
+        P1A["exp020~022:<br/>sym reward + ATR 공식으로<br/>PPO 학습 1M steps"]
+        P1B["관찰: 학습된 정책이<br/>상수 [1.0, 0.0]으로 수렴"]
+        P1C["ablation: RL ≈ Fixed [1.0,0.0]<br/>(Sharpe 소수점 셋째 자리까지 일치)"]
+        P1A --> P1B --> P1C
+    end
+
+    Phase1 --> Pivot[💡 가설 전환:<br/>sym reward가 RL 자유도를<br/>흡수한다면, 다른 reward는?]
+    Pivot --> Phase2
+
+    subgraph Phase2["🔧 Phase 2 — 환경 정상화"]
+        P2A["체결 방식 수정<br/>다음 봉 극값 → 지정가"]
+        P2B["학습 안정화 패키지<br/>LR decay + entropy anneal<br/>+ target_kl + best_checkpoint"]
+        P2C["Optuna로 asym/dsr/pt<br/>하이퍼파라미터 30 trials × 200k"]
+        P2A --> P2B --> P2C
+    end
+
+    Phase2 --> Phase3
+
+    subgraph Phase3["🎯 Phase 3 — 본 논문 메인"]
+        E32B["exp032b: 4 reward × 10 시드 × 1M<br/>→ Pareto frontier (시나리오 D)"]
+        E32C["exp032c: 1.04M trajectory 분석<br/>→ 메커니즘 정량"]
+        E33["exp033: + slippage 0.02%<br/>→ cluster 구조 보존"]
+        E34["exp034: CPCV 6-fold 15 paths<br/>→ Winner 1차 reversal sym→dsr"]
+        E35["exp035: Test 봉인 해제 (2024-)<br/>→ Winner 2차 reversal dsr→pt"]
+        P16D["Phase 16d: trajectory OOS 분석<br/>→ pt OOS 강건성 메커니즘 입증"]
+        E32B --> E32C --> E33 --> E34 --> E35 --> P16D
+    end
+
+    Phase3 --> Result[📌 본 논문 4가지 발견]
+    Result --> R1["(1) Pareto Frontier / 시나리오 D"]
+    Result --> R2["(2) 세 환경 세 Winner Reversal"]
+    Result --> R3["(3) Prospect Theory OOS 강건성"]
+    Result --> R4["(4) DSR 양면성"]
+
+    style Phase1 fill:#FFF3E0,stroke:#FF6F00
+    style Phase2 fill:#E1F5FE,stroke:#0277BD
+    style Phase3 fill:#E8F5E9,stroke:#2E7D32
+    style Result fill:#FCE4EC,stroke:#C2185B
+    style Pivot fill:#F3E5F5,stroke:#6A1B9A,stroke-width:3px
+</div>
+
+<h3>5.2 왜 그 순서인가</h3>
+<table>
+  <tr><th>단계</th><th>의도</th><th>결과</th></tr>
+  <tr><td>Phase 1 (이전)</td><td>"RL이 동적 변동성 적응을 학습한다" 가설 검증</td><td>정책 포화 → 가설 부정</td></tr>
+  <tr><td>Phase 2 (이전)</td><td>표면 negative를 깊이 진단하고 환경 정상화</td><td>출발선 마련</td></tr>
+  <tr><td><strong>exp032b</strong></td><td>Reward 변형 비교 메인 실험</td><td>두 클러스터 발견 (시나리오 D)</td></tr>
+  <tr><td><strong>exp032c</strong></td><td>"왜" 두 클러스터인가 메커니즘 분석</td><td>행동 차이 정량</td></tr>
+  <tr><td><strong>exp033</strong></td><td>비용 모델 강건성 (sim2real)</td><td>cluster 구조 보존</td></tr>
+  <tr><td><strong>exp034</strong></td><td>평가 시기 강건성 (CPCV)</td><td>1차 winner reversal</td></tr>
+  <tr><td><strong>exp035</strong></td><td>진정한 OOS (test 봉인 해제)</td><td>2차 winner reversal + H5 발견</td></tr>
+</table>
+</section>
+
+<section id="sec-6" class="section-anchor">
+<h2>6. 핵심 도구 ① — 4가지 보상 함수</h2>
+
+<h3>6.1 직관적 설명</h3>
+<p>각 보상 함수는 <strong>AI에게 "잘했다/못했다"를 알려주는 점수표</strong>입니다. 모두 같은
+입력(1시간 동안 자산이 얼마나 늘었나 = <code>x</code>)을 받아 점수를 출력합니다.</p>
+
+<table>
+  <tr><th>변형</th><th>한 줄 정의</th><th>직관적 의미</th></tr>
+  <tr><td><strong>sym</strong></td><td><code>r = x</code></td><td>"수익이면 +, 손실이면 - 그대로". 가장 단순.</td></tr>
+  <tr><td><strong>asym</strong></td><td>손실에 β배 패널티</td><td>"이익은 그대로, 손실은 3.4배 무겁게 처벌하자"</td></tr>
+  <tr><td><strong>dsr</strong></td><td>샤프비율의 미분</td><td>"단순 수익이 아니라 위험 조정 수익. 과거 1.2일 평균/분산이 보상에 반영"</td></tr>
+  <tr><td><strong>pt</strong></td><td>Kahneman-Tversky 효용함수</td><td>"사람처럼 손실을 두려워하고, 이익도 한계 효용이 체감되게"</td></tr>
+</table>
+
+<h3>6.2 함수 모양 비교 그림</h3>
+<figure>
+  <img src="guide_figures/reward_functions_shape.png" alt="4가지 보상 함수의 모양 비교" />
+  <figcaption>4가지 보상 함수의 모양 비교 — 가로축: 1시간 수익률(%), 세로축: 정책이 받는 보상</figcaption>
+</figure>
+
+<div class="callout callout-info">
+<strong>읽는 법</strong>
+<ul>
+  <li><strong>(a) sym</strong>: 가장 단순. 손실과 이익을 같은 무게.</li>
+  <li><strong>(b) asym</strong>: 손실 영역의 기울기가 sym보다 3.4배 가파르다. → "손실 회피 정책" 학습.</li>
+  <li><strong>(c) pt</strong>: 손실 영역이 매우 가파르고 + 곡선이 오목(concave). 큰 이익을 기다리는 것보다 작은 이익을 빨리 실현 학습.</li>
+  <li><strong>(d) dsr</strong>: ★ 다른 3개와 본질적으로 다름 — 과거 1.2일 평균/분산이 보상 계산에 들어감. 정책에 시간적 의존성을 학습시킴 → 긴 holding 선호.</li>
+</ul>
+</div>
+
+<h3>6.3 왜 dsr이 특별한가</h3>
+<p>다른 세 함수(sym, asym, pt)는 "1시간 PnL만 입력하면 보상이 나옴"입니다. <strong>dsr만 "1시간 PnL + 과거 윈도우의 평균/분산"이 입력</strong>입니다. 이 <em>메모리 구조</em>가 정책에게 "긴 holding을 선호하라"를 학습시키는 직접적 원인입니다 (논문 §6.2).</p>
+
+<pre>sym(x), asym(x), pt(x)    → 입력: x 한 개
+dsr(x | A_prev, B_prev)   → 입력: x + 과거 평균 A_prev + 과거 분산 B_prev
+                                       ↑
+                                 EWMA로 1.2일 윈도우 유지</pre>
+
+<p>이 차이가 본 논문 후반의 <strong>DSR 양면성</strong>(in-sample 우위 + OOS 실패)의 근원입니다.</p>
+
+<h3>6.4 하이퍼파라미터는 어떻게 정했나</h3>
+<p>각 변형의 하이퍼파라미터(β, η, α, λ)는 <strong>Optuna로 30 trials × 200k steps</strong> 자동 탐색해서 검증셋 Sharpe를 최대화하는 값을 골랐습니다:</p>
+<table>
+  <tr><th>변형</th><th>파라미터</th><th>Optuna best</th><th>인간 표준 (참고)</th></tr>
+  <tr><td>asym</td><td>β (손실 가중)</td><td><strong>3.420</strong></td><td>—</td></tr>
+  <tr><td>dsr</td><td>η (EWMA decay)</td><td><strong>0.0352</strong> (≈ 1/28h)</td><td>—</td></tr>
+  <tr><td>pt</td><td>α (오목성)</td><td><strong>0.683</strong></td><td>0.88</td></tr>
+  <tr><td>pt</td><td>λ (손실 회피)</td><td><strong>3.303</strong></td><td>2.25</td></tr>
+</table>
+
+<div class="callout callout-warn">
+<strong>흥미로운 부수 발견</strong>
+<p>pt의 (α, λ)는 <strong>인간 행동 표준값보다 더 극단적</strong>입니다 (더 강한 손실 회피, 더 오목한 효용). BTC OOS 강건성을 위한 RL 정책의 최적 효용함수는 "인간보다 더 보수적"입니다 — 본 논문의 부수 발견 중 하나로, "행동경제학 추정값을 그대로 RL에 쓰지 말고 도메인 데이터로 재튜닝하라"는 권고로 이어집니다.</p>
+</div>
+</section>
+
+<section id="sec-7" class="section-anchor">
+<h2>7. 핵심 도구 ② — 환경 설계 (MDP)</h2>
+
+<h3>7.1 한눈에 보기</h3>
+
+<div class="mermaid">
+flowchart LR
+    State[State<br/>7개 숫자<br/>가격추세·변동성·포지션] --> Policy[PPO 정책<br/>작은 신경망<br/>MLP 64-64]
+    Policy --> Action[Action<br/>2개 숫자<br/>aggressiveness, profit_target]
+    Action --> Env[환경<br/>BTC 1시간봉<br/>+ 그리드 공식]
+    Env --> Order[4개 지정가 호가<br/>buy_hi/lo, sell_mkt/cost]
+    Order --> Fill[다음 봉의 high/low로<br/>체결 판정]
+    Fill --> Reward[Reward<br/>sym / asym / dsr / pt<br/>중 하나]
+    Reward --> Update[정책 업데이트]
+    Update --> State
+
+    style Policy fill:#E3F2FD,stroke:#1565C0
+    style Reward fill:#FFE0B2,stroke:#E65100
+</div>
+
+<h3>7.2 State (7개 숫자) — 정책이 매 시간 보는 정보</h3>
+<table>
+  <tr><th>#</th><th>이름</th><th>의미</th></tr>
+  <tr><td>0</td><td>log_price</td><td>현재가 / 168시간 평균. (1주 평균 대비 어디?)</td></tr>
+  <tr><td>1</td><td>divergence</td><td>평단가 대비 괴리율 (보유 중일 때만 의미).</td></tr>
+  <tr><td>2</td><td>holdings_value_ratio</td><td>자본의 몇 %를 BTC로 들고 있나.</td></tr>
+  <tr><td>3</td><td>cash_ratio</td><td>자본의 몇 %가 현금인가.</td></tr>
+  <tr><td>4</td><td>volatility</td><td>ATR / 가격. (지금 시장이 얼마나 출렁이나)</td></tr>
+  <tr><td>5</td><td>trend_short</td><td>3일 가격 변화율.</td></tr>
+  <tr><td>6</td><td>trend_long</td><td>30일 가격 변화율.</td></tr>
+</table>
+
+<h3>7.3 Action (2개 숫자)</h3>
+<ul>
+  <li><code>aggressiveness</code> ∈ [0, 1] → 매수 호가 2개의 위치 결정</li>
+  <li><code>profit_target</code> ∈ [0, 1] → 매도 호가 2개의 위치 결정</li>
+</ul>
+
+<p>이 두 숫자가 다음 공식에 들어가서 4개의 호가 가격이 결정됩니다:</p>
+
+<pre>buy_hi 가격     = 현재가 × (1 − ATR/현재가 × (A_b + B_b × aggressiveness))
+buy_lo 가격     = 현재가 × (1 − ATR/현재가 × (C_b + D_b × aggressiveness))
+sell_mkt 가격   = 현재가 × (1 + ATR/현재가 × (A_s + B_s × profit_target))
+sell_cost 가격  = 평단가 × (1 + ATR/현재가 × (C_s + D_s × profit_target))</pre>
+
+<p>핵심: <strong>ATR이 자동으로 변동성을 흡수</strong>하고, 정책의 action은 그 위에서 "추가로 얼마나 좁게/넓게"를 결정합니다.</p>
+
+<h3>7.4 ATR 베이스라인 — 비교 대상</h3>
+<p>본 논문의 모든 RL 결과는 <strong>"ATR 베이스라인"</strong>(=강화학습 없이 같은 공식, action=[0,0] 고정) 과 비교됩니다.</p>
+<ul>
+  <li>Val Sharpe: <strong>1.378</strong> (no slippage), <strong>0.835</strong> (with slippage 0.02%)</li>
+  <li>Test Sharpe: <strong>-0.055</strong></li>
+</ul>
+<p>ATR 베이스라인은 단순 규칙이지만 변동성 자체에 적응하는 합리적 정책이므로, RL이 이를 초과해야 "강화학습의 의미"가 있다는 기준선입니다.</p>
+
+<h3>7.5 사이클 정의</h3>
+<ul>
+  <li><strong>사이클 시작</strong>: 보유량 0 → 첫 매수 체결</li>
+  <li><strong>사이클 종료</strong>: 보유량이 다시 0으로 회복 (전량 매도)</li>
+  <li>사이클 시작 시 자본을 <code>n_splits=2</code>로 나누어 본 사이클에 절반 투입</li>
+  <li>그 절반을 다시 <code>n_buy_orders=2</code>로 나누어 매수 호가 2개에 분배</li>
+</ul>
+</section>
+
+<section id="sec-8" class="section-anchor">
+<h2>8. 실험 단계별 흐름</h2>
+
+<h3>8.1 각 실험의 한 줄 의미</h3>
+<table>
+  <tr><th>실험</th><th>무엇을 했나</th><th>왜 했나</th><th>결과</th></tr>
+  <tr><td><strong>Phase 1<br/>(exp020–022)</strong></td><td>sym reward로 PPO 1M step 학습</td><td>"동적 변동성 적응" 가설 검증</td><td><span class="badge badge-danger">정책 포화</span> RL = Fixed [1.0, 0.0]</td></tr>
+  <tr><td><strong>Phase 2</strong></td><td>환경 정상화 + 학습 안정화 패키지</td><td>Phase 1의 표면 negative 진단</td><td><span class="badge badge-success">출발선 마련</span></td></tr>
+  <tr><td><strong>exp032b</strong></td><td>4 reward × 10 시드 × 1M step</td><td>메인 비교</td><td>Pareto frontier (시나리오 D)</td></tr>
+  <tr><td><strong>exp032c</strong></td><td>1.04M step trajectory 행동 분석</td><td>"왜 두 클러스터인가"</td><td>거래 빈도·hold rate 차이 정량</td></tr>
+  <tr><td><strong>exp033</strong></td><td>슬리피지 0.02% 추가 후 재학습</td><td>비용 모델 강건성</td><td>cluster 보존 (2.19×)</td></tr>
+  <tr><td><strong>exp034</strong></td><td>CPCV 6-fold 15 paths</td><td>시기 강건성</td><td>1차 reversal: sym → dsr</td></tr>
+  <tr><td><strong>exp035</strong></td><td>Test 2024+ 봉인 해제 후 평가</td><td>진정한 OOS</td><td>2차 reversal: dsr → pt</td></tr>
+  <tr><td><strong>Phase 16d</strong></td><td>Test trajectory 분석</td><td>"왜 pt가 OOS robust?"</td><td>Hold duration 메커니즘 입증</td></tr>
+</table>
+
+<h3>8.2 데이터 분할</h3>
+<pre>2017-08-17 ────── Train ────── 2020-12-31  (~30,000 봉, 학습 데이터)
+2021-01-01 ─── Validation ──── 2023-12-31  (~26,000 봉, 모델 선택)
+2024-01-01 ──── Test (봉인) ── 2026-04     (~20,000 봉, 마지막에만 1회 열람)</pre>
+
+<div class="callout callout-warn">
+<strong>Test 봉인의 의미</strong>
+<p>Test는 exp035 (2026-05-16)까지 절대 열람 금지였습니다. 모든 hyperparameter 결정, Optuna 탐색, 디버깅이 train+val 위에서만 일어났습니다. 본 논문 Test 결과는 <strong>사상 첫 1회의 봉인 해제</strong>입니다 (Gort et al. 2022 권장).</p>
+</div>
+</section>
+
+<section id="sec-9" class="section-anchor">
+<h2>9. 4가지 핵심 발견</h2>
+
+<h3>9.1 발견 1 — 시나리오 D (Pareto 프론티어)</h3>
+
+<p><strong>한 줄</strong>: 4 reward 변형이 단일 winner가 아니라 <strong>두 그룹</strong>으로 갈라지며, Sharpe-MDD 평면에서 trade-off frontier를 형성한다.</p>
+
+<h4>사전에 등록한 시나리오</h4>
+<p>논문은 결과를 받기 전에 3가지 시나리오를 등록했습니다 (사후 합리화 방지):</p>
+<table>
+  <tr><th>시나리오</th><th>가정</th><th>결과 시 의미</th></tr>
+  <tr><td>A (낙관)</td><td>asym/dsr/pt가 sym과 ATR 모두를 압도</td><td>"Reward design이 RL alpha의 핵심 채널"</td></tr>
+  <tr><td>B (중립)</td><td>variant 간 차이는 있으나 ATR에 못 미침</td><td>"ATR 공식이 강한 흡수력"</td></tr>
+  <tr><td>C (비관)</td><td>variant 간 차이 미미</td><td>"Reward 형식 변경은 의미 없음"</td></tr>
+</table>
+
+<p><strong>실제 결과는 A/B/C 어디에도 들지 않았습니다</strong>. → 사후 시나리오 D를 정의:</p>
+
+<blockquote>
+<p><strong>시나리오 D</strong>: 4 변형 모두 ATR을 초과하지만 단일 winner는 없으며, Sharpe-MDD 평면에서 <strong>두 클러스터의 Pareto-유사 frontier</strong>를 형성한다.</p>
+</blockquote>
+
+<figure>
+  <img src="../exp032c/figures/menu1_pareto_scatter.png" alt="Pareto scatter — 두 클러스터" />
+  <figcaption>Fig: 40개 정책의 Sharpe-MDD 산점도. 두 클러스터가 평면의 다른 영역에 모임.</figcaption>
+</figure>
+
+<div class="callout callout-info">
+<strong>읽는 법</strong>
+<ul>
+  <li>점 하나 = 한 시드의 학습 결과 (40개 = 4 variant × 10 시드)</li>
+  <li>가로축: best Val Sharpe (오른쪽일수록 좋음)</li>
+  <li>세로축: MDD (아래일수록 좋음)</li>
+  <li>🔴 sym + 🟢 dsr → 오른쪽 위 (공격적)</li>
+  <li>🔵 asym + 🟠 pt → 왼쪽 아래 (보수적)</li>
+</ul>
+</div>
+
+<h4>통계적 분리</h4>
+<table>
+  <tr><th>비교</th><th>Cohen's d (Sharpe)</th><th>정책 거리 (L2)</th></tr>
+  <tr><td>within: sym vs dsr</td><td>0.29 (작음)</td><td>0.123</td></tr>
+  <tr><td>within: asym vs pt</td><td>0.15 (작음)</td><td>0.134</td></tr>
+  <tr><td>across: sym vs asym</td><td>1.10 (큼)</td><td>0.209</td></tr>
+  <tr><td>across: sym vs pt</td><td>1.19 (큼)</td><td>0.326</td></tr>
+  <tr><td>across: dsr vs asym</td><td>0.79 (큼)</td><td>0.256</td></tr>
+  <tr><td>across: dsr vs pt</td><td>0.89 (큼)</td><td>0.353</td></tr>
+  <tr><td><strong>across/within 비율</strong></td><td>—</td><td><strong>2.22×</strong></td></tr>
+</table>
+
+<p>같은 클러스터의 정책들이 다른 클러스터보다 <strong>2.22배 더 행동이 비슷</strong>합니다.</p>
+
+<h3>9.2 발견 2 — Winner Reversal (세 환경 세 우승자)</h3>
+
+<p><strong>한 줄</strong>: 평가 환경이 바뀌면 우승자도 매번 바뀐다.</p>
+
+<div class="mermaid">
+flowchart LR
+    Val["📊 단일 분할 Val<br/>(2021-2023)"] --> ValWin["🏆 sym (1.871)"]
+    CPCV["📊 CPCV 6-fold<br/>15 paths"] --> CpcvWin["🏆 dsr (1.413)"]
+    Test["📊 봉인 해제 Test<br/>(2024-2026)"] --> TestWin["🏆 pt (0.34~0.37)"]
+
+    style ValWin fill:#FFCDD2,stroke:#C62828
+    style CpcvWin fill:#C8E6C9,stroke:#2E7D32
+    style TestWin fill:#FFE0B2,stroke:#E65100
+</div>
+
+<table>
+  <tr><th>평가 환경</th><th>무엇을 측정</th><th>1위</th></tr>
+  <tr><td>단일 분할 Val</td><td>특정 2021-2023 시기 적합도</td><td>sym</td></tr>
+  <tr><td>CPCV multi-split</td><td>다양한 시기에 일관성</td><td>dsr</td></tr>
+  <tr><td>Test OOS</td><td>학습 시 본 적 없는 미래</td><td><strong>pt</strong></td></tr>
+</table>
+
+<div class="callout callout-info">
+<strong>논문의 권고</strong>
+<p>RL 트레이딩 연구의 표준 평가 프로토콜로 <strong>세 환경 동시 사용</strong>을 권고합니다:</p>
+<ol>
+  <li>Single-split Val → 일반적 정책 행동 + baseline 우열</li>
+  <li>CPCV multi-split → 시기 강건성</li>
+  <li>Sealed Test → 진정한 OOS 안전성 (실 운용 우선순위)</li>
+</ol>
+</div>
+
+<h3>9.3 발견 3 — Prospect Theory의 OOS 강건성 (H5, 본 논문 핵심)</h3>
+
+<p><strong>한 줄</strong>: 인간의 손실 회피 심리를 reward로 쓰면 AI가 "짧게 잡고 빠지는" 정책을 학습해서 미공개 강세장에서도 안정적이다.</p>
+
+<h4>Test (2024+) 결과</h4>
+<table>
+  <tr><th>변형</th><th>exp032b source (n=10)</th><th>exp034 source (n=15)</th><th>p-value (양 소스)</th></tr>
+  <tr><td>sym</td><td>+0.090 ± 0.11</td><td>+0.001 ± 0.19</td><td>0.015 / 0.495</td></tr>
+  <tr><td>asym</td><td>+0.173 ± 0.20</td><td>+0.175 ± 0.25</td><td>0.011 / 0.009</td></tr>
+  <tr><td>dsr</td><td><strong>-0.122</strong> ± 0.19</td><td>+0.070 ± 0.25</td><td>0.961 / 0.150</td></tr>
+  <tr><td><strong>pt</strong></td><td><strong>+0.367</strong> ± 0.29 ★</td><td><strong>+0.339</strong> ± 0.31 ★</td><td><strong>0.0015 / 0.0004</strong> ★</td></tr>
+</table>
+<p>ATR baseline Test Sharpe = -0.055.</p>
+
+<h4>왜 pt가 살아남는가? — 메커니즘</h4>
+
+<div class="mermaid">
+flowchart TD
+    PT[pt reward<br/>λ=3.30 손실회피<br/>α=0.68 오목효용] -->|학습| Behavior[정책이 학습한 행동:<br/>매수 후 평균 1.4시간 내<br/>최대 6시간 안에 매도]
+    Behavior -->|결과| Risk[Bull market의<br/>장기 가격 변동에 노출 안 됨<br/>→ Sell-side timing risk 회피]
+    Risk -->|결과| OOS[Test Sharpe<br/>+0.34 ~ +0.37<br/>양 소스 일관 1위]
+
+    style PT fill:#FFE0B2,stroke:#E65100
+    style OOS fill:#C8E6C9,stroke:#2E7D32
+</div>
+
+<p>대조적으로:</p>
+
+<div class="mermaid">
+flowchart TD
+    DSR[dsr reward<br/>EWMA 1.2일 윈도우<br/>= 시간 의존성 부여] -->|학습| Behavior[정책이 학습한 행동:<br/>매수 후 평균 4.6시간<br/>최대 7일까지 holding]
+    Behavior -->|in-sample| CPCV[CPCV: 다양한 시기에<br/>일관 성능 → 1위 1.413]
+    Behavior -->|OOS bull market| Risk[BTC 42K→75K 강세장에서<br/>긴 hold = sell 호가가<br/>시장에서 멀어짐]
+    Risk -->|결과| Fail[Test Sharpe<br/>-0.12 exp032b source<br/>4위, ATR보다도 나쁨]
+
+    style DSR fill:#E0F2F1,stroke:#00695C
+    style CPCV fill:#C8E6C9,stroke:#2E7D32
+    style Fail fill:#FFCDD2,stroke:#C62828
+</div>
+
+<div class="callout callout-success">
+<strong>핵심 통찰</strong>
+<p>같은 메커니즘("긴 holding 학습")이 평가 환경에 따라 강점/약점 부호가 반대로 작동합니다.</p>
+</div>
+
+<h4>Hold duration 분포 (Phase 16d)</h4>
+<table>
+  <tr><th>변형</th><th>sessions</th><th>mean (h)</th><th>median (h)</th><th>p95 (h)</th><th><strong>max (h)</strong></th></tr>
+  <tr><td>sym</td><td>5,666</td><td>2.15</td><td>1.0</td><td>5</td><td>98</td></tr>
+  <tr><td>asym</td><td>4,567</td><td>1.40</td><td>1.0</td><td>3</td><td>7</td></tr>
+  <tr><td>dsr</td><td>5,384</td><td><strong>4.58</strong></td><td>1.0</td><td><strong>20</strong></td><td><strong>169 (7일!)</strong></td></tr>
+  <tr><td>pt</td><td>3,922</td><td><strong>1.39</strong></td><td>1.0</td><td>3</td><td><strong>6</strong></td></tr>
+</table>
+
+<h3>9.4 발견 4 — DSR의 양면성</h3>
+
+<blockquote>
+<p><strong>같은 reward formulation의 같은 행동 효과 (긴 holding) 가 평가 환경에 따라 반대 부호로 작동한다.</strong></p>
+</blockquote>
+
+<table>
+  <tr><th>평가 환경</th><th>DSR 결과</th><th>이유</th></tr>
+  <tr><td>단일 분할 Val</td><td>1.809 (2위)</td><td>긴 hold가 학습 후반 안정성↑</td></tr>
+  <tr><td>CPCV multi-split</td><td><strong>1.413 (1위)</strong> ★</td><td>긴 hold = 시기 의존성↓, robust</td></tr>
+  <tr><td>Test 봉인 해제</td><td><strong>-0.122 (꼴찌)</strong> ★</td><td>긴 hold = bull market에서 sell timing risk 폭증</td></tr>
+</table>
+
+<h4>Val ↔ Test generalization gap</h4>
+<table>
+  <tr><th>변형</th><th>exp032b Val→Test</th><th>exp034 CPCV→Test</th></tr>
+  <tr><td>sym</td><td>-1.78</td><td>-1.30</td></tr>
+  <tr><td>asym</td><td>-1.51</td><td>-0.87</td></tr>
+  <tr><td>dsr</td><td><strong>-1.93 (worst)</strong></td><td>-1.34</td></tr>
+  <tr><td><strong>pt</strong></td><td><strong>-1.30 (smallest)</strong></td><td><strong>-0.75 (smallest)</strong></td></tr>
+</table>
+
+<h3>9.5 보너스 — 시장 분포 이동이 진짜 원인</h3>
+<p>"Val→Test gap이 정책이 변한 탓인가, 시장이 변한 탓인가?"를 정직하게 확인했습니다.</p>
+<table>
+  <tr><th>측정</th><th>결과</th></tr>
+  <tr><td>같은 모델의 Val/Test 행동 차이 (4 variant 평균)</td><td><strong>Δ ≤ 5%</strong> (거의 동일)</td></tr>
+  <tr><td>Val/Test 변동성 (ATR/price 평균)</td><td>0.96% → 0.70% (<strong>-27%</strong>)</td></tr>
+  <tr><td>KS test p-value</td><td><strong>&lt; 10⁻¹⁰</strong> (통계적으로 매우 유의)</td></tr>
+</table>
+<p>→ <strong>정책은 robust하게 같은 행동을 출력</strong>하지만, 그 행동이 다른 시장에서 다른 결과를 낳습니다. OOS 성능 차이의 원인은 <strong>정책의 변화가 아니라 시장의 distribution shift</strong>입니다.</p>
+</section>
+
+<section id="sec-10" class="section-anchor">
+<h2>10. 본 논문 그림 한 장씩 읽기</h2>
+<p>논문 PDF를 펼쳐서 도식이 나올 때 이 절을 옆에 두고 보면 됩니다.</p>
+
+<h3>10.1 exp032b — 4 reward 메인 비교</h3>
+
+<details open>
+<summary>Fig: Boxplot of Sharpe (4 variants)</summary>
+<figure>
+  <img src="../exp032b/figures/boxplot_sharpe.png" alt="boxplot" />
+  <figcaption>박스의 가운데 선 = 중앙값. 같은 클러스터끼리 박스 위치가 비슷, 다른 클러스터끼리 분리됨.</figcaption>
+</figure>
+</details>
+
+<details>
+<summary>Fig: Cohen's d Heatmap</summary>
+<figure>
+  <img src="../exp032b/figures/heatmap_cohens_d.png" alt="cohens_d" />
+  <figcaption>셀의 색이 진할수록 페어 차이가 큼. 대각선 블록 옅고, 오프-대각선 진함 → 두 클러스터 시각적 확인.</figcaption>
+</figure>
+</details>
+
+<h3>10.2 exp032c — 메커니즘 분석</h3>
+
+<details open>
+<summary>Fig: Pareto scatter (가장 중요한 한 장)</summary>
+<figure>
+  <img src="../exp032c/figures/menu1_pareto_scatter.png" alt="pareto" />
+  <figcaption>40개 점 (4 variant × 10 시드). 두 색 그룹이 평면의 다른 영역에 모임.</figcaption>
+</figure>
+</details>
+
+<details>
+<summary>Fig: Action distribution (3 regime × 4 variant)</summary>
+<figure>
+  <img src="../exp032c/figures/menu2_action_distribution.png" alt="action_dist" />
+  <figcaption>12개 패널 그리드. 빨간 십자가 = 평균. dsr만 매도 쪽이 0.15로 더 큼 → 긴 hold의 직접 원인.</figcaption>
+</figure>
+</details>
+
+<details>
+<summary>Fig: Behavior per regime (trade/hold rate)</summary>
+<figure>
+  <img src="../exp032c/figures/menu4_behavior_per_regime.png" alt="behavior_per_regime" />
+  <figcaption>위 행: trade rate. 아래 행: hold rate. DSR의 hold rate가 다른 3개의 2-6배.</figcaption>
+</figure>
+</details>
+
+<details>
+<summary>Fig: Policy distance matrix</summary>
+<figure>
+  <img src="../exp032c/figures/menu5_policy_distance.png" alt="policy_distance" />
+  <figcaption>4×4 행렬. 대각선 블록 (sym-dsr, asym-pt) 이 진함 → 클러스터 행동 수준 확인.</figcaption>
+</figure>
+</details>
+
+<h3>10.3 exp033 — Slippage 강건성</h3>
+<figure>
+  <img src="../exp033/figures/menu1_side_by_side.png" alt="slippage side by side" />
+  <figcaption>연한 색: slippage 없음. 진한 색: slippage 0.02%. 4 variant 모두 ~12% 감쇠하지만 cluster 구조 보존.</figcaption>
+</figure>
+
+<h3>10.4 exp034 — CPCV 다중 분할</h3>
+
+<details open>
+<summary>Fig: CPCV Sharpe Boxplot</summary>
+<figure>
+  <img src="../exp034/figures/menu3_boxplot.png" alt="cpcv boxplot" />
+  <figcaption>15 path × 4 variant. dsr의 박스가 가장 좁고 가장 높음 → CPCV 1위로의 reversal.</figcaption>
+</figure>
+</details>
+
+<details>
+<summary>Fig: CPCV Heatmap (variant × path)</summary>
+<figure>
+  <img src="../exp034/figures/menu2_heatmap.png" alt="cpcv heatmap" />
+  <figcaption>4 행 × 15 열. dsr 행이 일관되게 어두운 색, asym/pt 행은 path 간 편차 큼.</figcaption>
+</figure>
+</details>
+
+<h3>10.5 exp035 — Test 봉인 해제</h3>
+
+<details open>
+<summary>Fig: Test Sharpe Boxplot</summary>
+<figure>
+  <img src="../exp035/figures/menu3_oos_boxplot.png" alt="test boxplot" />
+  <figcaption>두 source × 4 variant = 8 박스. pt 박스가 두 source 모두 가장 높이.</figcaption>
+</figure>
+</details>
+
+<details>
+<summary>Fig: Val vs Test 비교</summary>
+<figure>
+  <img src="../exp035/figures/menu2_val_vs_test.png" alt="val vs test" />
+  <figcaption>가로축 Val Sharpe, 세로축 Test Sharpe. pt 점이 가장 위쪽 (Val에서 낮았지만 Test에서 가장 높음).</figcaption>
+</figure>
+</details>
+
+<h3>10.6 Phase 15 — 분포 이동 분석</h3>
+
+<details>
+<summary>Fig: Val vs Test 시장 분포</summary>
+<figure>
+  <img src="../phase15/figures/menu_b_distribution_shift.png" alt="distribution shift" />
+  <figcaption>파란 분포 (Val): 폭 넓음 (변동성 높음). 주황 분포 (Test): 폭 좁음 + 평균 양수 이동. KS p &lt; 10⁻¹⁰.</figcaption>
+</figure>
+</details>
+
+<details>
+<summary>Fig: 세 환경 winner 비교</summary>
+<figure>
+  <img src="../phase15/figures/menu_c_three_env.png" alt="three env" />
+  <figcaption>Val / CPCV / Test 세 환경의 4 variant Sharpe 비교. 환경마다 다른 winner → reversal 한 장 요약.</figcaption>
+</figure>
+</details>
+
+<h3>10.7 Phase 16d — Test 행동 분석</h3>
+
+<details open>
+<summary>Fig: Hold duration 분포</summary>
+<figure>
+  <img src="../phase16d/figures/menu3_hold_duration.png" alt="hold duration" />
+  <figcaption>4 variant의 hold duration histogram. dsr이 long-tail (오른쪽으로 길게). pt의 분포는 가장 좁고 빨리 끝남.</figcaption>
+</figure>
+</details>
+
+<details>
+<summary>Fig: Val/Test 정책 행동 안정성</summary>
+<figure>
+  <img src="../phase16d/figures/menu2_val_test_shift.png" alt="val test shift" />
+  <figcaption>같은 모델의 Val/Test 행동 비교. 모든 variant Δ ≤ 5% → 정책은 변하지 않음.</figcaption>
+</figure>
+</details>
+</section>
+
+<section id="sec-11" class="section-anchor">
+<h2>11. 인과 사슬 — 한 줄 정리</h2>
+
+<div class="mermaid">
+flowchart LR
+    R[Reward 형식<br/>sym/asym/dsr/pt] --> B[거래 빈도 + Hold 시간]
+    B --> P[Risk profile cluster<br/>aggressive vs conservative]
+    P --> T[Sharpe-MDD trade-off]
+    T --> W[환경별 winner reversal<br/>Val: sym → CPCV: dsr → Test: pt]
+
+    style R fill:#FFE0B2,stroke:#E65100
+    style W fill:#FCE4EC,stroke:#C2185B
+</div>
+
+<table>
+  <tr><th>화살표</th><th>정량 증거</th></tr>
+  <tr><td>Reward 형식 → 거래 빈도</td><td>asym(β=3.42), pt(λ=3.30)이 매수 호가를 멀리 배치 → 거래 빈도 25-35% 감소</td></tr>
+  <tr><td>Reward 형식 → Hold 시간</td><td>DSR의 sliding-window memory가 긴 hold의 SNR↑ → hold rate 2-6배</td></tr>
+  <tr><td>거래 빈도 + Hold → Risk profile</td><td>적게 거래 + 짧은 hold = MDD↓ + Calmar↑ (conservative)</td></tr>
+  <tr><td>Risk profile → 환경별 winner</td><td>aggressive: in-sample 우위 / conservative + 짧은 hold: OOS 강건</td></tr>
+</table>
+</section>
+
+<section id="sec-12" class="section-anchor">
+<h2>12. 자주 묻는 질문 (FAQ)</h2>
+
+<details>
+<summary>Q1. 그래서 이 시스템으로 돈을 벌 수 있어요?</summary>
+<p><strong>A</strong>: 단기 답: <strong>현재 형태로는 권하지 않음</strong>. 본 논문은 학술 연구로, 다음 한계가 있습니다:</p>
+<ul>
+  <li>단일 자산 (BTC), 단일 시간단위 (1시간봉) 만 검증</li>
+  <li>Test 시기 (2024+) 의 BTC는 강한 상승장 → buy-and-hold가 단순 수익률은 더 높음 (B&amp;H Sharpe 0.757 &gt; pt 0.367). 단, B&amp;H MDD 50% vs pt MDD 2.3% → risk-adjusted (Calmar)로는 pt 약 10배 우위</li>
+  <li>실제 거래 슬리피지/수수료는 본 논문보다 더 큰 영향을 줄 수 있음</li>
+  <li>본 논문의 메인 contribution은 <strong>"어떤 reward가 OOS 강건한가의 메커니즘 정량"</strong>이지 실 거래 시스템 권고가 아님</li>
+</ul>
+</details>
+
+<details>
+<summary>Q2. 4 reward 중 어느 것이 진짜 best인가요?</summary>
+<p><strong>A</strong>: <strong>단일 답이 없습니다.</strong> 평가 방법에 따라:</p>
+<ul>
+  <li>단일 시기 최대 Sharpe → sym</li>
+  <li>다양한 시기 일관 안정 → dsr</li>
+  <li>미공개 미래에서 살아남기 → <strong>pt</strong> ← 본 논문이 가장 중요시</li>
+  <li>MDD 최소화 → asym (pt와 거의 동등)</li>
+</ul>
+</details>
+
+<details>
+<summary>Q3. 왜 dsr이 CPCV에서는 1위, Test에서는 꼴찌인가요?</summary>
+<p><strong>A</strong>: 같은 메커니즘 (긴 holding) 이:</p>
+<ul>
+  <li><strong>CPCV</strong>: 다양한 시기에 걸쳐 robust한 정책으로 작동 → 강점</li>
+  <li><strong>Test (강세장)</strong>: 긴 hold 동안 가격이 멀리 가버려 sell 호가가 못 미치는 timing risk → 약점</li>
+</ul>
+<p>같은 정책이 시장 분포가 다르면 정반대 결과를 낳을 수 있다는 정직한 발견입니다.</p>
+</details>
+
+<details>
+<summary>Q4. ATR 베이스라인을 왜 그렇게 강조하나요?</summary>
+<p><strong>A</strong>: 강화학습이 단순 규칙(ATR)을 못 이긴다면 "강화학습의 의미"가 없습니다. 따라서 <strong>RL이 ATR을 통계적으로 초과한다</strong>는 사실이 반드시 입증되어야 합니다. 본 논문은 모든 4 variant가 ATR을 22-36% 초과 (Bonferroni 보정 후 p&lt;0.004) 함을 보입니다.</p>
+</details>
+
+<details>
+<summary>Q5. Test를 왜 그렇게까지 봉인했나요?</summary>
+<p><strong>A</strong>: 백테스트 과적합을 방지하기 위해서입니다. Test를 한 번 보면 결과를 보고 "어 이게 안 되네, 살짝 hyperparameter 바꿔볼까" 하는 유혹이 생깁니다. 그 순간 Test는 더 이상 "미공개 미래"가 아니라 "새로운 validation"이 됩니다. Gort et al.(2022)의 권고에 따라 exp035 단계까지 <strong>어떤 분석에도 Test partition을 사용하지 않았습니다</strong>.</p>
+</details>
+
+<details>
+<summary>Q6. 1M step 학습이 얼마나 걸리나요?</summary>
+<p><strong>A</strong>: 시드당 약 4시간 (Windows 11 CPU, n_envs=4 병렬). 본 논문 전체 (Phase 3) 학습량:</p>
+<ul>
+  <li>exp032b: 4 × 10 × 1M = 40M step (~3h 44m)</li>
+  <li>exp033: 같은 양 (~3h 47m)</li>
+  <li>exp034: 4 × 15 × 1M = 60M step (~5h 27m)</li>
+  <li>총 ~17시간 + Optuna 탐색 ~2시간</li>
+</ul>
+</details>
+
+<details>
+<summary>Q7. 왜 인간 표준 (α=0.88, λ=2.25) 가 아닌 Optuna best (α=0.683, λ=3.303) 인가요?</summary>
+<p><strong>A</strong>: 사람이 실제 의사결정에서 보이는 행동에 fit된 값이 사람의 표준값입니다. 그러나 <strong>RL 정책에 가장 좋은 효용함수의 모양</strong>은 다를 수 있습니다. 본 논문은 Optuna로 검증 Sharpe를 최대화하는 (α, λ) 를 찾았고, 결과적으로 인간보다 <strong>더 강한 손실 회피 + 더 오목한 효용</strong>이 RL 정책에 유리함을 발견했습니다.</p>
+</details>
+
+<details>
+<summary>Q8. 4 reward만 비교했나요? 더 많이 시도하지 그랬어요?</summary>
+<p><strong>A</strong>: 졸업 논문 범위 제약입니다. 4 reward는 4가지 이론적 계보를 대표합니다: sym (베이스라인), asym (위험 회피 효용), dsr (Moody 2001 위험 조정 수익), pt (Kahneman 1979 행동경제학). 더 많은 변형 (예: Conditional VaR reward, hyperbolic discounting) 은 future work로 남겨두었습니다.</p>
+</details>
+</section>
+
+<section id="sec-13" class="section-anchor">
+<h2>13. 한계와 다음 단계</h2>
+
+<h3>13.1 정직하게 인정한 한계</h3>
+<table>
+  <tr><th>#</th><th>한계</th><th>영향</th></tr>
+  <tr><td>1</td><td>자산 범위 = BTC 단일</td><td>"pt OOS robust"의 일반화 검증 안 됨</td></tr>
+  <tr><td>2</td><td>Test regime = 강세장 단일</td><td>bear/sideways에서도 같은 결과일지 미확인</td></tr>
+  <tr><td>3</td><td>Slippage = 단일 수준 0.02%</td><td>다단계 sensitivity 안 함</td></tr>
+  <tr><td>4</td><td>Domain Randomization 미적용</td><td>DR로 dsr OOS 실패가 회복 가능할지 미확인</td></tr>
+  <tr><td>5</td><td>학습 길이 = 1M step 단일</td><td>더 긴 학습이 결과를 바꿀 가능성</td></tr>
+</table>
+
+<h3>13.2 정직하게 인정한 추가 사실</h3>
+<ul>
+  <li><strong>exp027_rl 사전 증거의 환경 의존성</strong>: Phase 2 후기 (Env-v3) 에서 asym이 Test Sharpe 1.955로 매우 강했으나, 본 논문 canonical Env-v4 에서 재실행하니 sym (1.871) 보다 낮음. <strong>환경 변경 효과 > reward variant 효과</strong>라는 사실을 §8.2에서 정직 인정.</li>
+  <li><strong>B&amp;H baseline의 강세장 우위</strong>: 2024+ BTC가 +78% 상승하는 환경에서 buy-and-hold Sharpe 0.757은 모든 RL을 초과. 단, MDD 50% vs pt MDD 2.3% → risk-adjusted (Calmar) 로는 pt 약 10배 우위. <strong>본 논문의 "pt OOS robust" 주장은 risk-adjusted return의 의미에서 성립</strong>.</li>
+</ul>
+
+<h3>13.3 Defense 우선순위가 높은 future work 3개</h3>
+<ol>
+  <li><strong>Multi-asset 검증</strong> — pt OOS robust를 주식 ETF, FX 등에서 검증. 짧은-hold 메커니즘의 일반화 정량.</li>
+  <li><strong>Meta-RL adaptive reward parameter</strong> — (α, λ) 를 시변으로 online 적응하는 meta-RL.</li>
+  <li><strong>Domain Randomization 통합</strong> — DR로 dsr의 OOS 실패가 회복되는지 정량.</li>
+</ol>
+</section>
+
+<section id="sec-14" class="section-anchor">
+<h2>14. 용어집</h2>
+
+<details open>
+<summary>주요 약어/용어 41개</summary>
+<table>
+  <tr><th>용어</th><th>뜻</th></tr>
+  <tr><td>Action</td><td>정책이 매 시간 출력하는 행동 (본 논문에서는 2개 숫자)</td></tr>
+  <tr><td>Asymmetric reward</td><td>손실에 양의 가중치 β를 부여하는 변형</td></tr>
+  <tr><td>ATR</td><td>Average True Range. 168시간 윈도우의 평균 진실 범위 (변동성 지표)</td></tr>
+  <tr><td>Backtest overfitting</td><td>백테스트를 과도하게 조정하여 OOS에서 실패</td></tr>
+  <tr><td>Best checkpoint</td><td>학습 중 Val Sharpe가 가장 높았던 시점의 모델 가중치</td></tr>
+  <tr><td>Bull market</td><td>상승장. 본 논문 Test (2024+) 가 이에 해당</td></tr>
+  <tr><td>Calmar ratio</td><td>Annualized Return / MDD</td></tr>
+  <tr><td>Cluster</td><td>{sym, dsr} aggressive 와 {asym, pt} conservative 두 그룹</td></tr>
+  <tr><td>Cohen's d</td><td>두 분포의 평균 차이 효과 크기. |d|&lt;0.3 작음, |d|&gt;0.8 큼</td></tr>
+  <tr><td>CPCV</td><td>Combinatorial Purged Cross-Validation</td></tr>
+  <tr><td>Cycle</td><td>보유 0 → 첫 매수 → 다시 보유 0까지의 한 거래 단위</td></tr>
+  <tr><td>Deflated Sharpe Ratio</td><td>López de Prado(2014). 백테스트 시도 횟수 보정</td></tr>
+  <tr><td>Differential Sharpe Ratio</td><td>Moody(2001). 본 논문의 4 reward 중 하나</td></tr>
+  <tr><td>Distribution shift</td><td>학습 시기와 평가 시기의 시장 분포가 다른 현상</td></tr>
+  <tr><td>Domain Randomization</td><td>학습 시 환경 파라미터를 randomize하여 OOS robust 학습</td></tr>
+  <tr><td>Episode</td><td>강화학습의 한 에피소드. 본 논문 720시간 (30일)</td></tr>
+  <tr><td>EWMA</td><td>Exponentially Weighted Moving Average</td></tr>
+  <tr><td>Gymnasium</td><td>OpenAI Gym의 후속 표준 강화학습 환경 인터페이스</td></tr>
+  <tr><td>Hold rate</td><td>(보유 중 + 체결 없음) 스텝 / 전체 스텝</td></tr>
+  <tr><td>Hyperparameter</td><td>학습 전에 정해두는 값 (lr, β, η, α, λ 등)</td></tr>
+  <tr><td>IQM</td><td>Interquartile Mean. 25-75 분위 평균. 이상치 robust</td></tr>
+  <tr><td>MDD</td><td>Maximum Drawdown</td></tr>
+  <tr><td>MDP</td><td>Markov Decision Process</td></tr>
+  <tr><td>OOS</td><td>Out-Of-Sample</td></tr>
+  <tr><td>Optuna</td><td>하이퍼파라미터 자동 탐색 라이브러리 (TPE sampler)</td></tr>
+  <tr><td>Pareto frontier</td><td>한 metric 개선 ↔ 다른 metric 악화의 trade-off 곡선</td></tr>
+  <tr><td>PnL</td><td>Profit and Loss. 손익</td></tr>
+  <tr><td>Policy</td><td>강화학습의 의사결정 함수. 본 논문 MLP [64, 64]</td></tr>
+  <tr><td>PPO</td><td>Proximal Policy Optimization. 본 논문 사용 알고리즘</td></tr>
+  <tr><td>Prospect Theory</td><td>Kahneman &amp; Tversky(1979). 인간의 위험 회피 효용 모형</td></tr>
+  <tr><td>Purge</td><td>CPCV에서 train/test 경계의 ±168h 제외</td></tr>
+  <tr><td>Quote / 호가</td><td>매수/매도 의향 가격</td></tr>
+  <tr><td>Random seed</td><td>학습의 무작위성을 결정하는 정수. 본 논문 10시드 (42-51)</td></tr>
+  <tr><td>Reward</td><td>강화학습의 보상 신호</td></tr>
+  <tr><td>Sharpe ratio</td><td>평균 수익률 / 수익률 표준편차</td></tr>
+  <tr><td>Slippage</td><td>호가와 실제 체결가의 차이 (시장 마찰)</td></tr>
+  <tr><td>stable-baselines3</td><td>PyTorch 기반 강화학습 라이브러리 표준</td></tr>
+  <tr><td>State</td><td>정책이 매 시간 보는 관측. 본 논문 7차원</td></tr>
+  <tr><td>Symmetric reward</td><td>이익과 손실을 같은 무게로 처리하는 베이스라인</td></tr>
+  <tr><td>Test partition</td><td>봉인된 OOS 데이터. 본 논문 2024-01 ~ 2026-04</td></tr>
+  <tr><td>Trade rate</td><td>체결 발생 스텝 / 전체 스텝</td></tr>
+  <tr><td>Trajectory</td><td>(state, action, reward, ...) 의 한 에피소드 sequence</td></tr>
+  <tr><td>Validation</td><td>모델 선택에 사용하는 데이터. 본 논문 2021-2023</td></tr>
+  <tr><td>Winner reversal</td><td>평가 환경이 바뀔 때 1위 variant가 바뀌는 현상</td></tr>
+</table>
+</details>
+</section>
+
+<section id="sec-15" class="section-anchor">
+<h2>15. 더 자세히 읽고 싶다면</h2>
+
+<h3>15.1 본 논문 직접 읽기</h3>
+<ul>
+  <li>한글: <a href="main_ko.pdf">main_ko.pdf</a></li>
+  <li>영문: <a href="main.pdf">main.pdf</a></li>
+  <li>추천 순서 (비전문가): Abstract → §1 Introduction → §4 Phase 1 negative finding → §5 Pareto frontier → §6 메커니즘 → §7.3 OOS → §9 Conclusion</li>
+</ul>
+
+<h3>15.2 프로젝트 부속 문서</h3>
+<table>
+  <tr><th>문서</th><th>내용</th></tr>
+  <tr><td><a href="../../docs/PROJECT_GOAL.md">docs/PROJECT_GOAL.md</a></td><td>본 논문 단일 기준점 (RQ + 가설 + scope)</td></tr>
+  <tr><td><a href="../../docs/MDP.md">docs/MDP.md</a></td><td>State/Action/Reward 설계 근거</td></tr>
+  <tr><td><a href="../../docs/FORMULAS.md">docs/FORMULAS.md</a></td><td>ATR 고정 / RL 버전 공식</td></tr>
+  <tr><td><a href="../../docs/RELATED_WORK.md">docs/RELATED_WORK.md</a></td><td>7편 선행 연구의 역할 및 차별점</td></tr>
+  <tr><td><a href="../../docs/RESULTS_SUMMARY.md">docs/RESULTS_SUMMARY.md</a></td><td>Phase별 결과 요약</td></tr>
+  <tr><td><a href="../../RESEARCH_LOG.md">RESEARCH_LOG.md</a></td><td>날짜별 실험 의사결정 기록</td></tr>
+  <tr><td><a href="../../ROADMAP.md">ROADMAP.md</a></td><td>Phase별 진행 현황</td></tr>
+</table>
+
+<h3>15.3 학습 자료 (이 분야를 더 공부하고 싶다면)</h3>
+<table>
+  <tr><th>문서/논문</th><th>분야</th></tr>
+  <tr><td><a href="../../docs/study/rl_finance/00_overview.md">docs/study/rl_finance/00_overview.md</a></td><td>RL × Finance 24개 노트 인덱스</td></tr>
+  <tr><td>Wilder (1978)</td><td>ATR 원본</td></tr>
+  <tr><td>Schulman et al. (2017)</td><td>PPO 원본 논문</td></tr>
+  <tr><td>Moody (2001)</td><td>DSR 원본</td></tr>
+  <tr><td>Kahneman &amp; Tversky (1979)</td><td>Prospect Theory 원본</td></tr>
+  <tr><td>López de Prado (2018) ch.8</td><td>CPCV 원본</td></tr>
+  <tr><td>Gort et al. (2022)</td><td>Crypto DRL backtest overfitting</td></tr>
+  <tr><td>Henderson et al. (2018)</td><td>RL reproducibility (시드 통계 권장사항)</td></tr>
+</table>
+
+<h3>15.4 코드 / 데이터 접근</h3>
+<p>GitHub: <a href="https://github.com/cosmicpotato2047/capstone-rl-trading">github.com/cosmicpotato2047/capstone-rl-trading</a></p>
+
+<p>주요 디렉토리:</p>
+<ul>
+  <li><code>src/</code> — 환경, 정책, 학습 로직</li>
+  <li><code>scripts/</code> — 실험 실행 진입점</li>
+  <li><code>config/experiment_config.yaml</code> — 모든 수치 파라미터</li>
+  <li><code>data/processed/</code> — 전처리된 BTC 1시간봉 (test는 봉인)</li>
+  <li><code>reports/expXXX/</code> — 실험별 결과 figure + csv</li>
+</ul>
+</section>
+
+</main>
+</div>
+
+<footer class="site-footer">
+  <p>본 가이드는 캡스톤 디자인 프로젝트 — 최종 보고서의 부가 자료입니다.</p>
+  <p>저자: 이찬희 (happilyfly@seoultech.ac.kr) · 서울과학기술대학교 컴퓨터공학부 · 2026년 6월</p>
+</footer>
+
+<div class="lightbox" id="lightbox">
+  <img id="lightboxImg" src="" alt="" />
+</div>
+
+<script>
+// === Mermaid init ===
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'default',
+  flowchart: { curve: 'basis', useMaxWidth: true },
+  themeVariables: {
+    fontFamily: 'Segoe UI, Malgun Gothic, sans-serif',
+    fontSize: '14px',
+  },
+});
+
+// === Progress bar ===
+const progressBar = document.getElementById('progressBar');
+window.addEventListener('scroll', () => {
+  const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+  const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+  const scrolled = docHeight > 0 ? (scrollTop / docHeight) * 100 : 0;
+  progressBar.style.width = scrolled + '%';
+});
+
+// === Active TOC link ===
+const sections = document.querySelectorAll('section[id^="sec-"]');
+const tocLinks = document.querySelectorAll('nav.sidebar a');
+function updateActiveLink() {
+  let currentId = '';
+  const scrollPos = window.pageYOffset + 100;
+  sections.forEach(sec => {
+    if (sec.offsetTop <= scrollPos) currentId = sec.id;
+  });
+  tocLinks.forEach(link => {
+    link.classList.toggle('active', link.getAttribute('href') === '#' + currentId);
+  });
+}
+window.addEventListener('scroll', updateActiveLink);
+updateActiveLink();
+
+// === Sidebar toggle (mobile) ===
+const sidebar = document.getElementById('sidebar');
+document.getElementById('sidebarToggle').addEventListener('click', () => {
+  sidebar.classList.toggle('open');
+});
+tocLinks.forEach(link => {
+  link.addEventListener('click', () => sidebar.classList.remove('open'));
+});
+
+// === Image lightbox ===
+const lightbox = document.getElementById('lightbox');
+const lightboxImg = document.getElementById('lightboxImg');
+document.querySelectorAll('figure img').forEach(img => {
+  img.addEventListener('click', () => {
+    lightboxImg.src = img.src;
+    lightboxImg.alt = img.alt;
+    lightbox.classList.add('open');
+  });
+});
+lightbox.addEventListener('click', () => {
+  lightbox.classList.remove('open');
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') lightbox.classList.remove('open');
+});
+</script>
+
+</body>
+</html>
