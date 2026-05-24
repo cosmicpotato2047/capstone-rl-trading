@@ -5,8 +5,8 @@ data/processed/
 *.parquet
 *.feather
 
-# 논문 PDF — 저작권 문제로 비공개
-papers/
+# 논문 PDF — 저작권 문제로 비공개 (docs/study/rl_finance/에 정리 노트)
+docs/papers/
 
 # LaTeX auxiliary files
 paper/*.aux
