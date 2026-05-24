@@ -16,8 +16,8 @@ Key finding: the winner **reverses across evaluation environments** — Val=sym 
 ![Three-environment winner reversal](reports/phase15/figures/menu_c_three_env.png)
 
 📄 **Paper PDFs** (43–45 pages, 9 chapters, 9 figures, 18 tables, 20 references):
-- 한글 본문: [`reports/paper/main_ko.pdf`](reports/paper/main_ko.pdf)
-- English: [`reports/paper/main.pdf`](reports/paper/main.pdf)
+- 한글 본문: [`paper/main_ko.pdf`](paper/main_ko.pdf)
+- English: [`paper/main.pdf`](paper/main.pdf)
 
 ---
 
@@ -132,7 +132,7 @@ python scripts/analyze/analyze_exp035.py
 ### Build paper
 
 ```bash
-cd reports/paper
+cd paper
 xelatex main_ko.tex && bibtex main_ko && xelatex main_ko.tex && xelatex main_ko.tex
 pdflatex main.tex   && bibtex main    && pdflatex main.tex   && pdflatex main.tex
 ```
@@ -147,6 +147,13 @@ capstone-rl-trading/
 ├── README.md              # this file
 ├── RESEARCH_LOG.md        # dated decisions & per-experiment 6-section logs
 ├── ROADMAP.md             # phase status
+├── paper/                 # final thesis (LaTeX)
+│   ├── main_ko.tex / main_ko.pdf      # Korean (43 pages)
+│   ├── main.tex / main.pdf            # English (45 pages)
+│   ├── references.bib
+│   ├── READING_GUIDE.md / reading_guide.html
+│   ├── figures/, guide_figures/, presentation_prep/
+│   └── archive/                       # v1 drafts
 ├── config/                # YAML experiment configs (exp030 ~ exp035)
 ├── data/                  # processed/ (parquet, gitignored)
 ├── docs/                  # design + reference documents
@@ -156,13 +163,11 @@ capstone-rl-trading/
 │   ├── MDP.md, FORMULAS.md, ENV_HISTORY.md, RELATED_WORK.md
 │   └── study/                     # learning notes (rl_finance/, lopez de prado/, etc.)
 ├── experiments/
-│   ├── archive/                   # Phase 1-2 (exp001 ~ exp027), outdated
+│   ├── archive/                   # Phase 1-2 (exp001 ~ exp031), outdated
 │   └── exp032a ~ exp035/          # main paper experiments (configs, models, csv, log)
-├── notebooks/             # exploratory Jupyter notebooks
 ├── reports/
 │   ├── exp032b ~ phase16d/        # per-experiment analysis.md + figures/
-│   ├── midterm/                   # mid-term presentation materials
-│   └── paper/                     # main_ko.tex, main.tex, references.bib, archive/
+│   └── semester1/                 # weekly presentations + proposals
 ├── scripts/
 │   ├── train/             # training + evaluation runners
 │   ├── analyze/           # post-hoc analysis (Cohen's d, CPCV, mechanism)
@@ -174,8 +179,7 @@ capstone-rl-trading/
 │   ├── agents/            # PPO agent + baselines
 │   ├── evaluation/        # metrics + behavior analysis
 │   └── utils/             # config loader
-├── tests/                 # 46 environment unit tests
-└── live_trading/          # paper-trading scaffolding (not used in thesis)
+└── tests/                 # 46 environment unit tests
 ```
 
 ---
@@ -184,8 +188,8 @@ capstone-rl-trading/
 
 | Document | Purpose |
 |---|---|
-| [`reports/paper/main_ko.pdf`](reports/paper/main_ko.pdf) | **Final paper (Korean, 43 pages)** |
-| [`reports/paper/main.pdf`](reports/paper/main.pdf) | **Final paper (English, 45 pages)** |
+| [`paper/main_ko.pdf`](paper/main_ko.pdf) | **Final paper (Korean, 43 pages)** |
+| [`paper/main.pdf`](paper/main.pdf) | **Final paper (English, 45 pages)** |
 | [`docs/PROJECT_GOAL.md`](docs/PROJECT_GOAL.md) | Research question, hypotheses, scenario branches |
 | [`docs/PAPER_OUTLINE.md`](docs/PAPER_OUTLINE.md) | 9-chapter outline used as writing navigation |
 | [`docs/RESULTS_SUMMARY.md`](docs/RESULTS_SUMMARY.md) | Single-page quick reference of all numerical results |

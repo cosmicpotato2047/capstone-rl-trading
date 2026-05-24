@@ -1,29 +1,30 @@
-# Reports — 학기별 보고서
+# Reports — 학기별 보고서 + 실험 분석
 
-> 본 디렉토리는 주간/학기 보고서, 발표 자료, 논문 초고를 담는다.
+> 본 디렉토리는 학기 발표 자료(`semester1/`)와 실험별 분석 보고서(`exp032b/` ~ `phase16d/`)를 담는다.
+> 최종 논문 LaTeX 소스는 root의 [`paper/`](../paper/)에 있다.
 > 본 논문의 RQ는 [`docs/PROJECT_GOAL.md`](../docs/PROJECT_GOAL.md) 참조.
 
 ## 구조
 
 ```
 reports/
-├── WEEKLY_TEMPLATE.md          # 주간 보고서 템플릿
-├── project_journey.html        # 프로젝트 전체 흐름 인터랙티브 시각화
-├── semester1/                  # 1학기 (2026-03 ~ 2026-06)
-│   ├── week05_2026-04-10.md
-│   ├── week07_presentation(midterm_report).md  # 중간 보고서
-│   └── figures/                # 그래프 PNG
-├── semester2/                  # 2학기 (2026-08 ~ )
-│   └── figures/                # (작성 시 추가)
-└── paper/                      # 최종 논문 초고 (LaTeX)
+├── semester1/                  # 1학기 (2026-03 ~ 2026-06) 발표 자료
+│   ├── week02_연구주제.pptx ~ week11_knowledge_map.html
+│   └── figures/                # 발표용 그래프 PNG
+├── exp032b/                    # exp032b 분석 + figures
+├── exp032c/                    # exp032c 분석 + figures
+├── exp033/                     # 슬리피지 강건성
+├── exp034/                     # CPCV 6-fold
+├── exp035/                     # OOS Test 봉인 해제
+├── phase15/                    # Phase 15 (B&H baseline, distribution shift)
+└── phase16d/                   # Phase 16d (hold duration, OOS mechanism)
 ```
 
 ## 보고서 작성 규칙
 
-- **주간 보고서**: `WEEKLY_TEMPLATE.md` 복사 후 `weekXX_YYYY-MM-DD.md` 명명
-- **중간/기말 보고서**: 학기 디렉토리에 직접
+- **실험 분석**: `expXXX/analysis.md` + `figures/` 표준
 - **figures/**: PNG/SVG만. 원본 데이터는 `experiments/expXXX/`에
-- **paper/**: LaTeX 소스. 최종 PDF는 git ignored (`.gitignore`)
+- **논문 LaTeX 소스**: [`paper/`](../paper/)에서 빌드 (root 레벨, reports/ 밖)
 
 ## 본 논문 작성 시 챕터별 출처
 
