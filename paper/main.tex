@@ -42,8 +42,9 @@
 \title{
     \vspace{-1cm}
     {\large Capstone Design Project --- Final Report}\\[0.8em]
-    \textbf{The Effect of Reward Function Design in RL-Based\\
-    BTC Grid Trading: Pareto Frontier, Winner Reversal,\\
+    \textbf{The Effect of Reward Function Design\\
+    in RL-Based BTC Grid Trading:\\
+    Pareto Frontier, Winner Reversal,\\
     and OOS Robustness of Prospect-Theoretic Reward}
 }
 
@@ -91,7 +92,7 @@ $\to$ CPCV=\texttt{dsr}(1.41, $p<10^{-9}$) $\to$ Test=\texttt{pt}(0.34--0.37,
 consistent across two model sources, $p<0.002$).
 \textbf{(4)} The OOS robustness of \texttt{pt} arises from a short-holding
 mechanism: loss aversion $\lambda=3.30$ combined with concave gain $\alpha=0.68$
-trains policies to exit within mean 1.4\,h (max 6\,h), thereby avoiding the
+trains policies to exit within an average of 1.4\,h (max 6\,h), thereby avoiding the
 sell-side timing risk of the unseen bull regime. In contrast, \texttt{dsr} learns
 long holding (mean 4.58\,h, max 169\,h = 7 days) and records the worst OOS
 performance---demonstrating that the same reward formulation simultaneously
@@ -105,7 +106,7 @@ performance difference is driven by the market distribution shift, not by
 policy change.
 
 Our contribution is twofold. First, we demonstrate quantitatively that reward
-design exerts its effect through a \emph{trade-off dimension in risk profile}
+design takes effect along a \emph{trade-off dimension in risk profile}
 rather than a single Sharpe ``alpha source.'' Second, we provide quantitative
 evidence that Kahneman-Tversky prospect theory confers OOS safety on
 RL trading policies. Code and data:
@@ -138,10 +139,11 @@ reinforcement-learning policy.
 \subsection{Motivation and Research Question}
 \label{sec:intro_motivation}
 
-An earlier phase of this project hypothesized that PPO RL would discover dynamic
-volatility adaptation and outperform a fixed-grid baseline. Post-hoc behavioral
-analysis, however, revealed that the trained policy converged to a near-constant
-action $[1.0, 0.0]$ (\S\ref{sec:phase1_negative}), and that the
+This project ran in two prior phases (Phase 1 and Phase 2) before the work
+reported here. Phase 1 hypothesized that PPO RL would discover dynamic
+volatility adaptation and outperform a fixed-grid baseline. Post-hoc
+behavioral analysis, however, revealed that the trained policy converged to a
+near-constant action $[1.0, 0.0]$ (\S\ref{sec:phase1_negative}), and that the
 Bayesian-optimized ATR coefficient itself was the principal source of
 performance. This negative finding suggested that the symmetric-reward $+$
 ATR-proportional combination structurally absorbs the policy's degrees of
@@ -283,7 +285,7 @@ empirically show that \emph{single-split train/test results do not guarantee
 OOS generalization} in cryptocurrency DRL trading, and recommend CPCV
 (Combinatorial Purged Cross-Validation) and DSR (Deflated Sharpe Ratio). This
 paper adopts those recommendations, using Val (2021--2023), CPCV (6-fold inside
-the Train partition), and Test (2024-- unsealed) environments concurrently.
+the Train partition), and Test (2024 onward, unsealed) environments concurrently.
 Our \emph{winner reversal} finding (Val \texttt{sym} $\to$ CPCV \texttt{dsr}
 $\to$ Test \texttt{pt}) is a quantitative confirmation that Gort et al.'s
 concern reappears in the dimension of reward-variant selection.
@@ -376,7 +378,7 @@ of three evaluation environments} (Val / CPCV / Test) that allowed us to
 discover the winner reversal. Studies relying solely on single-split or solely
 on CPCV cannot expose OOS generalization failure, and studies relying solely
 on OOS cannot expose the in-sample conservatism of \texttt{pt}. The
-simultaneous application of three environments is, in our view, a methodological
+simultaneous application of three environments is a methodological
 contribution: it generalizes the multi-evaluation recommendations of
 \citet{henderson2018rlreproducibility} and \citet{gort2022backtest} to the
 single dimension of reward-variant comparison.
@@ -507,8 +509,9 @@ At the start of each cycle, the slot size used for the cycle is set:
 \frac{c_{\text{start}}}{n_{\text{splits}}}, \quad
 \text{order\_size} = \frac{\text{slot\_size}}{n_{\text{buy\_orders}}}
 \end{equation}
-We use $n_{\text{splits}}=2$ and $n_{\text{buy\_orders}}=2$ (the best values
-from Phase 2 Optuna Trial \#34). \texttt{threshold\_basis} is fixed to
+We use $n_{\text{splits}}=2$ and $n_{\text{buy\_orders}}=2$ (best of an Optuna
+50-trial search during Phase 2 preliminary tuning). \texttt{threshold\_basis}
+is fixed to
 \texttt{avg\_price}, meaning the ``liquidate all'' detection uses the average
 cost.
 
@@ -532,11 +535,11 @@ g^{\mathrm{buy\_lo}}, g^{\mathrm{sell\_mkt}}, g^{\mathrm{sell\_cost}}$ with all
 RL action degrees of freedom \emph{zeroed} ($a_t^{(0)} = a_t^{(1)} = 0$, so
 that the $B_b, D_b, B_s, D_s$ terms drop and the grid widths are fixed
 time-independent constants determined entirely by $A_b, C_b, A_s, C_s$). The
-coefficient values come from Phase 2 Optuna Trial \#34:
+coefficient values come from the same Optuna search:
 
 \begin{table}[!htbp]
 \centering
-\caption{Grid coefficients of the ATR baseline (Phase 2, Optuna Trial \#34).}
+\caption{Grid coefficients of the ATR baseline (best of 50 Optuna trials).}
 \begin{tabular}{lcclcc}
 \toprule
 Coef. & Value & Role & Coef. & Value & Role \\
@@ -759,8 +762,8 @@ finding is the starting point that motivates the reward-formulation comparison
 of \S\ref{sec:reward_variants}. The Phase 1 experiments were run on
 \emph{Env-v2} (2D ATR-proportional formula, next-bar-extreme execution) rather
 than on this paper's canonical Env-v4, so the absolute Sharpe values include
-a favorable-bias artifact. However, the qualitative observation at the heart
-of this section---that the \emph{policy converges to a constant}---is
+a favorable-bias artifact. However, the qualitative observation central
+to this section---that the \emph{policy converges to a constant}---is
 environment-independent and remains valid as motivation.
 
 \subsection{The Saturation Phenomenon}
@@ -877,7 +880,7 @@ policy that exceeds the ATR baseline (Val Sharpe sym $= 1.87 > $ ATR $1.378$).
 The strong Phase 1 negative ``RL = Fixed'' is therefore a joint result of
 favorable-bias execution and insufficient training stabilization; once the
 environment is normalized and training is stabilized, the reward form itself
-becomes the principal channel through which RL adds value.
+becomes the principal source of RL's added value.
 
 % ─── 5. Main Finding: Pareto Frontier ────────────────────────────────────────
 \section{Pareto Frontier and Two-Cluster Separation}
@@ -960,7 +963,7 @@ normalization (limit-order execution) and the stabilization package
 \paragraph{(ii) Four different metric leaders.}
 \texttt{sym} leads on best Sharpe, \texttt{dsr} leads on final Sharpe and
 cumulative return, \texttt{asym} leads on MDD and Calmar, and \texttt{pt}
-sits a hair behind \texttt{asym} on all metrics. There is no single winner;
+sits marginally behind \texttt{asym} on all metrics. There is no single winner;
 the choice of metric determines which variant is ``best.'' This is a
 multi-dimensional trade-off structure, and \textbf{H2 strong (asym/dsr/pt $>$
 sym) is partially rejected}.
@@ -1238,7 +1241,7 @@ In every regime, \{\texttt{sym}, \texttt{dsr}\} (the aggressive cluster) trade
 roughly 30--50\% more often than \{\texttt{asym}, \texttt{pt}\} (the
 conservative cluster). The variant-induced effect (variant $|d| \approx 1.0$)
 is \emph{larger} than the regime-induced effect (regime $|d| \approx 0.3$).
-That is, the policy's trade frequency is determined primarily by the
+In other words, the policy's trade frequency is determined primarily by the
 \emph{reward form itself} rather than by market volatility. This is the
 action-level confirmation of H3 ``selective entry $\to$ conservative cluster.''
 
@@ -1458,8 +1461,9 @@ an OOS liability'' causal chain that returns in \S\ref{sec:oos}).
 \label{sec:slippage}
 
 The results of \S\ref{sec:pareto} and \S\ref{sec:mechanism} were obtained on
-an environment with only a 0.05\% fee. As a standard sim2real stress test we
-now add slippage $\sigma = 0.02\%$ and ask whether Scenario D (two clusters,
+an environment with only a 0.05\% fee. As a standard sim-to-real (sim2real)
+stress test we now add slippage $\sigma = 0.02\%$ and ask whether Scenario D
+(two clusters,
 Pareto frontier) is preserved. This is the first piece of evidence on
 hypothesis \textbf{H4 (slippage / CPCV robustness)}.
 
@@ -1807,7 +1811,7 @@ lead on Test, or whether yet another reversal appears.
 \subsection{Out-of-Sample Evaluation and Prospect Theory's Robustness}
 \label{sec:oos}
 
-This subsection is the most important of the paper. We evaluate 100 RL models
+This subsection presents the paper's central result. We evaluate 100 RL models
 plus the ATR baseline and a Buy-and-Hold (B\&H) baseline on the unsealed
 Test partition (2024-01 \,--\, 2026-04, BTC \$42K\,$\to$\,\$75K bull market).
 Two main findings are reported: (i) \emph{prospect-theoretic reward
@@ -1824,8 +1828,8 @@ safety} on RL trading policies.
 
 Following \S\ref{sec:related_eval} and \citet{gort2022backtest}, the Test
 partition was kept sealed from every hyperparameter decision and analysis up
-to the exp035 stage. This subsection represents the \emph{first-ever}
-Test unsealing in this project; the Test statistics
+to the exp035 stage. This subsection represents the \emph{first} Test
+unsealing in this project; the Test statistics
 reported here determine the paper's final conclusions.
 
 \paragraph{100 RL Models Evaluated.}
@@ -1901,8 +1905,8 @@ one of the key findings of this paper.
 \label{sec:oos_three_env_reversal}
 
 Combining the Test-1st of this subsection with the Val-1st of
-\S\ref{sec:pareto} and the CPCV-1st of \S\ref{sec:cpcv} completes the central
-frame of the paper.
+\S\ref{sec:pareto} and the CPCV-1st of \S\ref{sec:cpcv} completes this paper's
+central argument.
 
 \begin{table}[!htbp]
 \centering
@@ -1966,7 +1970,7 @@ variant suffers a large Val $\to$ Test generalization gap (absolute $\Delta$
 in $0.75$--$1.93$). However, \texttt{pt} has the \emph{smallest gap} in
 both sources, while \texttt{dsr} has the \emph{worst gap} on the exp032b
 source. The in-sample metric is therefore \emph{not aligned} with OOS
-performance; in some cases it points the opposite direction. This forces the
+performance; in some cases it points in the opposite direction. This forces the
 paper's frame into an explicit ``in-sample advantage $\leftrightarrow$
 OOS robustness'' trade-off rather than a single-axis ranking.
 
@@ -2015,7 +2019,7 @@ certain gain now rather than wait for an uncertain larger one.'' The trained
 policy therefore exits within a very short window after a buy (mean $1.39$
 \,h, max $6$\,h). During the Test BTC bull market (\$42K $\to$ \$75K), this
 behavior closes positions \emph{before} large price moves occur, naturally
-avoiding sell-side timing risk. MDD remains near $2.3\%$ and Sharpe stays
+avoiding sell-side timing risk. MDD remains near $2.3\%$ and Sharpe remains
 positive at $0.34$--$0.37$.
 
 \paragraph{Mechanism behind \texttt{dsr}'s OOS failure.}
@@ -2023,7 +2027,7 @@ DSR's sliding-window reward structure trains policies for \emph{longer
 holdings} (\S\ref{sec:mechanism_hold_rate}). This is a strength in in-sample
 environments (\S\ref{sec:cpcv} CPCV) because it produces period-robust
 policies. In the Test bull market, however, the policy's hold duration
-stretches to median 1\,h, p95 20\,h, max 169\,h (7 days). When BTC's price
+stretches to a median of 1\,h, p95 of 20\,h, and max of 169\,h (7 days). When BTC's price
 moves substantially within a 7-day window, the policy's sell quote falls
 far behind the market and remains unfilled. Sell-side timing risk surges and
 the Test Sharpe falls into the \emph{negative} range (exp032b $-0.122$,
@@ -2123,7 +2127,7 @@ return.}
 
 We discuss this in \S\ref{sec:discussion}.
 
-\subsubsection{H5: The Paper's Core Contribution}
+\subsubsection{H5: Statement and Evidence}
 \label{sec:oos_h5}
 
 We formalize this section's finding as a hypothesis. H1--H4 were pre-registered,
@@ -2437,7 +2441,7 @@ direct effect of training length.
 Topics that respond to these five limitations:
 \begin{itemize}[leftmargin=*]
 \item Verify H5 on multi-asset environments (equity ETFs, FX).
-\item Add other regimes (2018 bear, 2019 sideways) via simulation or
+\item Add additional regime tests (2018 bear, 2019 sideways) via simulation or
 historical tests.
 \item Combine DR with meta-learning to recover \texttt{dsr}'s OOS failure.
 \item This paper uses only PPO. Replicate the reward-variant comparison
