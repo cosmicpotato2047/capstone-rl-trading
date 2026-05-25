@@ -724,7 +724,7 @@ therefore stated separately as a post-hoc hypothesis.
 \centering
 \small
 \caption{Pre-registered hypotheses H1--H4 and post-hoc hypothesis H5.}
-\begin{tabular}{p{1.3cm}p{5cm}p{7cm}}
+\begin{tabular}{p{1.8cm}p{5cm}p{6.5cm}}
 \toprule
 Hypothesis & Name & Definition \\
 \midrule
@@ -971,13 +971,16 @@ sym) is partially rejected}.
 \centering
 \includegraphics[width=0.85\textwidth]{menu1_pareto_scatter}
 \caption{Scatter of the 40 policies (4 variants $\times$ 10 seeds) in the
-Sharpe--MDD plane. The horizontal axis is best Val Sharpe (higher better) and
-the vertical axis is MDD (lower better). \texttt{sym}/\texttt{dsr} cluster in
-the \emph{aggressive} region of high Sharpe + high MDD;
-\texttt{asym}/\texttt{pt} cluster in the \emph{conservative} region of
-moderate Sharpe + low MDD. The ATR baseline sits at $(1.378, 9.83)$ in the
-same plane and is Pareto-dominated by every RL policy. Of the 40 policies,
-\textbf{5 are Pareto-optimal} (\texttt{sym} 2, \texttt{asym} 1, \texttt{dsr} 1,
+Sharpe--MDD plane. \textbf{The horizontal axis is Max Drawdown \%
+(lower better) and the vertical axis is Val Sharpe (higher better).}
+\texttt{sym}/\texttt{dsr} cluster in the \emph{aggressive} region of high
+Sharpe + high MDD (upper right); \texttt{asym}/\texttt{pt} cluster in the
+\emph{conservative} region of moderate Sharpe + low MDD (lower left). Large X
+marks denote per-variant means; the dashed line is the Pareto frontier
+(connecting 4 of the 40 points). The ATR baseline (black star) sits at
+(MDD $9.83\%$, Sharpe $1.378$) — off-frame, marked ``clipped'' — and is
+Pareto-dominated by every RL policy. Of the 40 policies, \textbf{5 are
+Pareto-optimal} (\texttt{sym} 2, \texttt{asym} 1, \texttt{dsr} 1,
 \texttt{pt} 1), so all four variants contribute to the frontier.}
 \label{fig:pareto_scatter}
 \end{figure}
@@ -1313,12 +1316,13 @@ Variant & Vol regime & $\bar{a}^{(0)}$ mean & $\bar{a}^{(0)}$ std & $\bar{a}^{(1
 \begin{figure}[!htbp]
 \centering
 \includegraphics[width=0.95\textwidth]{menu2_action_distribution}
-\caption{2D action distribution $(a^{(0)}, a^{(1)})$ over the 4 variants
-$\times$ 3 vol regimes grid. Points are trajectory steps; red crosses are
-per-cell means. \texttt{sym/dsr} cluster around $a^{(0)} \approx 0.12$ (narrow
-buy spacing); \texttt{asym/pt} cluster around $a^{(0)} \approx 0.30$--$0.45$
-(deeper buy quotes). Only \texttt{dsr} has $a^{(1)} \approx 0.15$, with a
-slightly wider sell grid to extend holding time.}
+\caption{2D density distribution of $(a^{(0)}, a^{(1)})$ over the 4 variants
+$\times$ 3 vol regimes grid. Cell color is the joint density of
+$(a^{(0)}, a^{(1)})$ — darker purple indicates more trajectory steps. Red
+stars are per-cell means. \texttt{sym/dsr} cluster around $a^{(0)} \approx 0.13$
+(narrow buy spacing); \texttt{asym/pt} cluster around $a^{(0)} \approx
+0.30$--$0.45$ (deeper buy quotes). Only \texttt{dsr} has $a^{(1)} \approx 0.15$,
+with a slightly wider sell grid to extend holding time.}
 \label{fig:action_distribution}
 \end{figure}
 
@@ -1553,10 +1557,12 @@ exp032c (policy distance $L_2$) & $0.129$ & $0.286$ & $2.22\times$ \\
 \begin{figure}[!htbp]
 \centering
 \includegraphics[width=0.9\textwidth]{menu1_side_by_side}
-\caption{Side-by-side comparison of exp032b (light) vs exp033 (dark). Mean
-$\pm$ std bars are overlaid with the 10 seed points for each variant. All
-four variants drop mean Sharpe by roughly $0.20$ under slippage, but the
-ordering and the cluster separation are preserved.}
+\caption{exp032b (no slippage, light) vs exp033 (slippage 0.02\%, dark)
+side-by-side comparison. Left panel: mean Val Sharpe. Right panel: mean best
+MDD\%. Dashed line is the ATR baseline ($1.378$). All four variants drop mean
+Sharpe by roughly $0.20$ under slippage (\texttt{dsr} drops by $0.26$), but
+the across/within $|d|$ ratio of $2.19\times$ shows the variant ordering and
+cluster separation are preserved.}
 \label{fig:exp033_side_by_side}
 \end{figure}
 
@@ -1734,7 +1740,7 @@ different winners across three evaluation environments}.
 Sharpe value (numeric label centered). Color is a diverging colormap: dark
 blue (low, negative) → white ($\approx 1.0$) → dark red (high, $\geq 2.0$).
 The \texttt{dsr} row is consistently more red, indicating uniformly higher
-Sharpe across paths, while \texttt{asym/pt} mix dark blue (p14 at $0.50$) and
+Sharpe across paths, while \texttt{asym/pt} mix blue (p14 at $0.50$) and
 red (p09 at $\approx 1.92$), exhibiting larger path-to-path variance. Row
 means match Table~\ref{tab:cpcv_per_variant}.}
 \label{fig:cpcv_heatmap}
@@ -1862,10 +1868,12 @@ Source & Variant & Test mean $\pm$ std & IQM & 5\% CVaR & $t$-stat & $p$ (1-side
 \begin{figure}[!htbp]
 \centering
 \includegraphics[width=0.95\textwidth]{menu3_oos_boxplot}
-\caption{Test Sharpe distributions (variant $\times$ source). \texttt{pt}'s
-box is highest in both sources; \texttt{dsr} drops below zero in the exp032b
-source and has the widest spread in the exp034 source. The ATR baseline
-$-0.055$ (dashed line) is the comparison reference.}
+\caption{Test Sharpe distributions (variant $\times$ source). Left panel:
+exp032b ($n=10$/variant). Right panel: exp034 ($n=15$/variant). \texttt{pt}'s
+box is highest in both sources (positive Test Sharpe). In exp032b, only
+\texttt{dsr}'s entire box is below zero; in exp034, \texttt{dsr}'s whisker
+extends lowest (to $\approx -0.4$). The ATR baseline $-0.055$ (dashed line)
+is the comparison reference.}
 \label{fig:oos_boxplot}
 \end{figure}
 
