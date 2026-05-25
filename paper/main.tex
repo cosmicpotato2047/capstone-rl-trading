@@ -166,12 +166,14 @@ Four reward functions (\texttt{sym}, \texttt{asym}, \texttt{dsr}, \texttt{pt}) a
 trained in an identical environment with 10 seeds $\times$ 1M steps, and pairwise
 statistical tests (Cohen's $d$, bootstrap P(A$>$B), IQM, 5\% CVaR) are applied
 following \citet{henderson2018rlreproducibility}'s reproducibility guidelines.
-\item \textbf{Scenario D --- Pareto-frontier discovery.} Rather than a single
-``best variant'' winner, the four variants statistically partition into two
-clusters \{\texttt{sym}, \texttt{dsr}\} vs.\ \{\texttt{asym}, \texttt{pt}\}
-forming a Pareto-like frontier on the Sharpe--MDD plane
-(\S\ref{sec:pareto}). This outcome falls into none of the pre-registered scenario
-branches (A optimistic / B neutral / C pessimistic).
+\item \textbf{Pareto-frontier discovery (multi-dimensional trade-off).}
+Rather than a single ``best variant'' winner, the four variants statistically
+partition into two clusters \{\texttt{sym}, \texttt{dsr}\} vs.\
+\{\texttt{asym}, \texttt{pt}\} forming a Pareto-like frontier on the
+Sharpe--MDD plane (\S\ref{sec:pareto}). This outcome falls into none of the
+pre-registered scenario branches (A optimistic / B neutral / C pessimistic),
+so we name it \emph{Scenario D} and formalize it in
+\S\ref{sec:pareto_scenario_d}.
 \item \textbf{Causal chain: reward $\to$ behavior $\to$ outcome.} Policy-level
 differences across variants are quantified on 1.04M step trajectories via a
 policy-distance matrix (within-cluster 0.129 vs.\ across-cluster 0.286), regime-
@@ -722,7 +724,7 @@ therefore stated separately as a post-hoc hypothesis.
 \centering
 \small
 \caption{Pre-registered hypotheses H1--H4 and post-hoc hypothesis H5.}
-\begin{tabular}{p{1.3cm}p{4cm}p{8cm}}
+\begin{tabular}{p{1.3cm}p{5cm}p{7cm}}
 \toprule
 Hypothesis & Name & Definition \\
 \midrule
@@ -1357,10 +1359,18 @@ dominant}.
 \centering
 \includegraphics[width=0.95\textwidth]{menu3_counterfactual_action_map}
 \caption{Counterfactual mean-action heatmaps over the
-(atr\_ratio, divergence) state grid for each variant. All four variants
-differ most in the region with large negative divergence and mid
-atr\_ratio (i.e., when the held position is above the average cost and
-volatility is moderate).}
+(atr\_ratio, divergence) state grid for each variant. \textbf{8-panel layout
+(2 rows $\times$ 4 columns)}: top row shows mean action$_0$ (aggressiveness,
+buy quote), bottom row shows mean action$_1$ (profit\_target, sell quote);
+columns are variants (left to right: sym, asym, dsr, pt). Each panel's x-axis
+is atr\_ratio (0.005--0.025) and y-axis is divergence ($s_t^{(1)}$, 0 to
+$-0.20$). Color scale: dark blue (action $\approx 0$) → white ($\approx 0.5$)
+→ dark red ($\approx 1.0$). \textbf{The largest cross-variant difference is
+in the lower-left region of the top row} (low atr\_ratio + negative
+divergence; i.e., low volatility combined with deep drawdown from average
+cost): \texttt{pt} shows deep red (high aggressiveness $\geq 0.6$) while
+\texttt{sym/dsr} stay blue and \texttt{asym} stays pale, demonstrating that
+the same state induces different policy actions across variants.}
 \label{fig:counterfactual}
 \end{figure}
 
@@ -1657,11 +1667,14 @@ Variant & SR mean $\pm$ std & IQM & 5\% CVaR & (min, max) & $t$-stat & $p$ (one-
 \centering
 \includegraphics[width=0.85\textwidth]{menu3_boxplot}
 \caption{Boxplot of Sharpe distributions across the 15 CPCV paths per
-variant. Boxes are IQR; the center line is the median; whiskers extend to
-1.5$\,\times\,$IQR. \texttt{dsr} has the highest median and 5\% CVaR and the
-tightest spread (std 0.378). \texttt{asym/pt} are wider (IQR
-$0.5$\,--\,$1.5$) with lower medians. The ATR baseline Val Sharpe $1.378$
-serves as a comparison reference.}
+variant. Boxes are IQR (25\%--75\%); the orange center line is the median;
+the green triangle is the mean; whiskers extend to 1.5$\,\times\,$IQR.
+\texttt{dsr} has the highest median ($1.500$), mean ($1.413$), and 5\% CVaR
+($0.890$), and the \emph{smallest standard deviation over the full
+distribution} (std $0.378$ vs.\ $0.47$--$0.51$ for other variants). Visually
+\texttt{sym}'s IQR box appears narrower, but \texttt{sym}'s whiskers extend
+much further (0.58--2.05), giving it a larger std. The ATR baseline
+($1.378$) is shown as a dashed reference line.}
 \label{fig:cpcv_boxplot}
 \end{figure}
 
@@ -1717,10 +1730,13 @@ different winners across three evaluation environments}.
 \begin{figure}[!htbp]
 \centering
 \includegraphics[width=0.85\textwidth]{menu2_heatmap}
-\caption{4 variants $\times$ 15 paths Sharpe heatmap. Each cell is a
-single (variant, path) Sharpe; the right margin gives the row mean (matching
-Table~\ref{tab:cpcv_per_variant}). The \texttt{dsr} row is consistently dark
-(high Sharpe), while \texttt{asym/pt} show larger path-to-path variance.}
+\caption{4 variants $\times$ 15 paths Sharpe heatmap. Each cell shows the
+Sharpe value (numeric label centered). Color is a diverging colormap: dark
+blue (low, negative) → white ($\approx 1.0$) → dark red (high, $\geq 2.0$).
+The \texttt{dsr} row is consistently more red, indicating uniformly higher
+Sharpe across paths, while \texttt{asym/pt} mix dark blue (p14 at $0.50$) and
+red (p09 at $\approx 1.92$), exhibiting larger path-to-path variance. Row
+means match Table~\ref{tab:cpcv_per_variant}.}
 \label{fig:cpcv_heatmap}
 \end{figure}
 
@@ -1906,11 +1922,14 @@ implications in \S\ref{sec:discussion}.
 \begin{figure}[!htbp]
 \centering
 \includegraphics[width=0.85\textwidth]{menu2_val_vs_test}
-\caption{Per-variant Val Sharpe vs Test Sharpe (both sources). Horizontal:
-Val Sharpe; vertical: Test Sharpe. The dashed diagonal is the ``Val = Test''
-reference. All points lie below the diagonal, but \texttt{pt}'s points drop
-the least (starting from the lowest Val position and ending at the highest
-Test position).}
+\caption{Per-variant Val Sharpe (light bars) vs Test Sharpe (dark bars).
+Left panel: exp032b source (models trained on Val). Right panel: exp034
+source (models trained via CPCV). \emph{All variants degrade substantially
+from Val to Test in both sources}, but \texttt{pt}'s Test bar is clearly
+highest among variants in both sources ($+0.367 / +0.339$). \texttt{dsr}
+goes negative in exp032b and ranks last in exp034. Val bars are similar in
+height across variants, but the Test ranking reverses, visually confirming
+the winner reversal.}
 \label{fig:oos_val_vs_test}
 \end{figure}
 
@@ -2179,9 +2198,14 @@ Hourly log return & $1.4 \cdot 10^{-5}$ ($0.71\%$) & $2.9 \cdot 10^{-5}$ ($0.52\
 \begin{figure}[!htbp]
 \centering
 \includegraphics[width=0.95\textwidth]{menu_b_distribution_shift}
-\caption{KDE plots of the ATR ratio and hourly log return on Val
-(2021--2023, blue) and Test (2024+, orange). Test is tighter and centered
-at a positive mean log return. KS $p < 10^{-10}$ on both metrics.}
+\caption{Histograms of the Val (2021--2023, blue) and Test (2024+, red)
+distributions. \textbf{Left panel (ATR ratio, volatility)}: the Test
+distribution concentrates at lower values with a shorter right tail,
+i.e.\ a \emph{$-27\%$ reduction in variance}; the mean shifts from $0.96\%$
+(Val) to $0.70\%$ (Test). Dashed lines show the two means. \textbf{Right
+panel (hourly log return)}: the shape is similar but the Test mean shifts
+slightly positive ($+2.9 \cdot 10^{-5}$ vs $+1.4 \cdot 10^{-5}$), reflecting
+the bull regime. Both metrics show KS $p < 10^{-10}$.}
 \label{fig:disc_shift}
 \end{figure}
 
@@ -2491,6 +2515,7 @@ The code and data of this work are released at
 \url{https://github.com/cosmicpotato2047/capstone-rl-trading}.
 
 % ─── References ──────────────────────────────────────────────────────────────
+\clearpage
 \bibliographystyle{plainnat}
 \bibliography{references}
 

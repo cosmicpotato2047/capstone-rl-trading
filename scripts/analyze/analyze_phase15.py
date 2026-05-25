@@ -41,9 +41,9 @@ CLUSTERS = {"sym": "aggressive", "dsr": "aggressive",
 COLOR = {"sym": "#1f77b4", "dsr": "#ff7f0e", "asym": "#2ca02c", "pt": "#d62728"}
 
 # ATR baseline reference values
-ATR_VAL_SHARPE = 1.505    # Env-v4 ATR Bayesian Trial #34, Val 2021-2023
+ATR_VAL_SHARPE = 1.378    # Env-v4 ATR Bayesian Trial #34, Val 2021-2023 (re-measured post-Phase-16a)
 ATR_TEST_SHARPE = -0.055  # exp035 measured (Test 2024+)
-# exp033/exp034 의 ATR baseline 은 미측정 — Val 1.505 reference 사용 (caveat)
+# exp033/exp034 의 ATR baseline 은 미측정 — Val 1.378 reference 사용 (caveat)
 
 
 # ---------- A: Bootstrap significance ----------
@@ -76,7 +76,7 @@ def menu_a(out_dir: Path) -> pd.DataFrame:
         # Val (exp032b)
         s = val_b[val_b.variant == v]["best_val_sharpe"].values
         r = bootstrap_p_greater(s, ATR_VAL_SHARPE)
-        r.update({"variant": v, "env": "Val (single-split)", "atr_ref": "Val 1.505"})
+        r.update({"variant": v, "env": "Val (single-split)", "atr_ref": "Val 1.378"})
         rows.append(r)
         # Slippage (exp033)
         s = slp[slp.variant == v]["best_val_sharpe"].values

@@ -32,7 +32,7 @@ VARIANTS = ["sym", "asym", "dsr", "pt"]
 CLUSTERS = {"sym": "aggressive", "dsr": "aggressive",
             "asym": "conservative", "pt": "conservative"}
 COLOR = {"sym": "#1f77b4", "dsr": "#ff7f0e", "asym": "#2ca02c", "pt": "#d62728"}
-ATR_SHARPE = 1.505  # Env-v4 ATR baseline (Val 2021-2023, no slippage)
+ATR_SHARPE = 1.378  # Env-v4 ATR baseline (Val 2021-2023, no slippage; re-measured post-Phase-16a)
 
 
 # ---------- statistics ----------

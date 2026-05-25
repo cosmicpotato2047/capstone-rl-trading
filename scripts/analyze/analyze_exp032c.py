@@ -39,8 +39,8 @@ VARIANTS = ["sym", "asym", "dsr", "pt"]
 CLUSTERS = {"sym": "aggressive", "dsr": "aggressive",
             "asym": "conservative", "pt": "conservative"}
 COLOR = {"sym": "#1f77b4", "dsr": "#ff7f0e", "asym": "#2ca02c", "pt": "#d62728"}
-# ATR baseline (Env-v4 Bayesian Trial #34)
-ATR_SHARPE = 1.505
+# ATR baseline (Env-v4 Bayesian Trial #34, re-measured post-Phase-16a)
+ATR_SHARPE = 1.378
 ATR_MDD = 9.83
 
 

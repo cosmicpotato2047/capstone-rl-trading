@@ -33,7 +33,7 @@ VARIANTS = ["sym", "asym", "dsr", "pt"]
 CLUSTERS = {"sym": "aggressive", "dsr": "aggressive",
             "asym": "conservative", "pt": "conservative"}
 COLOR = {"sym": "#1f77b4", "dsr": "#ff7f0e", "asym": "#2ca02c", "pt": "#d62728"}
-ATR_SHARPE = 1.505
+ATR_SHARPE = 1.378
 ATR_MDD = 9.83
 
 
