@@ -94,12 +94,12 @@ mechanism: loss aversion $\lambda=3.30$ combined with concave gain $\alpha=0.68$
 trains policies to exit within mean 1.4\,h (max 6\,h), thereby avoiding the
 sell-side timing risk of the unseen bull regime. In contrast, \texttt{dsr} learns
 long holding (mean 4.58\,h, max 169\,h = 7 days) and records the worst OOS
-performance---demonstrating that the same reward formulation underlies both
-in-sample advantage and OOS failure as two sides of the same coin.
+performance---demonstrating that the same reward formulation simultaneously
+drives in-sample advantage and OOS failure.
 The Val--Test distribution shift is highly significant
 (KS $p<10^{-10}$, $-27\%$ variance), while policies' actions remain nearly
 invariant between Val and Test ($\Delta \leq 5\%$). That is, the policies
-emit the same actions, but those actions produce different outcomes in the
+output the same actions, but those actions produce different outcomes in the
 different market regimes (Val = range-bound vs. Test = bull); the OOS
 performance difference is driven by the market distribution shift, not by
 policy change.
@@ -185,11 +185,11 @@ of prospect theory.} The winner reverses completely across single-split Val
 (\texttt{sym} 1\textsuperscript{st}) $\to$ CPCV multi-split
 (\texttt{dsr} 1\textsuperscript{st}) $\to$ the unsealed Test
 (\texttt{pt} 1\textsuperscript{st}, consistent across two sources $p<0.002$)
-(\S\ref{sec:robustness}). The OOS robustness of \texttt{pt} is mechanistically
-attributed via trajectory analysis to its loss aversion $\lambda=3.30$ and
-concave utility $\alpha=0.68$ training policies to exit within mean 1.4\,h,
-thereby avoiding the sell-side timing risk of the unseen bull regime. This
-provides quantitative evidence that the Kahneman-Tversky prospect theory
+(\S\ref{sec:robustness}). Trajectory analysis attributes \texttt{pt}'s OOS
+robustness to its loss aversion ($\lambda=3.30$) and concave utility
+($\alpha=0.68$), which train policies to exit within an average of $1.4$\,h
+and thereby avoid sell-side timing risk in the unseen bull regime. This
+provides quantitative evidence that the Kahneman--Tversky prospect theory
 \citep{kahneman1979prospect} confers OOS safety on RL trading policies.
 \end{enumerate}
 
@@ -214,7 +214,7 @@ discusses distribution shift quantification and limitations, and Section
 \section{Related Work}
 \label{sec:related}
 
-This paper sits at the intersection of four areas: (i) market making and grid
+This paper lies at the intersection of four areas: (i) market making and grid
 trading, (ii) reinforcement-learning-based trading, (iii) reward-design theory,
 and (iv) evaluation methodology for trading policies. This section surveys the
 key prior work in each area and clarifies where our contribution lies.
@@ -262,25 +262,25 @@ form to behavioral difference, and \S\ref{sec:robustness} documents
 out-of-sample (OOS) generalization phenomena that are not captured by
 single-split validation alone.
 
-There are four directly preceding works. \citet{liu2021bitcoin} feeds the
+Four prior works are directly relevant. \citet{liu2021bitcoin} feed the
 output of an LSTM price predictor into the state of a PPO trading policy in a
 two-stage pipeline. The limitation of this approach is that prediction errors
 propagate directly into trading decisions; this paper bypasses the limitation
 by \emph{eliminating} the price-prediction stage and using a volatility-adaptive
-grid structure instead. \citet{yasin2024rl} compares DQN/PPO/A2C with 20
-technical indicators, but the action space is discrete buy/sell with no hold
+grid structure instead. \citet{yasin2024rl} compare DQN/PPO/A2C with 20
+technical indicators, but their action space is discrete buy/sell with no hold
 action. This paper adopts a continuous two-dimensional action (aggressiveness
 and profit target) that supports fine-grained grid control.
-\citet{pham2025dqn} uses DQN to select one of five predefined strategies as a
+\citet{pham2025dqn} use DQN to select one of five predefined strategies as a
 meta-strategy, but the strategies themselves are not learned.
-\citet{bandarupalli2025risk} augments PPO with a volatility penalty and a
-transaction-cost term, but stays at the level of hyperparameter tuning within
-a single reward variant and does not compare across reward \emph{forms}, which
+\citet{bandarupalli2025risk} augment PPO with a volatility penalty and a
+transaction-cost term, but stay at the level of hyperparameter tuning within
+a single reward variant and do not compare across reward \emph{forms}, which
 is the focus of this paper.
 
-A particularly relevant prior work is \citet{gort2022backtest}, which
-empirically shows that \emph{single-split train/test results do not guarantee
-OOS generalization} in cryptocurrency DRL trading, and recommends CPCV
+A particularly relevant prior work is \citet{gort2022backtest}, who
+empirically show that \emph{single-split train/test results do not guarantee
+OOS generalization} in cryptocurrency DRL trading, and recommend CPCV
 (Combinatorial Purged Cross-Validation) and DSR (Deflated Sharpe Ratio). This
 paper adopts those recommendations, using Val (2021--2023), CPCV (6-fold inside
 the Train partition), and Test (2024-- unsealed) environments concurrently.
@@ -288,7 +288,7 @@ Our \emph{winner reversal} finding (Val \texttt{sym} $\to$ CPCV \texttt{dsr}
 $\to$ Test \texttt{pt}) is a quantitative confirmation that Gort et al.'s
 concern reappears in the dimension of reward-variant selection.
 
-In one sentence, our position is: whereas prior DRL trading literature focuses
+In summary, whereas prior DRL trading literature focuses
 on comparing algorithms and state designs under a \emph{single} reward function,
 this paper performs a controlled comparison of \emph{four reward functions} on
 top of the same algorithm (PPO) and the same environment, and separately
@@ -317,19 +317,20 @@ imposes a \emph{multi-step temporal dependency} on the policy. As we show in
 \S\ref{sec:mechanism}, this memory structure is what causes the \texttt{dsr}
 policy to learn 2--6$\times$ longer holding times than the other variants---a
 property that becomes the in-sample advantage of \S\ref{sec:robustness} and
-the OOS failure of \S\ref{sec:oos} as two sides of the same causal coin.
+the OOS failure of \S\ref{sec:oos} — the same causal mechanism viewed
+from two evaluation angles.
 
 Prospect theory \citep{kahneman1979prospect} is a foundational model of
 human decision making under risk, with two characteristic parameters:
 (a) loss aversion $\lambda \approx 2.25$ (standard value from
 \citealt{tversky1992cumulative}) and (b) the concavity exponent
 $\alpha \approx 0.88$. While the theory has been widely used to describe
-human trader behavior (e.g., the disposition effect of clinging to losses and
-realizing gains too early), \emph{direct use of prospect-theoretic utility as
-an RL reward} is rare in the literature. To our knowledge, this paper is the
-first to directly implement the \citet{kahneman1979prospect} utility as an RL
-reward (with $\alpha=0.68$, $\lambda=3.30$, tuned by Optuna) and quantitatively
-establish the OOS robustness that the resulting policy exhibits.
+human trader behavior (e.g., the disposition effect — holding losing positions
+too long while realizing gains too early), \emph{direct use of
+prospect-theoretic utility as an RL reward} is rare in the literature. This paper directly implements the
+\citet{kahneman1979prospect} utility as an RL reward (with $\alpha=0.68$,
+$\lambda=3.30$, tuned by Optuna) and quantitatively establishes the OOS
+robustness that the resulting policy exhibits.
 
 \citet{ng1999reward}'s policy-invariance theorem of potential-based reward
 shaping states that ``a monotone transformation of the reward signal does not
@@ -349,9 +350,9 @@ statistically significant manner.
 
 The two principal pitfalls in evaluating RL trading policies are (a) backtest
 overfitting and (b) seed dependence of results.
-\citet{henderson2018rlreproducibility} empirically demonstrates that seed
+\citet{henderson2018rlreproducibility} empirically demonstrate that seed
 variability alone can produce large differences for the same algorithm, and
-proposes 5--10 seed statistical comparisons, IQM (Interquartile Mean), and
+propose 5--10 seed statistical comparisons, IQM (Interquartile Mean), and
 bootstrap confidence intervals as standard recommendations. This paper uses
 10 seeds per variant (Val/exp033) and 100 models (Test), and applies pairwise
 Cohen's $d$ and bootstrap $\mathrm{P}(A>B)$ to all comparisons.
@@ -424,7 +425,7 @@ All components are pre-normalized by a 168-bar rolling z-score computed on the
 training set and clipped to $[-5, 5]$.
 
 \paragraph{Action $\mathcal{A} = [0,1]^2$.}
-At each step the policy emits a continuous 2D action $\mathbf{a}_t =
+At each step the policy outputs a continuous 2D action $\mathbf{a}_t =
 (a_t^{(0)}, a_t^{(1)})$. The first coordinate $a_t^{(0)}$ (\emph{aggressiveness})
 controls two buy limit orders, and $a_t^{(1)}$ (\emph{profit target}) controls
 two sell limit orders. We avoid a discrete buy/sell/hold action space because
@@ -734,7 +735,7 @@ H2 strong & asym/dsr/pt $>$ sym & Loss-asymmetric / risk-adjusted reward exceeds
 H3 & Selective entry $\to$ conservative & The benefit of superior reward manifests as ``selective entry'' behavior, forming a conservative cluster with low trade frequency. \\
 H4 & Slippage / CPCV robustness & The conclusions H1--H3 are preserved under slippage (\S\ref{sec:slippage}) and CPCV multi-split (\S\ref{sec:cpcv}). \\
 \midrule
-H5 (post-hoc) & Prospect Theory OOS robustness & \texttt{pt} statistically significantly exceeds every other variant on the unsealed Test, and the mechanism is the short holding behavior induced by prospect theory's loss aversion ($\lambda > 1$) and concave utility ($\alpha < 1$). \\
+H5 (post-hoc) & Prospect-theoretic OOS robustness & \texttt{pt} statistically significantly exceeds every other variant on the unsealed Test, and the mechanism is the short holding behavior induced by prospect theory's loss aversion ($\lambda > 1$) and concave utility ($\alpha < 1$). \\
 \bottomrule
 \end{tabular}
 \label{tab:hypotheses}
@@ -1481,9 +1482,9 @@ PPO stabilization package) are \emph{identical} to exp032b in
 \begin{table}[!htbp]
 \centering
 \small
-\caption{exp033 results. 10-seed mean $\pm$ std. The last two columns compare
-to ATR baseline outperformance (no-slip / with-slip). The ATR baseline is re-measured
-the ATR baseline under the same slippage to Val Sharpe $0.835$
+\caption{exp033 results. 10-seed mean $\pm$ std. The last two columns report
+outperformance against the ATR baseline (no-slip / with-slip). The ATR
+baseline re-measured under the same slippage drops to Val Sharpe $0.835$
 (MDD 15.27\%).}
 \begin{tabular}{lcccccc}
 \toprule
@@ -1989,7 +1990,7 @@ Variant & $n$ sessions & mean (h) & median (h) & p95 (h) & \textbf{max (h)} \\
 \midrule
 \texttt{sym}  & $5{,}666$ & $2.15$ & $1.0$ & $5$ & $98$ \\
 \texttt{asym} & $4{,}567$ & $1.40$ & $1.0$ & $3$ & $7$ \\
-\texttt{dsr}  & $5{,}384$ & $\mathbf{4.58}$ & $1.0$ & $\mathbf{20}$ & $\mathbf{169}$ (7\,days!) \\
+\texttt{dsr}  & $5{,}384$ & $\mathbf{4.58}$ & $1.0$ & $\mathbf{20}$ & $\mathbf{169}$ (7\,days) \\
 \texttt{pt}   & $3{,}922$ & $\mathbf{1.39}$ & $1.0$ & $3$ & $\mathbf{6}$ \\
 \bottomrule
 \end{tabular}
@@ -2484,9 +2485,8 @@ utility ($\alpha=0.683, \lambda=3.303$) is consistently first on the unseen
 Test bull market across two sources ($p<0.002$, smallest Val$\to$Test gap).
 The mechanism is short holding (mean $1.4$\,h, max $6$\,h), avoiding
 sell-side timing risk---directly verified by trajectory analysis
-(\S\ref{sec:oos_mechanism}). To our knowledge, this is the first
-quantitative demonstration that behavioral-economics prospect theory confers
-OOS safety on RL policies. A side finding is that
+(\S\ref{sec:oos_mechanism}). This is a quantitative demonstration that
+behavioral-economics prospect theory confers OOS safety on RL policies. A side finding is that
 \emph{stronger loss aversion and stronger concavity} than the human-fit
 values ($\alpha=0.88, \lambda=2.25$) favors the RL policy, suggesting the
 practical recommendation that ``do not adopt human-estimated behavioral
@@ -2516,8 +2516,8 @@ one-shot $(\alpha, \lambda)$ as OOS robust; the question is whether
 online-adapted parameters yield additional advantage in nonstationary
 environments.
 \item \textbf{Domain Randomization (DR)}: whether \texttt{dsr}'s OOS
-failure recovers under DR---i.e., whether the dual face of the same reward
-can be dissolved by DR.
+failure recovers under DR---i.e., whether the same reward's two-sided effect
+can be neutralized by DR.
 \end{itemize}
 
 The code and data of this work are released at
