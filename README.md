@@ -19,7 +19,7 @@ reinforcement-learning policies for ATR-proportional grid trading on the BTC/USD
 1-hour market. Four reward variants are each trained with **10 seeds × 1M steps**
 and evaluated on **three environments**: single-split validation, 6-fold
 combinatorial purged cross-validation (CPCV, 15 paths), and the unsealed
-out-of-sample Test set (2024–2026, BTC \$42K → \$76K bull regime).
+out-of-sample Test set (2024–2026, BTC \$42K → \$75K bull regime).
 
 **Key finding:** the winner **reverses across evaluation environments** —
 Val=`sym` → CPCV=`dsr` → Test=`pt` — and **prospect-theoretic reward (`pt`)**
@@ -35,7 +35,7 @@ confers OOS safety on RL trading policies.
 
 | Resource | Description |
 |---|---|
-| 📄 [Paper (English, 45p)](paper/main.pdf) | Final thesis, full method + results |
+| 📄 [Paper (English, 46p)](paper/main.pdf) | Final thesis, full method + results |
 | 📄 [Paper (한국어, 43p)](paper/main_ko.pdf) | 한국어판 |
 | 📖 [Reading Guide](https://cosmicpotato2047.github.io/capstone-rl-trading/paper/reading_guide.html) | Section-by-section roadmap (interactive HTML) |
 | 🗺️ [Knowledge Map](https://cosmicpotato2047.github.io/capstone-rl-trading/reports/semester1/week11_knowledge_map.html) | RL × Finance prerequisites concept map (interactive HTML) |
@@ -70,8 +70,8 @@ Trajectory analysis shows that `pt`'s loss aversion ($\lambda = 3.30$) and
 concave gain ($\alpha = 0.68$) train policies to exit within mean **1.4 h
 (max 6 h)**, avoiding sell-side timing risk in the unseen bull regime. In
 contrast, `dsr` learns long holding (mean 4.58 h, max 169 h = 7 days) and
-records the worst OOS performance — the same reward formulation drives both
-in-sample advantage and OOS failure as two sides of the same coin (Section 7.3).
+records the worst OOS performance — the same reward formulation simultaneously
+drives both in-sample advantage and OOS failure (Section 7.3).
 
 ### 4. Methodological recommendation
 Single-split Val + multi-split CPCV + out-of-sample Test are **jointly
