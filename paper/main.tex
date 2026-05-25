@@ -704,7 +704,7 @@ prevents information leakage. We execute 4 variants $\times$ 15 paths $\times$
 \paragraph{Test (unsealed).}
 The OOS environment of \S\ref{sec:oos}. For academic rigor, following
 \citet{gort2022backtest}, Test was \emph{kept sealed from any search or
-hyperparameter decision} until exp035 (May 16, 2026). After unsealing, we
+hyperparameter decision} until exp035. After unsealing, we
 evaluate 100 RL models (4 variants $\times$ multi-seed/seed-pair) along with
 the ATR baseline and Buy-and-Hold on Test.
 
@@ -738,7 +738,7 @@ H2 strong & asym/dsr/pt $>$ sym & Loss-asymmetric / risk-adjusted reward exceeds
 H3 & Selective entry $\to$ conservative & The benefit of superior reward manifests as ``selective entry'' behavior, forming a conservative cluster with low trade frequency. \\
 H4 & Slippage / CPCV robustness & The conclusions H1--H3 are preserved under slippage (\S\ref{sec:slippage}) and CPCV multi-split (\S\ref{sec:cpcv}). \\
 \midrule
-H5 (post-hoc) & Prospect-theoretic OOS robustness & \texttt{pt} statistically significantly exceeds every other variant on the unsealed Test, and the mechanism is the short holding behavior induced by prospect theory's loss aversion ($\lambda > 1$) and concave utility ($\alpha < 1$). \\
+H5\newline(post-hoc) & Prospect-theoretic OOS robustness & \texttt{pt} statistically significantly exceeds every other variant on the unsealed Test, and the mechanism is the short holding behavior induced by prospect theory's loss aversion ($\lambda > 1$) and concave utility ($\alpha < 1$). \\
 \bottomrule
 \end{tabular}
 \label{tab:hypotheses}
