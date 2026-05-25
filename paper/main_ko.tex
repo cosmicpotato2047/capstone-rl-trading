@@ -512,7 +512,7 @@ g^{\mathrm{sell\_cost}}$를 그대로 사용하되, RL action의 자유도를 \e
 
 \begin{table}[!htbp]
 \centering
-\caption{ATR 베이스라인의 격자 계수 (Phase 2, Optuna Trial \#34).}
+\caption{ATR 베이스라인의 격자 계수 (Phase 2 Optuna 50 trial 중 best).}
 \begin{tabular}{lcclcc}
 \toprule
 계수 & 값 & 역할 & 계수 & 값 & 역할 \\
@@ -2043,8 +2043,9 @@ Hourly log return & $1.4 \cdot 10^{-5}$ ($0.71\%$) & $2.9 \cdot 10^{-5}$ ($0.52\
 \textbf{왼쪽 패널 (ATR ratio, 변동성)}: Test 분포가 더 낮은 값에 집중되고
 오른쪽 꼬리가 짧아 \emph{분산이 $-27\%$ 감소}. 평균이 $0.96\%$(Val) $\to$
 $0.70\%$(Test)로 이동. 점선이 두 평균. \textbf{오른쪽 패널 (hourly log return)}:
-분포 모양은 유사하지만 Test 평균이 약간 양의 방향으로 이동 ($+0.024\%$ vs $-0.007\%$)
-— bull regime 반영. 두 통계 모두 KS 검정 $p < 10^{-10}$로 매우 유의.}
+분포 모양은 유사하지만 Test 평균이 약간 양의 방향으로 이동
+($+2.9 \cdot 10^{-5}$ vs $+1.4 \cdot 10^{-5}$) — bull regime 반영.
+두 통계 모두 KS 검정 $p < 10^{-10}$로 매우 유의.}
 \label{fig:disc_shift}
 \end{figure}
 
