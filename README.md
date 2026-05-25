@@ -51,7 +51,7 @@ confers OOS safety on RL trading policies.
 
 ## Key Findings
 
-### 1. Scenario D — Pareto-frontier discovery
+### 1. Pareto-frontier discovery (two-cluster separation)
 Four reward variants partition into two clusters {`sym`, `dsr`} (aggressive)
 vs. {`asym`, `pt`} (conservative) on the Sharpe–MDD plane, with **no single
 Sharpe winner**. Within-cluster Cohen's $|d| < 0.30$ versus across-cluster
@@ -82,7 +82,7 @@ required**; in-sample diversity (CPCV) does not guarantee OOS consistency
 
 ## Selected Figures
 
-### Pareto frontier on Val (Scenario D)
+### Pareto frontier on Val (two-cluster separation)
 40 runs (4 variants × 10 seeds) form two clusters on the Sharpe–MDD plane;
 5 runs are Pareto-optimal.
 
@@ -114,7 +114,7 @@ $2.22\times$) quantifies the two-cluster separation at the policy level.
 ```
 capstone-rl-trading/
 ├── paper/                         # Final thesis (LaTeX)
-│   ├── main.tex / main.pdf            # English (45 pages)
+│   ├── main.tex / main.pdf            # English (46 pages)
 │   ├── main_ko.tex / main_ko.pdf      # Korean (43 pages)
 │   ├── references.bib
 │   ├── READING_GUIDE.md / reading_guide.html
@@ -175,7 +175,7 @@ Train 2017-08 ~ 2020-12 / Val 2021-01 ~ 2023-12 / Test 2024-01 ~
 ### Train (4 reward variants × 10 seeds × 1M steps, ≈ 3.5 h)
 
 ```bash
-# §3.5 — Optuna hyperparameter tuning for each variant (~2 h)
+# §3.4 — Optuna hyperparameter tuning for each variant (~2 h)
 python scripts/tune/tune_reward_optuna.py
 
 # §5 — main comparison
@@ -218,9 +218,9 @@ pdflatex main.tex   && bibtex main    && pdflatex main.tex   && pdflatex main.te
 
 ---
 
-## Honest Limitations
+## Limitations
 
-The paper's §8.5 documents the following limitations transparently:
+The paper's §8.5 documents the following limitations:
 
 - **BTC single asset.** Multi-asset extension is explicitly out of scope.
 - **Single OOS regime.** Test (2024–2026) is a BTC bull market only; bear
@@ -229,8 +229,8 @@ The paper's §8.5 documents the following limitations transparently:
   Domain Randomization are deferred to future work.
 - **1M training steps per seed.** Longer training may shift winner reversal
   patterns.
-- **Phase 2 prior evidence (exp027_rl, Env-v3, Test Sharpe 1.955) is not
-  reproduced** on the canonical Env-v4 environment, demonstrating that
+- **Phase 2 prior evidence (an Env-v3 asym run with Test Sharpe 1.955) is
+  not reproduced** on the canonical Env-v4 environment, demonstrating that
   environment dependence exceeds reward-variant effect in absolute alpha.
 
 ---
