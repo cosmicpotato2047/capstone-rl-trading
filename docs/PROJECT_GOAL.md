@@ -72,7 +72,7 @@
 | dsr  | 1.809 ± 0.21 | 4.33 | 0.47 | aggressive |
 | asym | 1.681 ± 0.10 | 2.28 | 0.755 | conservative |
 | pt   | 1.667 ± 0.09 | 2.31 | 0.735 | conservative |
-| ATR  | 1.505 | 9.83 | 0.153 | — |
+| ATR  | 1.378 | 9.83 | 0.153 | — |
 
 - 4 variant 모두 ATR 을 +11~24% 초과 (H2 weak form 지지)
 - sym 이 Sharpe 1위 → H2 strong form ("variant > sym") **부분 부정**
@@ -81,7 +81,7 @@
 **가설 H1~H4 점검**:
 | 가설 | 결과 | 근거 |
 |---|---|---|
-| H1 (sym ≈ ATR) | 부정 | sym best 1.871 >> ATR 1.505 |
+| H1 (sym ≈ ATR) | 부정 | sym best 1.871 >> ATR 1.378 |
 | H2 weak (variant > ATR) | 지지 | 4 모두 ATR 초과 |
 | H2 strong (variant > sym) | 부분 부정 | dsr ≈ sym, asym/pt < sym |
 | H3 (selective entry) | 지지 | asym/pt 거래 ~75% of sym |

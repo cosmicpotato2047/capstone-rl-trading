@@ -105,7 +105,8 @@
 
 **ATR Baseline (Bayesian 50 trials)**:
 - 최적 계수 (Trial #34): A_b=1.665, C_b=6.070, A_s=0.285, C_s=1.951, n_splits=2
-- Val Sharpe **1.505**, Return +35.80%, MDD 9.83%
+- Val Sharpe **1.505** (초기 측정) → **1.378** (Phase 16a evaluation setup 통일 후 재측정, 본 논문 canonical 값)
+- Return +35.80%, MDD 9.83%
 - ⚠️ exp023 Env-v2 계수는 Env-v4 에서 Sharpe -4.738 — 환경 의존성 입증
 
 **RL with Asymmetric Reward β=2.0 재현 (1M steps)**:

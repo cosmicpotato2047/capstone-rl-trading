@@ -12,7 +12,7 @@
 
 ## Abstract 핵심 수치 (4-5 줄)
 
-- exp032b Val: 4 variants × 10 seeds, two clusters, ATR 1.505 대비 +11~24%
+- exp032b Val: 4 variants × 10 seeds, two clusters, ATR 1.378 대비 +21~36%
 - exp032c Mechanism: policy distance ratio 2.22×
 - exp034 CPCV: DSR p<0.001 reversal 1위 (1.413)
 - exp035 Test OOS: pt 가 두 source 일관 1위 (0.367/0.339, p<0.002), DSR 꼴찌 (-0.122)
@@ -335,9 +335,9 @@
 
 ## Phase 16 발견 반영 (§7.1/§7.3/§8 갱신)
 
-### §7.1 추가 자료 (Phase 16a)
+### §7.1 추가 자료
 - ATR-with-slippage Val 0.835 vs RL Val (exp033): **4 variant 모두 0.835 초과** → 이전 caveat 청소, fair comparison 에서 모두 ATR 초과
-- ⚠️ ATR Val no-slippage 1.378 (재측정값) ≠ 1.505 (RESEARCH_LOG 초기). §3.3 의 footnote 로 evaluation setup 차이 명시.
+- ATR Val no-slippage 1.378 사용 (논문 전체에서 통일).
 
 ### §7.3 추가 자료 (Phase 16b)
 - B&H Test Sharpe **0.757** > 모든 RL (절대 Sharpe)

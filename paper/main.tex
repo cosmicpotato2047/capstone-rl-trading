@@ -985,8 +985,9 @@ Pareto-optimal} (\texttt{sym} 2, \texttt{asym} 1, \texttt{dsr} 1,
 \label{fig:pareto_scatter}
 \end{figure}
 
-Figure~\ref{fig:pareto_scatter} plots the 40 policies' $(\text{Sharpe},
-\text{MDD})$ coordinates color-coded by reward variant. Two features stand out.
+Figure~\ref{fig:pareto_scatter} plots the 40 policies' $(\text{MDD},
+\text{Sharpe})$ coordinates (horizontal, vertical) color-coded by reward
+variant. Two features stand out.
 
 First, within each variant the 10-seed points are tightly grouped:
 \texttt{asym} and \texttt{pt} have std $\approx 0.10$ (std/mean $\approx 6\%$),
@@ -1330,7 +1331,7 @@ Table~\ref{tab:action_stats} and Figure~\ref{fig:action_distribution} make
 the across-variant behavioral differences quantitative.
 
 \paragraph{Buy-side grid position ($\bar{a}^{(0)}$).}
-\texttt{sym/dsr} settle around $\bar{a}^{(0)} \approx 0.12$, placing buy quotes
+\texttt{sym/dsr} settle around $\bar{a}^{(0)} \approx 0.13$, placing buy quotes
 very close to the current price (in \S\ref{sec:mdp}'s grid formula
 $g^{\mathrm{buy\_hi}} = r_t(A_b + B_b a^{(0)})$, small $a^{(0)}$ gives a
 narrow buy spacing and a fill-friendly position). \texttt{asym} sits at
@@ -2171,8 +2172,8 @@ paper's true main contribution.}
 This section consolidates the scientific interpretation of the findings of
 \S\ref{sec:pareto}--\S\ref{sec:oos}. We address five topics: (i) quantitative
 characterization of the Val/Test distribution shift (\S\ref{sec:disc_shift}),
-(ii) explicit statement of the environment dependence of the prior
-exp027\_rl evidence (\S\ref{sec:disc_env_dependence}), (iii) the limitations
+(ii) explicit statement of the environment dependence of the Phase 2
+prior evidence (\S\ref{sec:disc_env_dependence}), (iii) the limitations
 of single-metric winners and a recommended multi-environment evaluation
 protocol (\S\ref{sec:disc_multi_env}), (iv) the application of behavioral
 economics to RL OOS safety (\S\ref{sec:disc_pt_safety}), and (v) limitations
